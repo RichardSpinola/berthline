@@ -18,5 +18,8 @@ python3 -m venv .venv
 ```
 The package lands in `dist/`.
 
+## AI use
+This project was built with AI assistance: Claude Opus 5.5 (Anthropic), through Claude Code. A person reviewed the work and decided what to keep.
+
 ## Status
 Early preview. Not affiliated with VSCodium, Microsoft, JetBrains or Oracle.
