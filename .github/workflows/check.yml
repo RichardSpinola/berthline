@@ -1,0 +1,55 @@
+name: check
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Build run that holds the zip
+        required: true
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  student:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install pywinauto pillow
+      - uses: actions/download-artifact@v4
+        with:
+          name: berthline-windows
+          path: zip
+          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Test as a plain user
+        timeout-minutes: 25
+        run: |
+          New-Item -ItemType Directory -Force C:\check\tests\out | Out-Null
+          Copy-Item tests\* C:\check\tests -Recurse -Force
+          Copy-Item zip\berthline-windows.zip C:\check
+          icacls C:\check /grant 'Users:(OI)(CI)M' /T /Q | Out-Null
+          $senha = ConvertTo-SecureString "$([guid]::NewGuid())aA1!" -AsPlainText -Force
+          New-LocalUser student -Password $senha -PasswordNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Users -Member student
+          $conta = [pscredential]::new('student', $senha)
+          $p = Start-Process powershell -Credential $conta -LoadUserProfile -PassThru -Wait `
+            -WorkingDirectory C:\check `
+            -RedirectStandardOutput C:\check\tests\out\student.log `
+            -RedirectStandardError C:\check\tests\out\student.err `
+            -ArgumentList '-ExecutionPolicy', 'Bypass', '-File', 'C:\check\tests\student.ps1', $env:pythonLocation
+          Get-Content C:\check\tests\out\student.log, C:\check\tests\out\student.err
+          exit $p.ExitCode
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: student-output
+          path: C:\check\tests\out
