@@ -16,13 +16,13 @@ jobs:
       - run: pip install PySide6 pyinstaller
       - run: python build/build.py
       - name: Smoke test
-        run: dist/code-suite-windows/node/node.exe tests/smoke.js dist/code-suite-windows
+        run: dist/berthline-windows/node/node.exe tests/smoke.js dist/berthline-windows
       - name: Zip
-        run: Compress-Archive -Path dist/code-suite-windows -DestinationPath dist/code-suite-windows.zip
+        run: Compress-Archive -Path dist/berthline-windows -DestinationPath dist/berthline-windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: code-suite-windows
-          path: dist/code-suite-windows.zip
+          name: berthline-windows
+          path: dist/berthline-windows.zip
           compression-level: 0
       - uses: actions/upload-artifact@v4
         if: always()

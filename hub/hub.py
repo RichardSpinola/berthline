@@ -29,7 +29,7 @@ def marca():
     try:
         return json.loads((RAIZ / 'brand.json').read_text(encoding='utf8'))
     except (OSError, ValueError):
-        return {'name': 'Code Suite', 'hub': 'Code Suite Hub', 'tagline': '', 'folder': '.code-suite'}
+        return {'name': 'Berthline', 'hub': 'Berthline Hub', 'tagline': '', 'folder': '.berthline'}
 
 
 def aplicativos():
@@ -175,7 +175,7 @@ def preparar(app):
     atual['telemetry.telemetryLevel'] = 'all' if opcao(app, 'telemetry') else 'off'
     atual['chat.disableAIFeatures'] = not opcao(app, 'ai')
     atual['update.mode'] = 'none'
-    if aplicativos()[app].get('base'):
+    if aplicativos()[app].get('base') and ripgrep():
         atual['todo-tree.ripgrep.ripgrep'] = str(ripgrep())
     args = atual.get('java.jdt.ls.vmargs')
     if args:
@@ -192,12 +192,13 @@ def preparar(app):
 
 
 def editor():
-    return RAIZ / 'editor' / ('Code.exe' if JANELAS else 'code')
+    nomes = ('VSCodium.exe', 'Code.exe') if JANELAS else ('codium', 'code')
+    return next((RAIZ / 'editor' / n for n in nomes if (RAIZ / 'editor' / n).exists()), RAIZ / 'editor' / nomes[-1])
 
 
 def ripgrep():
-    pasta = 'win32-x64/rg.exe' if JANELAS else 'linux-x64/rg'
-    return RAIZ / 'editor/resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin' / pasta
+    pacotes = RAIZ / 'editor/resources/app/node_modules.asar.unpacked/@vscode'
+    return next(iter(pacotes.glob('ripgrep*/bin/**/rg.exe' if JANELAS else 'ripgrep*/bin/**/rg')), None)
 
 
 def node():

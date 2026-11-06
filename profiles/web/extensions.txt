@@ -3,11 +3,11 @@ esbenp.prettier-vscode@12.4.0
 dbaeumer.vscode-eslint@3.0.34
 ecmel.vscode-html-css@2.0.14
 naumovs.color-highlight@2.8.0
-humao.rest-client@0.25.1
+humao.rest-client@0.25.0
 alefragnani.bookmarks@14.1.1
-gruntfuggly.todo-tree@0.0.226
+gruntfuggly.todo-tree@0.0.215
 editorconfig.editorconfig@0.18.2
-mhutchie.git-graph@1.30.0
+gxl.git-graph-3@1.37.19
 k--kato.intellij-idea-keybindings@1.7.8
 fogio.jetbrains-color-theme@1.0.3
 fogio.jetbrains-file-icon-theme@1.8.0

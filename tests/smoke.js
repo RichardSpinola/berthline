@@ -89,10 +89,54 @@ async function java(pasta) {
     passo('stop ends loop', await h.ate(async () => /Process finished with exit code/.test((await h.terminal()).split('tick').pop()), 10000));
     passo('stop button leaves', await h.ate(async () => !await h.acha('a.action-label', '^Stop'), 6000));
     await h.foto('java-3-stop');
+
+    await arquivo(h, 'Main');
+    const gutter = await h.ev(`(()=>{const e=[...document.querySelectorAll('.editor-instance .line-numbers')].find(e=>e.innerText.trim()==='8');const b=e.getBoundingClientRect();return {x:b.left-12,y:b.y+b.height/2}})()`);
+    await h.xy(gutter.x, gutter.y);
+    await dormir(500);
+    await h.clica('a.action-label', '^Debug \\(');
+    passo('debug asks input', await h.ate(async () => /Name\?/.test(await h.terminal()), 40000));
+    await dormir(800);
+    await h.clica('.terminal-wrapper .xterm');
+    await dormir(300);
+    await h.escreve('Ana');
+    await h.tecla('Enter', 'Enter', 13);
+    passo('breakpoint hit', await h.ate(async () => /paused on breakpoint/i.test(await h.ev(`document.querySelector('.debug-call-stack-title, .state.label, .session')?.parentElement?.innerText + document.body.innerText.slice(0, 20000)`)) || !!await h.acha('.debug-top-entry, .codicon-debug-stackframe, .debug-breakpoint-stackframe'), 15000));
+    await h.foto('java-4-debug');
+    await h.clica('a.action-label', '^Stop');
+    passo('debug stops', await h.ate(async () => !await h.acha('a.action-label', '^Stop'), 8000));
+
+    await dormir(1500);
+    passo('sidebar back on explorer', !!await h.acha('.explorer-folders-view .monaco-list-row', 'src'));
+    await h.clica('.explorer-folders-view .monaco-list-row', 'src');
+    await dormir(400);
+    await h.clica('.explorer-folders-view .monaco-list-row', 'src');
+    await dormir(400);
+    await h.clica('a.action-label', '^New Java Class');
+    await dormir(900);
+    await h.escreve('Boat');
+    await h.tecla('Enter', 'Enter', 13);
+    passo('new java class', await h.ate(() => fs.existsSync(path.join(pasta, 'src/Boat.java')), 6000));
+    await h.foto('java-5-class');
+
+    await arquivo(h, 'Quick');
+    await h.tecla('F1', 'F1', 112);
+    await dormir(800);
+    await h.escreve('Run with Profiler');
+    await dormir(800);
+    await h.tecla('Enter', 'Enter', 13);
+    passo('profiler runs', await h.ate(async () => /total \d+/.test(await h.terminal()), 40000));
+    passo('profiler report', await h.ate(async () => /Process finished with exit code 0/.test(await h.terminal()), 15000));
+    await dormir(5000);
+    await h.foto('java-6-profiler');
     await h.fechar();
 }
 
 async function web(pasta) {
+    // Evita abrir o navegador durante o teste
+    const ajustes = path.join(PACOTE, 'data/web/user/User');
+    fs.mkdirSync(ajustes, { recursive: true });
+    fs.writeFileSync(path.join(ajustes, 'settings.json'), '{"liveServer.settings.NoBrowser": true}');
     const h = await abrir('web', pasta);
     await dormir(6000);
     await h.clica('.explorer-folders-view .monaco-list-row', '^app\\.js');
@@ -105,6 +149,14 @@ async function web(pasta) {
     await h.clica('a.action-label', RODAR);
     passo('ts runs', await h.ate(async () => /typed 42/.test(await h.terminal()), 20000));
     await h.foto('web-2-run');
+    await h.clica('.explorer-folders-view .monaco-list-row', '^index\\.html');
+    await dormir(1200);
+    await h.clica('a.action-label', RODAR);
+    passo('live server answers', await h.ate(async () => {
+        try {
+            return await new Promise(ok => http.get('http://127.0.0.1:5500/index.html', r => { ok(r.statusCode === 200); r.resume(); }).on('error', () => ok(false)));
+        } catch { return false; }
+    }, 15000));
     await h.fechar();
 }
 

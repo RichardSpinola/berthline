@@ -1,6 +1,6 @@
 {
-  "name": "Code Suite",
-  "hub": "Code Suite Hub",
+  "name": "Berthline",
+  "hub": "Berthline Hub",
   "tagline": "Lightweight coding profiles",
-  "folder": ".code-suite"
+  "folder": ".berthline"
 }

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>
-    <Identity Language="en-US" Id="suite-tools" Version="0.1.0" Publisher="code-suite"/>
-    <DisplayName>Code Suite Tools</DisplayName>
-    <Description xml:space="preserve">Run, debug, templates and navigation for the Code Suite profiles</Description>
+    <Identity Language="en-US" Id="berthline-tools" Version="0.1.0" Publisher="berthline"/>
+    <DisplayName>Berthline Tools</DisplayName>
+    <Description xml:space="preserve">Run, debug, templates and navigation for the Berthline profiles</Description>
     <Properties><Property Id="Microsoft.VisualStudio.Code.Engine" Value="^1.90.0"/></Properties>
   </Metadata>
   <Installation><InstallationTarget Id="Microsoft.VisualStudio.Code"/></Installation>

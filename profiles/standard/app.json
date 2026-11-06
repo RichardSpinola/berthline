@@ -1,6 +1,6 @@
 {
   "title": "Standard",
-  "description": "The plain editor, without Suite changes.",
+  "description": "The plain editor, with no Berthline changes.",
   "order": 3,
   "base": false,
   "memory": false,

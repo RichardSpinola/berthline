@@ -1,6 +1,6 @@
 const vscode = require('vscode');
 
-const FERRAMENTAS = process.env.SUITE_TOOLS ?? require('path').join(require('os').homedir(), '.config', 'code-suite');
+const FERRAMENTAS = process.env.SUITE_TOOLS ?? require('path').join(require('os').homedir(), '.config', 'berthline');
 const ACOES = require('./acoes.json');
 
 const MAIN = /\bstatic\s+void\s+main\s*\(|^\s*(public\s+)?void\s+main\s*\(/;

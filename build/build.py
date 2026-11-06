@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -15,9 +16,8 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 JANELAS = sys.platform == 'win32'
 CACHE = RAIZ / 'build/cache'
-DESTINO = RAIZ / 'dist' / ('code-suite-windows' if JANELAS else 'code-suite-linux')
+DESTINO = RAIZ / 'dist' / ('berthline-windows' if JANELAS else 'berthline-linux')
 VERSOES = json.loads((RAIZ / 'build/versions.json').read_text())
-PLATAFORMA = 'win32-x64-archive' if JANELAS else 'linux-x64'
 SEM_VERIFICAR = '--no-signature-check' in sys.argv
 
 
@@ -48,18 +48,16 @@ def extrair(arquivo, pasta):
 
 def editor():
     v = VERSOES['editor']
-    with urllib.request.urlopen(f'https://update.code.visualstudio.com/api/versions/{v}/{PLATAFORMA}/stable') as r:
-        info = json.load(r)
-    extensao = 'zip' if JANELAS else 'tar.gz'
-    arquivo = baixar(f'https://update.code.visualstudio.com/{v}/{PLATAFORMA}/stable', f'editor-{v}.{extensao}')
-    if soma(arquivo) != info['sha256hash']:
+    plataforma = 'win32-x64' if JANELAS else 'linux-x64'
+    nome = f"VSCodium-{plataforma}-{v}.{'zip' if JANELAS else 'tar.gz'}"
+    url = f'https://github.com/VSCodium/vscodium/releases/download/{v}/{nome}'
+    arquivo = baixar(url, nome)
+    with urllib.request.urlopen(f'{url}.sha256') as r:
+        esperado = r.read().decode().split()[0]
+    if soma(arquivo) != esperado:
         sys.exit('editor hash mismatch')
-    temp = CACHE / 'editor-temp'
-    shutil.rmtree(temp, ignore_errors=True)
-    extrair(arquivo, temp)
-    interna = next(p for p in temp.iterdir()) if not JANELAS else temp
-    shutil.move(str(interna), DESTINO / 'editor')
-    shutil.rmtree(temp, ignore_errors=True)
+    (DESTINO / 'editor').mkdir()
+    extrair(arquivo, DESTINO / 'editor')
 
 
 def node():
@@ -78,7 +76,7 @@ def node():
 
 
 def vsix():
-    alvo = CACHE / 'suite-tools.vsix'
+    alvo = CACHE / 'berthline-tools.vsix'
     CACHE.mkdir(parents=True, exist_ok=True)
     versao = json.loads((RAIZ / 'extension/package.json').read_text(encoding='utf8'))['version']
     manifesto = (RAIZ / 'build/extension.vsixmanifest').read_text()
@@ -92,7 +90,7 @@ def vsix():
 
 
 def instalar(app, nome, pacote):
-    cli = DESTINO / 'editor/bin' / ('code.cmd' if JANELAS else 'code')
+    cli = DESTINO / 'editor/bin' / ('codium.cmd' if JANELAS else 'codium')
     temp = CACHE / 'cli-user'
     (temp / 'User').mkdir(parents=True, exist_ok=True)
     (temp / 'User/settings.json').write_text(json.dumps({'extensions.verifySignature': not SEM_VERIFICAR}))
@@ -107,7 +105,8 @@ def hub():
     trabalho = RAIZ / 'build/work'
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--windowed', '--onedir', '--name', 'Hub',
                     '--contents-directory', '_hub', '--distpath', str(trabalho / 'dist'),
-                    '--workpath', str(trabalho / 'obj'), '--specpath', str(trabalho), str(RAIZ / 'hub/hub.py')], check=True)
+                    '--workpath', str(trabalho / 'obj'), '--specpath', str(trabalho), '--icon', str(trabalho / 'berthline.ico'),
+                    str(RAIZ / 'hub/hub.py')], check=True)
     shutil.copytree(trabalho / 'dist/Hub', DESTINO, dirs_exist_ok=True)
 
 
@@ -119,9 +118,50 @@ def marcar():
     produto.update({
         'nameShort': marca['name'], 'nameLong': marca['name'],
         'dataFolderName': marca['folder'], 'sharedDataFolderName': f"{marca['folder']}-shared",
+        'win32DirName': marca['name'], 'win32NameVersion': marca['name'], 'linuxIconName': 'berthline',
     })
+    for chave in ('reportIssueUrl', 'releaseNotesUrl', 'documentationUrl', 'requestFeatureUrl'):
+        produto.pop(chave, None)
     arquivo.write_text(json.dumps(produto, indent='\t', ensure_ascii=False), encoding='utf8')
     shutil.copy(RAIZ / 'brand.json', DESTINO)
+    logos()
+
+
+def logos():
+    """Troca os logos do editor pelos da marca."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication, QImage, QPainter
+    from PySide6.QtSvg import QSvgRenderer
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    QGuiApplication.instance() or QGuiApplication(sys.argv)
+    origem = RAIZ / 'hub/assets/hub.svg'
+    media = DESTINO / 'editor/resources/app/out/media'
+    for nome in ('code-icon.svg', 'vscode-icon.svg'):
+        shutil.copy(origem, media / nome)
+    desenho = origem.read_text()
+    for nome, cor in (('letterpress-dark.svg', '#35383D'), ('letterpress-hcDark.svg', '#35383D'),
+                      ('letterpress-light.svg', '#DADADA'), ('letterpress-hcLight.svg', '#DADADA')):
+        (media / nome).write_text(re.sub(r'fill="#[0-9A-Fa-f]{6}"', f'fill="{cor}"', desenho))
+    imagem = QImage(512, 512, QImage.Format_ARGB32)
+    imagem.fill(Qt.transparent)
+    pintor = QPainter(imagem)
+    QSvgRenderer(str(origem)).render(pintor)
+    pintor.end()
+    png = DESTINO / 'editor/resources/app/resources/linux/code.png'
+    if png.exists():
+        imagem.save(str(png))
+    trabalho = RAIZ / 'build/work'
+    trabalho.mkdir(parents=True, exist_ok=True)
+    imagem.scaled(256, 256, Qt.KeepAspectRatio, Qt.SmoothTransformation).save(str(trabalho / 'berthline.ico'))
+    if JANELAS:
+        rcedit = baixar('https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe', 'rcedit.exe')
+        exe = DESTINO / 'editor/VSCodium.exe'
+        subprocess.run([str(rcedit), str(exe), '--set-icon', str(trabalho / 'berthline.ico'),
+                        '--set-version-string', 'ProductName', marca_nome(), '--set-version-string', 'FileDescription', marca_nome()], check=True)
+
+
+def marca_nome():
+    return json.loads((RAIZ / 'brand.json').read_text())['name']
 
 
 def so_hub():
@@ -152,7 +192,7 @@ def main():
         for item in itens:
             instalar(app, item, item)
         if itens:
-            instalar(app, 'suite-tools', pacote)
+            instalar(app, 'berthline-tools', pacote)
     if JANELAS:
         (DESTINO / 'Start-Java.bat').write_text('@start "" "%~dp0Hub.exe" --open java\r\n')
         (DESTINO / 'Start-Web.bat').write_text('@start "" "%~dp0Hub.exe" --open web\r\n')

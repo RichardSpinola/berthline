@@ -120,6 +120,7 @@
     "diffEditor.ignoreTrimWhitespace": false,
     "debug.internalConsoleOptions": "neverOpen",
     "debug.openDebug": "openOnDebugBreak",
+    "debug.openExplorerOnEnd": true,
     "testing.automaticallyOpenTestResults": "openOnTestFailure",
     "workbench.secondarySideBar.defaultVisibility": "hidden",
     "workbench.editor.enablePreview": false,

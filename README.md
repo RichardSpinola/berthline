@@ -1,6 +1,6 @@
-# Code Suite
+# Berthline
 
-Portable coding profiles built on top of a pinned Visual Studio Code. Each profile keeps its own settings and extensions, so nothing touches an editor you already use.
+Portable coding profiles built on top of a pinned VSCodium. Each profile keeps its own settings and extensions, so nothing touches an editor you already use.
 
 ## Profiles
 - **Java**: run, debug, refactor and inspect Java projects.
@@ -19,4 +19,4 @@ python3 -m venv .venv
 The package lands in `dist/`.
 
 ## Status
-Early preview. Not affiliated with Microsoft, JetBrains or Oracle.
+Early preview. Not affiliated with VSCodium, Microsoft, JetBrains or Oracle.

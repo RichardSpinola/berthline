@@ -1,9 +1,9 @@
 {
-  "name": "suite-tools",
-  "displayName": "Code Suite Tools",
-  "description": "Run, debug, templates and navigation for the Code Suite profiles",
+  "name": "berthline-tools",
+  "displayName": "Berthline Tools",
+  "description": "Run, debug, templates and navigation for the Berthline profiles",
   "version": "0.1.0",
-  "publisher": "code-suite",
+  "publisher": "berthline",
   "engines": {
     "vscode": "^1.90.0"
   },
