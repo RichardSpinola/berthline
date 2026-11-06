@@ -1,10 +1,19 @@
 # Runs as a plain user: unpacks the zip on the Desktop, then tests it like a student would.
 param([string]$Python)
 $env:Path = "$Python;$env:Path"
+# Start-Process keeps the caller's environment, so point it at this account.
+$casa = 'C:\Users\student'
+$env:USERPROFILE = $casa
+$env:HOMEPATH = '\Users\student'
+$env:USERNAME = 'student'
+$env:APPDATA = "$casa\AppData\Roaming"
+$env:LOCALAPPDATA = "$casa\AppData\Local"
+$env:TEMP = "$casa\AppData\Local\Temp"
+$env:TMP = $env:TEMP
 whoami
 whoami /groups | Select-String 'Administrators|High Mandatory|Medium Mandatory'
-$mesa = Join-Path $env:USERPROFILE 'Desktop'
-New-Item -ItemType Directory -Force $mesa | Out-Null
+$mesa = Join-Path $casa 'Desktop'
+New-Item -ItemType Directory -Force $mesa, $env:TEMP | Out-Null
 tar -xf C:\check\berthline-windows.zip -C $mesa
 $pacote = Join-Path $mesa 'berthline-windows'
 Get-ChildItem $pacote | Select-Object -ExpandProperty Name
