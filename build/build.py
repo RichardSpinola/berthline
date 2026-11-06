@@ -120,6 +120,9 @@ def marcar():
         'dataFolderName': marca['folder'], 'sharedDataFolderName': f"{marca['folder']}-shared",
         'win32DirName': marca['name'], 'win32NameVersion': marca['name'], 'linuxIconName': 'berthline',
     })
+    for chave, valor in list(produto.items()):
+        if chave.startswith('win32') and isinstance(valor, str) and 'VSCodium' in valor:
+            produto[chave] = valor.replace('VSCodium', marca['name'])
     for chave in ('reportIssueUrl', 'releaseNotesUrl', 'documentationUrl', 'requestFeatureUrl'):
         produto.pop(chave, None)
     arquivo.write_text(json.dumps(produto, indent='\t', ensure_ascii=False), encoding='utf8')
