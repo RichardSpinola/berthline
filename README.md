@@ -91,7 +91,7 @@ The icons follow the nautical theme. All of them share the same hull and change 
 - Profiles, settings and extensions stay inside the Berthline folder.
 - The list of trusted folders is stored in `.berthline-shared` in your user folder, and new projects go to `Projects` there. This is what stays on a shared computer.
 - On Linux, the Hub adds a hidden shortcut to your user folder so the taskbar shows the right icon.
-- Telemetry and AI features are off by default. You can change them per app under Settings.
+- Telemetry stays off. AI features are off by default, and you can turn them on per app under Settings.
 
 ## Limitations
 
