@@ -579,10 +579,8 @@ def janela(inicial=None):
     )
 
     COM_VIDRO = vidro_disponivel()
-    FUNDO = 'rgba(22, 23, 26, 196)' if COM_VIDRO else '#1E1F22'
     ESTILO = """
     * { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 13px; color: #DFE1E5; }
-    QWidget#raiz { background: FUNDO; }
     QWidget#pagina, QScrollArea, QStackedWidget, QAbstractScrollArea { background: transparent; border: none; }
     QDialog, QMenu, QMessageBox { background: #26272B; }
     QFrame#linhaV, QFrame#linhaH { background: rgba(255, 255, 255, 22); border: none; }
@@ -635,11 +633,10 @@ def janela(inicial=None):
     AZUL = '#3574F0'
 
     def estilo(cor):
-        return ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('ACENTO', cor).replace('FUNDO', FUNDO)
+        return ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('ACENTO', cor)
 
     def com_vidro(janela_):
         """Deixa a janela translúcida com desfoque do sistema, quando existe."""
-        janela_.setAttribute(Qt.WA_StyledBackground)
         if COM_VIDRO:
             janela_.setAttribute(Qt.WA_TranslucentBackground)
 
@@ -655,6 +652,14 @@ def janela(inicial=None):
         animacao.setEasingCurve(QEasingCurve.OutCubic)
         animacao.start()
         janela_.entrada = animacao
+
+    class Raiz(QWidget):
+        """Janela principal: pinta o próprio fundo para o vidro funcionar."""
+
+        def paintEvent(self, _):
+            p = QPainter(self)
+            p.setCompositionMode(QPainter.CompositionMode_Source)
+            p.fillRect(self.rect(), QColor(22, 23, 26, 205) if COM_VIDRO else QColor('#1E1F22'))
 
     class Troca(QStackedWidget):
         """Troca de página com passagem suave."""
@@ -746,7 +751,7 @@ def janela(inicial=None):
                 p.setBrush(Qt.NoBrush)
                 p.drawPath(onda)
 
-    class Partida(QWidget):
+    class Partida(Raiz):
         """Janela de espera com o barco, até o editor terminar de carregar."""
 
         def __init__(self, app, texto):
@@ -1315,7 +1320,7 @@ def janela(inicial=None):
             QVBoxLayout(d).addWidget(t)
             d.exec()
 
-    class Boasvindas(QWidget):
+    class Boasvindas(Raiz):
         """Tela de início de cada app, com o que é específico dele."""
 
         def __init__(self, app, painel=None):
@@ -1436,7 +1441,7 @@ def janela(inicial=None):
             if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
                 self.painel.boasvindas(self.app)
 
-    class Painel(QWidget):
+    class Painel(Raiz):
         """Janela principal: lista os apps e guarda só o que vale para todos."""
 
         def __init__(self):
