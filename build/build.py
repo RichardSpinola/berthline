@@ -121,6 +121,7 @@ def marcar():
         'nameShort': marca['name'], 'nameLong': marca['name'],
         'dataFolderName': marca['folder'], 'sharedDataFolderName': f"{marca['folder']}-shared",
         'win32DirName': marca['name'], 'win32NameVersion': marca['name'], 'linuxIconName': 'berthline',
+        'linuxDesktopName': marca['name'].lower(),
     })
     for chave, valor in list(produto.items()):
         if chave.startswith('win32') and isinstance(valor, str) and 'VSCodium' in valor:
@@ -128,6 +129,11 @@ def marcar():
     for chave in ('reportIssueUrl', 'releaseNotesUrl', 'documentationUrl', 'requestFeatureUrl'):
         produto.pop(chave, None)
     arquivo.write_text(json.dumps(produto, indent='\t', ensure_ascii=False), encoding='utf8')
+    # No Linux, este campo define a classe da janela, e por ela o sistema escolhe o ícone.
+    pacote = arquivo.with_name('package.json')
+    dados = json.loads(pacote.read_text(encoding='utf8'))
+    dados['desktopName'] = f"{marca['name'].lower()}.desktop"
+    pacote.write_text(json.dumps(dados, indent='\t', ensure_ascii=False), encoding='utf8')
     shutil.copy(RAIZ / 'brand.json', DESTINO)
     logos()
 

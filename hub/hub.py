@@ -259,9 +259,24 @@ def ambiente(app):
     return amb
 
 
+def ligar_icone():
+    """Liga a janela do editor ao ícone da marca na barra de tarefas do Linux."""
+    if JANELAS:
+        return
+    b = marca()
+    classe = b['name'].lower()
+    texto = (f"[Desktop Entry]\nType=Application\nName={b['name']}\nExec={editor()}\n"
+             f"Icon={imagem_icone('hub', 'png')}\nStartupWMClass={classe}\nNoDisplay=true\n")
+    arquivo = CASA / f'.local/share/applications/{classe}-editor.desktop'
+    if not arquivo.exists() or arquivo.read_text(encoding='utf8') != texto:
+        arquivo.parent.mkdir(parents=True, exist_ok=True)
+        arquivo.write_text(texto, encoding='utf8')
+
+
 def abrir_app(app, alvos=(), porta=None, comando_=None):
     alvos = [caminho_real(a) for a in alvos]
     preparar(app)
+    ligar_icone()
     if comando_:
         (ferramentas(app) / 'ao-abrir').write_text(comando_, encoding='utf8')
     if alvos:
@@ -645,7 +660,7 @@ def janela(inicial=None, lancar=None):
     QListWidget { background: transparent; border: none; outline: 0; }
     QListWidget::item { border-radius: 3px; }
     QListWidget::item:hover { background: rgba(255, 255, 255, 12); }
-    QListWidget::item:selected { background: rgba(255, 255, 255, 20); }
+    QListWidget::item:selected { background: rgba(255, 255, 255, 20); color: #F0F0F0; }
     QFrame#ferramenta { border-radius: 3px; }
     QFrame#ferramenta:hover { background: rgba(255, 255, 255, 12); }
     QMenu { border: 1px solid #3A3C42; padding: 4px; }

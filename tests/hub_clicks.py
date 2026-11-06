@@ -1,6 +1,5 @@
 """Clicks through a fresh package with the real mouse: Hub, app, New Project, Create."""
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -8,6 +7,7 @@ from pathlib import Path
 
 from PIL import ImageGrab
 from pywinauto import Desktop
+from pywinauto.keyboard import send_keys
 
 PACOTE = Path(sys.argv[1])
 SAIDA = Path(sys.argv[2])
@@ -44,11 +44,23 @@ def clicar(pid, nome):
     time.sleep(1.5)
 
 
+def nomear(pid, nome):
+    for c in controles(pid):
+        try:
+            if c.iface_value.CurrentValue == 'untitled':
+                c.click_input()
+                send_keys('^a' + nome)
+                time.sleep(1)
+                return
+        except Exception:  # most controls have no value
+            pass
+    raise SystemExit('project name field not found')
+
+
 def fechar_editor():
     filtro = f"Get-Process | Where-Object {{ $_.Path -like '{PACOTE}*' }} | Stop-Process -Force"
     subprocess.run(['powershell', '-NoProfile', '-Command', filtro], check=False)
     time.sleep(3)
-    shutil.rmtree(Path.home() / 'Projects/untitled', ignore_errors=True)
 
 
 def testar(app):
@@ -62,6 +74,7 @@ def testar(app):
         foto(f'{pasta}-2-welcome')
         clicar(hub.pid, 'New Project.*')
         achar(hub.pid, 'Create')
+        nomear(hub.pid, f'aula-{pasta}')
         foto(f'{pasta}-3-new-project')
         clicar(hub.pid, 'Create')
         time.sleep(3)
@@ -78,7 +91,7 @@ def testar(app):
     print(app, 'stage', etapa, 'windows', titulos, flush=True)
     if etapa != 'ready':
         raise SystemExit(f'{app} editor not ready: {etapa}')
-    if not any('untitled' in t for t in titulos):
+    if not any(f'aula-{pasta}' in t for t in titulos):
         raise SystemExit(f'{app} project window missing')
     fechar_editor()
 
