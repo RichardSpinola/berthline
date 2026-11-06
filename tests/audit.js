@@ -220,6 +220,49 @@ async function criacao(h, pasta) {
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
 }
 
+// True when the label for this file, in the tabs or the tree, shows the icon of this type
+const iconeDe = (h, onde, arquivo, tipo) => h.ev(`(()=>{
+const e=[...document.querySelectorAll(${JSON.stringify(onde)})].find(e=>e.classList.contains(${JSON.stringify(`${arquivo}.java-name-file-icon`)}));
+if(!e)return false;
+const v=getComputedStyle(document.documentElement).getPropertyValue(${JSON.stringify(`--ij-icone-${tipo}`)}).trim();
+return !!v&&getComputedStyle(e,'::before').backgroundImage.replace(/"/g,'')===v})()`);
+
+async function iconesReais(h, pasta) {
+    const ABA = '.tabs-container .tab .monaco-icon-label', ARVORE = '.explorer-folders-view .monaco-icon-label';
+    for (const nome of ['one', 'two']) fs.mkdirSync(path.join(pasta, 'src', nome), { recursive: true });
+    const umItem = path.join(pasta, 'src/one/Item.java'), doisItem = path.join(pasta, 'src/two/Item.java');
+    fs.writeFileSync(umItem, 'public class Item {\n}\n');
+    fs.writeFileSync(doisItem, 'public enum Item {\n    A\n}\n');
+    await dormir(1500);
+    await rpc('abrir', { arquivo: umItem });
+    const umaAba = async tipo => iconeDe(h, ABA, 'item', tipo);
+    conferir('tab shows the class icon', await h.ate(() => umaAba('class'), 5000));
+    await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
+    await rpc('abrir', { arquivo: doisItem });
+    conferir('same name in another package keeps its own icon', await h.ate(() => umaAba('enum'), 5000));
+    await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
+    await rpc('abrir', { arquivo: umItem });
+    fs.writeFileSync(umItem, 'public interface Item {\n}\n');
+    const inicio = Date.now();
+    conferir('icon follows a type change, no reload', await h.ate(() => umaAba('interface'), 8000), `${Date.now() - inicio} ms`);
+    const nomes = await h.ev(`[...document.querySelectorAll('.tabs-container .tab .label-name')].map(e=>e.innerText)`);
+    conferir('tab hides .java', nomes.length > 0 && nomes.every(n => !n.endsWith('.java')), nomes.join(' | '));
+    fs.renameSync(path.join(pasta, 'src/Oops.java'), path.join(pasta, 'src/Failure.java'));
+    conferir('icon follows a rename', await h.ate(() => iconeDe(h, ARVORE, 'failure', 'exception'), 8000));
+    fs.writeFileSync(path.join(pasta, 'src/Fresh.java'), 'public record Fresh(int a) {\n}\n');
+    conferir('new file gets its icon', await h.ate(() => iconeDe(h, ARVORE, 'fresh', 'record'), 8000));
+    await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
+    await rpc('renomear', { de: path.join(pasta, 'src/two'), para: path.join(pasta, 'src/three') });
+    await dormir(500);
+    await rpc('abrir', { arquivo: path.join(pasta, 'src/three/Item.java') });
+    conferir('icon survives a package rename', await h.ate(() => umaAba('enum'), 5000));
+    await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
+    for (const nome of ['Main', 'Pet', 'Shape', 'Color', 'Point', 'Failure']) await rpc('abrir', { arquivo: path.join(pasta, `src/${nome}.java`) });
+    await dormir(800);
+    await h.foto('audit-java-tabs');
+    await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
+}
+
 async function gerar(h, pasta) {
     await rpc('abrir', { arquivo: path.join(pasta, 'src/Sum.java') });
     await dormir(4000);
@@ -265,6 +308,7 @@ async function sugestoes(h, pasta) {
     const limpo = (await rpc('estado')).texto;
     for (const [escrito, esperado] of [['sout', 'System.out.println(name);'], ['var', 'var valor = name;']]) {
         await rpc('cursor', { linha: 5, coluna: 0 });
+        await dormir(400); // the cursor moves through the extension host, after the call returns
         // Real key presses: this is what opens and filters the list for a person
         for (const text of `name.${escrito}`) {
             await h.c('Input.dispatchKeyEvent', { type: 'keyDown', text, key: text, unmodifiedText: text });
@@ -285,6 +329,7 @@ async function sugestoes(h, pasta) {
         await dormir(400);
     }
     await rpc('cursor', { linha: 5, coluna: 0 });
+    await dormir(400);
     await h.c('Input.insertText', { text: '        so' });
     await dormir(1200);
     const modelos = (await rpc('sugestoes', { linha: 5, coluna: 10 })).sort((a, b) => a.ordem.localeCompare(b.ordem)).map(s => s.rotulo);
@@ -339,6 +384,7 @@ return r})()`;
         () => comandos(h),
         () => APP === 'java' ? teclado(h, arquivo) : null,
         () => APP === 'java' ? criacao(h, pasta) : null,
+        () => APP === 'java' ? iconesReais(h, pasta) : null,
         () => APP === 'java' ? gerar(h, pasta) : null,
         () => APP === 'java' ? sugestoes(h, pasta) : null,
         () => autosave(h, arquivo),

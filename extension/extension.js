@@ -510,7 +510,7 @@ async function exclusaoSegura(uri) {
     return vscode.commands.executeCommand('moveFileToTrash', alvo);
 }
 
-// Árvore como a do IntelliJ: nome sem .java e um ícone para cada tipo
+// Árvore e abas como no IntelliJ: nome sem .java e um ícone para cada tipo
 const TIPO_JAVA = /^\s*((?:(?:public|protected|private|abstract|final|sealed|non-sealed|static|strictfp)\s+)*)(class|interface|enum|record|@interface)\s+\w+(?:<[^{]*>)?(\s+extends\s+\w*(?:Exception|Error|Throwable))?/m;
 const ICONES = ['class', 'classAbstract', 'exception', 'test', 'main', 'interface', 'enum', 'record', 'annotation'];
 
@@ -525,36 +525,29 @@ function tipoJava(conteudo) {
     return conteudo.split('\n').some(l => MAIN.test(l)) ? 'main' : 'class';
 }
 
-function cssIcones() {
+// O tema de ícones só decide pelo nome e não recarrega sem piscar a janela toda.
+// As classes que o editor põe em cada rótulo trazem nome e pasta, então uma regra por arquivo vale em todo lugar.
+function varsIcones() {
     const fs = require('fs'), path = require('path');
-    const base = `.explorer-folders-view [data-ij]::before { content: '' !important; flex: none !important; width: 16px !important; height: 16px !important; margin: auto 6px auto 0 !important; padding: 0 !important; background-repeat: no-repeat !important; background-position: center !important; background-size: 16px !important; }`;
-    return base + ICONES.map(nome => {
+    return `:root { ${ICONES.map(nome => {
         const svg = fs.readFileSync(path.join(__dirname, 'icones', `${nome}.svg`)).toString('base64');
-        return `.explorer-folders-view [data-ij="${nome}"]::before { background-image: url(data:image/svg+xml;base64,${svg}) !important; }`;
-    }).join('');
+        return `--ij-icone-${nome}: url(data:image/svg+xml;base64,${svg});`;
+    }).join(' ')} }`;
 }
 
-const scriptArvore = css => `(()=>{
+const scriptArvore = vars => `(()=>{
 if (window.__ijArvore) return;
-const estilo = document.head.appendChild(document.createElement('style'));
-estilo.textContent = ${JSON.stringify(css)};
+document.head.appendChild(document.createElement('style')).textContent = ${JSON.stringify(vars)};
+const regras = document.head.appendChild(document.createElement('style'));
+regras.id = 'ij-tipos';
+window.__ijIcones = lista => {
+  regras.textContent = lista.map(([pasta, arquivo, tipo]) =>
+    '.show-file-icons .' + CSS.escape(pasta + '-name-dir-icon') + '.' + CSS.escape(arquivo + '-name-file-icon') + '::before { background-image: var(--ij-icone-' + tipo + ') !important; }').join(' ');
+};
 const aplicar = () => {
-  for (const rotulo of document.querySelectorAll('.explorer-folders-view .monaco-icon-label')) {
-    const nome = rotulo.querySelector('.label-name');
-    if (!nome) continue;
-    const texto = document.createTreeWalker(nome, NodeFilter.SHOW_TEXT).nextNode();
-    if (!texto) continue;
-    if (texto.data.endsWith('.java')) {
-      const curto = texto.data.slice(0, -5);
-      texto.data = curto;
-      rotulo.dataset.ijNome = curto;
-    } else if (rotulo.dataset.ijNome !== texto.data) {
-      delete rotulo.dataset.ijNome;
-      delete rotulo.dataset.ij;
-      continue;
-    }
-    const letra = window.__ijTipos?.[rotulo.dataset.ijNome];
-    if (letra && rotulo.dataset.ij !== letra) rotulo.dataset.ij = letra;
+  for (const rotulo of document.querySelectorAll('.explorer-folders-view .monaco-icon-label .label-name')) {
+    const texto = document.createTreeWalker(rotulo, NodeFilter.SHOW_TEXT).nextNode();
+    if (texto?.data.endsWith('.java')) texto.data = texto.data.slice(0, -5);
   }
 };
 window.__ijArvore = aplicar;
@@ -572,25 +565,52 @@ function estiloSugestoes(context) {
     return naJanela(context, `(()=>{const s=document.getElementById('ij-sugestoes')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-sugestoes'}));s.textContent=${JSON.stringify(css)}})()`);
 }
 
+// Tipo de cada .java; só relê o arquivo que mudou
+const TIPOS = new Map();
+
+async function lerTipo(uri) {
+    const tipo = tipoJava(Buffer.from(await vscode.workspace.fs.readFile(uri)).toString());
+    if (tipo) TIPOS.set(uri.fsPath, tipo);
+    else TIPOS.delete(uri.fsPath);
+}
+
+function enviarTipos(context) {
+    const path = require('path');
+    const lista = [...TIPOS].map(([arquivo, tipo]) => [path.basename(path.dirname(arquivo)).toLowerCase(), path.basename(arquivo).toLowerCase(), tipo]);
+    return naJanela(context, `window.__ijIcones?.(${JSON.stringify(lista)})`);
+}
+
 async function tiposJava(context) {
-    const tipos = {};
-    for (const uri of await vscode.workspace.findFiles('**/*.java', '**/{out,target,bin,build}/**', 3000)) {
-        const conteudo = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString();
-        const tipo = tipoJava(conteudo);
-        if (tipo) tipos[require('path').basename(uri.fsPath, '.java')] = tipo;
-    }
-    return naJanela(context, `window.__ijTipos=${JSON.stringify(tipos)};window.__ijArvore?.()`);
+    const arquivos = await vscode.workspace.findFiles('**/*.java', '**/{out,target,bin,build}/**', 3000);
+    TIPOS.clear();
+    await Promise.all(arquivos.map(lerTipo));
+    return enviarTipos(context);
 }
 
 function arvoreJava(context) {
     let espera;
-    const atualizar = () => {
+    const enviar = () => {
         clearTimeout(espera);
-        espera = setTimeout(() => tiposJava(context).catch(() => {}), 500);
+        espera = setTimeout(() => enviarTipos(context).catch(() => {}), 200);
+    };
+    const atualizar = uri => {
+        const antes = TIPOS.get(uri.fsPath);
+        lerTipo(uri).then(() => { if (TIPOS.get(uri.fsPath) !== antes) enviar(); }, () => {});
     };
     const vigia = vscode.workspace.createFileSystemWatcher('**/*.java');
-    context.subscriptions.push(vigia, vigia.onDidCreate(atualizar), vigia.onDidChange(atualizar), vigia.onDidDelete(atualizar));
-    naJanela(context, scriptArvore(cssIcones())).then(() => tiposJava(context)).catch(() => {});
+    context.subscriptions.push(vigia, vigia.onDidCreate(atualizar), vigia.onDidChange(atualizar), vigia.onDidDelete(uri => {
+        if (TIPOS.delete(uri.fsPath)) enviar();
+    }));
+    // Em pasta nova ou renomeada o vigia só avisa da pasta, não dos arquivos dentro dela
+    const reler = () => tiposJava(context).catch(() => {});
+    context.subscriptions.push(
+        vscode.workspace.onDidRenameFiles(reler),
+        vscode.workspace.onDidCreateFiles(reler),
+        vscode.workspace.onDidOpenTextDocument(doc => {
+            if (doc.languageId === 'java' && doc.uri.scheme === 'file' && !TIPOS.has(doc.uri.fsPath)) atualizar(doc.uri);
+        })
+    );
+    naJanela(context, scriptArvore(varsIcones())).then(reler);
 }
 
 function activate(context) {
