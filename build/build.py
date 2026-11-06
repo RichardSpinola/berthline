@@ -75,17 +75,19 @@ def node():
     shutil.rmtree(temp, ignore_errors=True)
 
 
-def vsix():
-    alvo = CACHE / 'berthline-tools.vsix'
+def vsix(pasta):
+    """Empacota uma extensão local para instalar sem passar pela loja."""
+    dados = json.loads((RAIZ / pasta / 'package.json').read_text(encoding='utf8'))
+    alvo = CACHE / f"{dados['name']}.vsix"
     CACHE.mkdir(parents=True, exist_ok=True)
-    versao = json.loads((RAIZ / 'extension/package.json').read_text(encoding='utf8'))['version']
     manifesto = (RAIZ / 'build/extension.vsixmanifest').read_text()
+    manifesto = manifesto.replace('Version="0.1.0"', f"Version=\"{dados['version']}\"").replace('Id="berthline-tools"', f"Id=\"{dados['name']}\"")
     with zipfile.ZipFile(alvo, 'w', zipfile.ZIP_DEFLATED) as z:
-        z.writestr('extension.vsixmanifest', manifesto.replace('Version="0.1.0"', f'Version="{versao}"'))
+        z.writestr('extension.vsixmanifest', manifesto)
         z.write(RAIZ / 'build/[Content_Types].xml', '[Content_Types].xml')
-        for f in (RAIZ / 'extension').rglob('*'):
+        for f in (RAIZ / pasta).rglob('*'):
             if f.is_file():
-                z.write(f, Path('extension') / f.relative_to(RAIZ / 'extension'))
+                z.write(f, Path('extension') / f.relative_to(RAIZ / pasta))
     return alvo
 
 
@@ -188,7 +190,7 @@ def main():
     shutil.copy(RAIZ / 'README.md', DESTINO)
     shutil.copy(RAIZ / 'NOTICE', DESTINO)
     hub()
-    pacote = vsix()
+    pacote, leve = vsix('extension'), vsix('extension-lite')
     for lista in sorted((RAIZ / 'profiles').glob('*/extensions.txt')):
         app = lista.parent.name
         itens = [l.strip() for l in lista.read_text().splitlines() if l.strip()]
@@ -196,6 +198,7 @@ def main():
             instalar(app, item, item)
         if itens:
             instalar(app, 'berthline-tools', pacote)
+        instalar(app, 'berthline-hub', leve)
     if JANELAS:
         (DESTINO / 'Start-Java.bat').write_text('@start "" "%~dp0Hub.exe" --open java\r\n')
         (DESTINO / 'Start-Web.bat').write_text('@start "" "%~dp0Hub.exe" --open web\r\n')

@@ -33,6 +33,7 @@ falhas = []
 abertos = []
 hub.abrir_app = lambda app, alvos=(), porta=None, comando_=None: abertos.append((app, [str(a) for a in alvos], comando_))
 hub.janela_aberta = lambda *a: True
+hub.etapa_atual = lambda app: 'ready'
 hub.TEMPORARIO = None
 QApplication.quit = staticmethod(lambda: None)
 
@@ -76,6 +77,7 @@ def roteiro():
     passo('window title', painel.windowTitle() == 'Berthline Hub', painel.windowTitle())
     passo('apps listed', {f.app for f in painel.findChildren(QFrame) if hasattr(f, 'mais')} == {'java', 'web', 'standard'})
 
+    hub.gravar_geral('transitions', False)
     painel.boasvindas('java')
     tela = painel.tela
     passo('welcome per app', tela.windowTitle() == 'Welcome to Berthline Java', tela.windowTitle())
@@ -127,6 +129,7 @@ def roteiro():
 
     def novo():
         d = QApplication.activeModalWidget()
+        passo('empty template offered', d.modelos.item(0).text() == 'Empty Project')
         d.nome.setText('demo')
         d.local.setText(str(TEMP))
         d.git.setChecked(True)
@@ -138,6 +141,17 @@ def roteiro():
     passo('template copied', (fora / 'src/Main.java').exists())
     passo('git created', (fora / '.git').is_dir())
     passo('new project trusted', hub.confiavel(fora))
+
+    vazio = hub.criar_projeto('standard', 'Empty Project', 'nada', TEMP)
+    passo('empty project stays empty', not list(vazio.iterdir()))
+    hub.PROJETOS.mkdir(exist_ok=True)
+    (hub.PROJETOS / 'loja/src').mkdir(parents=True)
+    (hub.PROJETOS / 'loja/src/A.java').write_text('class A {}')
+    (hub.PROJETOS / 'site').mkdir()
+    (hub.PROJETOS / 'site/index.html').write_text('<p>')
+    passo('disk project in java', any(t == 'On this computer' and any(p.name == 'loja' for p, _ in l) for t, l in hub.secoes('java')))
+    passo('disk project only in its app', not any(p.name == 'site' for _, l in hub.secoes('java') for p, _ in l))
+    passo('panel groups by app', {'Java', 'Web'} <= {t for t, _ in hub.secoes()})
 
     origem_git = TEMP / 'origem'
     origem_git.mkdir()

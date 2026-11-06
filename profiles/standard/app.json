@@ -11,5 +11,8 @@
       "VSCodium docs",
       "https://vscodium.com/"
     ]
+  ],
+  "required": [
+    "berthline.berthline-hub"
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "name": "berthline-hub",
+  "displayName": "Berthline Hub",
+  "description": "Back to Hub button and startup progress",
+  "version": "0.1.0",
+  "publisher": "berthline",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [{ "command": "berthline.openHub", "title": "Back to Hub" }]
+  }
+}

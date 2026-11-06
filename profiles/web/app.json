@@ -10,7 +10,8 @@
   ],
   "accent": "#3B82C4",
   "required": [
-    "berthline.berthline-tools"
+    "berthline.berthline-tools",
+    "berthline.berthline-hub"
   ],
   "learn": [
     [

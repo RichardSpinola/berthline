@@ -11,7 +11,8 @@
   "required": [
     "redhat.java",
     "vscjava.vscode-java-debug",
-    "berthline.berthline-tools"
+    "berthline.berthline-tools",
+    "berthline.berthline-hub"
   ],
   "learn": [
     [
