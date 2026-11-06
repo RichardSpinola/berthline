@@ -26,6 +26,15 @@
     ],
     "java.completion.chain.enabled": true,
     "java.completion.postfix.enabled": false,
+    "java.completion.maxResults": 50,
+    "java.completion.filteredTypes": [
+        "java.awt.List",
+        "com.sun.*",
+        "sun.*",
+        "jdk.*",
+        "org.graalvm.*",
+        "io.micrometer.shaded.*"
+    ],
     "java.completion.matchCase": "off",
     "java.inlayHints.parameterNames.enabled": "literals",
     "java.inlayHints.variableTypes.enabled": true,
@@ -49,7 +58,9 @@
     "[java]": {
         "editor.defaultFormatter": "redhat.java",
         "editor.formatOnSave": false,
-        "editor.snippetSuggestions": "none"
+        "editor.snippetSuggestions": "none",
+        "editor.suggest.localityBonus": true,
+        "editor.suggest.showStatusBar": false
     },
     "java.debug.settings.console": "integratedTerminal",
     "java.debug.settings.hotCodeReplace": "auto",

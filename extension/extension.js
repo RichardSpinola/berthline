@@ -7,7 +7,15 @@ const MAIN = /\bstatic\s+void\s+main\s*\(|^\s*(public\s+)?void\s+main\s*\(/;
 
 // Modelos postfix do IntelliJ que a extensão Java não oferece
 const POSTFIX = {
+    var: 'var ${1:valor} = E;$0',
     sout: 'System.out.println(E);$0',
+    if: 'if (E) {\n\t$0\n}',
+    else: 'if (!E) {\n\t$0\n}',
+    not: '!E$0',
+    null: 'if (E == null) {\n\t$0\n}',
+    for: 'for (var ${1:item} : E) {\n\t$0\n}',
+    while: 'while (E) {\n\t$0\n}',
+    cast: '((${1:Tipo}) E)$0',
     soutv: 'System.out.println("E = " + E);$0',
     serr: 'System.err.println(E);$0',
     souf: 'System.out.printf(E$1);$0',
@@ -33,20 +41,24 @@ const POSTFIX = {
     format: 'String.format(E$1)$0',
     reqnonnull: 'java.util.Objects.requireNonNull(E)$0'
 };
-const EXPRESSAO = /((?:"(?:[^"\\]|\\.)*"|\([^()]*\)|[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)(?:\.[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)*)\.(\w*)$/;
+const EXPRESSAO = /((?:new\s+)?(?:"(?:[^"\\]|\\.)*"|\([^()]*\)|[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)(?:\.[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)*)\.(\w*)$/;
 
 function postfix(doc, pos) {
     const m = doc.lineAt(pos.line).text.slice(0, pos.character).match(EXPRESSAO);
     if (!m) return [];
+    // Só a palavra depois do ponto entra na nota da lista; sem isso o postfix passaria à frente dos métodos
     const inicio = pos.character - m[0].length;
-    const faixa = new vscode.Range(pos.line, inicio, pos.line, pos.character);
-    return Object.entries(POSTFIX).map(([nome, corpo]) => {
+    const ponto = pos.character - m[2].length;
+    const faixa = new vscode.Range(pos.line, ponto, pos.line, pos.character);
+    const expressao = new vscode.Range(pos.line, inicio, pos.line, ponto);
+    return Object.entries(POSTFIX).map(([nome, corpo], ordem) => {
         const item = new vscode.CompletionItem(nome, vscode.CompletionItemKind.Keyword);
-        item.insertText = new vscode.SnippetString(corpo.replaceAll('$', '\u0000').replace(/E(?=[^\w]|$)/g, m[1].replaceAll('$', '\\$')).replaceAll('\u0000', '$'));
+        item.insertText = new vscode.SnippetString(corpo.replaceAll('$', '\u0000').replace(/\bE\b/g, () => m[1].replaceAll('$', '\\$')).replaceAll('\u0000', '$'));
         item.range = faixa;
-        item.filterText = `${m[1]}.${nome}`;
+        item.additionalTextEdits = [vscode.TextEdit.delete(expressao)];
+        item.filterText = nome;
         item.detail = 'Postfix';
-        item.sortText = `z${nome}`;
+        item.sortText = `z${String(ordem).padStart(2, '0')}`;
         return item;
     });
 }
@@ -65,17 +77,23 @@ function carregarModelos(context) {
     }
 }
 
+// O que mais se usa em aula vem primeiro; atalhos de uma ou duas letras ficam só no Ctrl+J
+const MODELOS_PRIMEIRO = ['sout', 'psvm', 'main', 'fori', 'iter', 'soutv', 'souf', 'serr', 'ifn', 'inn', 'thr', 'itar'];
+const SO_CTRL_J = /^[A-Z][A-Za-z]?$/;
+
 function sugerirModelos(modelos, doc, pos) {
     const antes = doc.lineAt(pos.line).text.slice(0, pos.character);
     const palavra = antes.match(/(?:^|[^\w.$])([A-Za-z][\w-]*)$/)?.[1];
     if (!palavra || antes.includes('//') || (antes.match(/"/g)?.length ?? 0) % 2) return [];
     const faixa = new vscode.Range(pos.line, pos.character - palavra.length, pos.line, pos.character);
-    return modelos.filter(m => m.prefixo.startsWith(palavra)).map(m => {
+    return modelos.filter(m => m.prefixo.startsWith(palavra) && !SO_CTRL_J.test(m.prefixo)).map(m => {
         const item = new vscode.CompletionItem({ label: m.prefixo, description: m.descricao }, vscode.CompletionItemKind.Keyword);
+        const ordem = MODELOS_PRIMEIRO.indexOf(m.prefixo);
         item.insertText = new vscode.SnippetString(m.corpo);
         item.range = faixa;
         item.filterText = m.prefixo;
-        item.sortText = `!${m.prefixo}`;
+        // Uma letra só ainda pode ser o começo de qualquer nome: não passa à frente deles
+        item.sortText = palavra.length > 1 ? `!${String(ordem < 0 ? 99 : ordem).padStart(2, '0')}${m.prefixo}` : `~${m.prefixo}`;
         item.preselect = m.prefixo === palavra;
         return item;
     });
@@ -83,12 +101,67 @@ function sugerirModelos(modelos, doc, pos) {
 
 // Janela única de New Java Class, como no IntelliJ
 const TIPOS_NOVOS = [
-    { label: 'Class', icone: 'class', codigo: n => `public class ${n} {\n    \n}\n`, cursor: [1, 4] },
-    { label: 'Interface', icone: 'interface', codigo: n => `public interface ${n} {\n    \n}\n`, cursor: [1, 4] },
-    { label: 'Record', icone: 'record', codigo: n => `public record ${n}() {\n}\n`, cursor: [0, n => `public record ${n}(`.length] },
-    { label: 'Enum', icone: 'enum', codigo: n => `public enum ${n} {\n    \n}\n`, cursor: [1, 4] },
-    { label: 'Annotation', icone: 'annotation', codigo: n => `public @interface ${n} {\n    \n}\n`, cursor: [1, 4] },
+    { label: 'Class', icone: 'class', codigo: (n, h) => `public class ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
+    { label: 'Abstract Class', icone: 'classAbstract', codigo: (n, h) => `public abstract class ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
+    { label: 'Interface', icone: 'interface', proibe: 'implements', codigo: (n, h) => `public interface ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
+    {
+        label: 'Enum', icone: 'enum', proibe: 'extends', cursor: [1, 4, 9],
+        codigo: (n, h) => `public enum ${n}${h} {\n    FIRST("first"),\n    SECOND("second");\n\n    private final String label;\n\n    ${n}(String label) {\n        this.label = label;\n    }\n\n    public String getLabel() {\n        return label;\n    }\n}\n`,
+    },
+    {
+        label: 'Record', icone: 'record', proibe: 'extends', cursor: [0, n => `public record ${n}(`.length, n => `public record ${n}(String name, int value`.length],
+        codigo: (n, h) => `public record ${n}(String name, int value)${h} {\n}\n`,
+    },
+    {
+        label: 'Exception', icone: 'exception', pai: 'Exception', cursor: [2, 8],
+        codigo: (n, h) => `public class ${n}${h} {\n    public ${n}(String message) {\n        super(message);\n    }\n}\n`,
+    },
+    {
+        label: 'Main', icone: 'main', cursor: [2, 8],
+        codigo: (n, h) => `public class ${n}${h} {\n    public static void main(String[] args) {\n        \n    }\n}\n`,
+    },
+    { label: 'Annotation', icone: 'annotation', proibe: 'extends implements', codigo: (n, h) => `public @interface ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
 ];
+
+const TIPO = '[A-Za-z_$][\\w$.]*(?:<[^{}]*>)?';
+const LISTA = `${TIPO}(?:\\s*,\\s*${TIPO})*`;
+const PEDIDO = new RegExp(`^([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*?)(?:\\.java)?(?:\\s+extends\\s+(${LISTA}))?(?:\\s+implements\\s+(${LISTA}))?$`);
+
+function lerPedido(texto, tipo) {
+    const achado = texto.trim().match(PEDIDO);
+    if (!achado) return { erro: 'not a valid name' };
+    const [, nome, pai, contratos] = achado;
+    if (pai && tipo.proibe?.includes('extends')) return { erro: `${tipo.label} cannot use extends` };
+    if (contratos && tipo.proibe?.includes('implements')) return { erro: `${tipo.label} cannot use implements` };
+    const base = pai ?? tipo.pai;
+    return { nome, heranca: `${base ? ` extends ${base}` : ''}${contratos ? ` implements ${contratos}` : ''}`, herda: !!(pai || contratos) };
+}
+
+// O que o Java Language Server oferece como conserto para o que a herança exige
+const CONSERTOS = [
+    [/cannot be resolved to a type/, /^Import '/],
+    [/must implement the inherited abstract method/, /^Add unimplemented methods/],
+    [/Implicit super constructor|default constructor/, /^Add constructor/],
+];
+
+async function aplicarAcao(acao) {
+    if (acao.edit) await vscode.workspace.applyEdit(acao.edit);
+    if (acao.command) await vscode.commands.executeCommand(acao.command.command, ...(acao.command.arguments ?? []));
+}
+
+async function completarHeranca(uri) {
+    for (let i = 0; i < 40; i++) {
+        await new Promise(pronto => setTimeout(pronto, 500));
+        for (const [erro, titulo] of CONSERTOS) {
+            const problema = vscode.languages.getDiagnostics(uri).find(d => erro.test(d.message));
+            if (!problema) continue;
+            // O servidor só preenche a edição quando se pede a resolução de cada ação
+            const acoes = await vscode.commands.executeCommand('vscode.executeCodeActionProvider', uri, problema.range, vscode.CodeActionKind.QuickFix.value, 20);
+            const acao = acoes?.find(a => titulo.test(a.title));
+            if (acao) await aplicarAcao(acao);
+        }
+    }
+}
 
 async function pastaDestino(uri) {
     let alvo = uri;
@@ -113,19 +186,20 @@ function pacoteDe(pasta) {
     return raiz >= 0 ? partes.slice(raiz + 1) : [];
 }
 
-async function criarClasse(pasta, nome, tipo) {
-    const partes = nome.replace(/\.java$/, '').split('.');
+async function criarClasse(pasta, pedido, tipo) {
+    const partes = pedido.nome.split('.');
     const classe = partes.pop();
     const pacote = [...pacoteDe(pasta), ...partes].join('.');
     const arquivo = vscode.Uri.joinPath(pasta, ...partes, `${classe}.java`);
     const existe = await vscode.workspace.fs.stat(arquivo).then(() => true, () => false);
     if (existe) return `${classe} already exists`;
     const cabecalho = pacote ? `package ${pacote};\n\n` : '';
-    await vscode.workspace.fs.writeFile(arquivo, Buffer.from(cabecalho + tipo.codigo(classe)));
+    await vscode.workspace.fs.writeFile(arquivo, Buffer.from(cabecalho + tipo.codigo(classe, pedido.heranca)));
     const linha = tipo.cursor[0] + (pacote ? 2 : 0);
-    const coluna = typeof tipo.cursor[1] === 'function' ? tipo.cursor[1](classe) : tipo.cursor[1];
-    const posicao = new vscode.Position(linha, coluna);
-    await vscode.window.showTextDocument(arquivo, { selection: new vscode.Range(posicao, posicao), preview: false });
+    const coluna = c => (typeof c === 'function' ? c(classe) : c);
+    const inicio = coluna(tipo.cursor[1]);
+    await vscode.window.showTextDocument(arquivo, { selection: new vscode.Range(linha, inicio, linha, coluna(tipo.cursor[2] ?? inicio)), preview: false });
+    if (pedido.herda) completarHeranca(arquivo);
     return undefined;
 }
 
@@ -134,27 +208,49 @@ async function novaClasse(uri) {
     if (!pasta) return vscode.window.showInformationMessage('Open a project first.');
     const janela = vscode.window.createQuickPick();
     janela.title = 'New Java Class';
-    janela.placeholder = 'Name';
+    janela.placeholder = 'Name, optionally: extends Base implements Foo, Bar';
     janela.sortByLabel = false;
     janela.items = TIPOS_NOVOS.map(tipo => ({
         label: tipo.label,
         alwaysShow: true,
-        iconPath: vscode.Uri.file(require('path').join(__dirname, 'icones', `${tipo.icone}_dark.svg`)),
+        iconPath: vscode.Uri.file(require('path').join(__dirname, 'icones', `${tipo.icone}.svg`)),
         tipo,
     }));
     janela.onDidChangeValue(() => { janela.title = 'New Java Class'; });
     janela.onDidAccept(async () => {
-        const nome = janela.value.trim();
-        if (!/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*(\.java)?$/.test(nome)) {
-            janela.title = 'New Java Class: not a valid name';
-            return;
-        }
-        const erro = await criarClasse(pasta, nome, janela.activeItems[0].tipo);
+        const { tipo } = janela.activeItems[0];
+        const pedido = lerPedido(janela.value, tipo);
+        const erro = pedido.erro ?? await criarClasse(pasta, pedido, tipo);
         if (erro) janela.title = `New Java Class: ${erro}`;
         else janela.dispose();
     });
     janela.onDidHide(() => janela.dispose());
     janela.show();
+}
+
+// Menu Generate, como o Alt+Insert do IntelliJ, sobre as ações do Java Language Server
+const GERAR = [
+    ['Constructor…', /Constructors/],
+    ['Getter…', /Getters(?! and)/],
+    ['Setter…', /(?<!and )Setters/],
+    ['Getter and Setter…', /Getters and Setters/],
+    ['equals() and hashCode()…', /hashCode\(\) and equals\(\)/],
+    ['toString()…', /toString\(\)/],
+    ['Override or Implement Methods…', /Override\/Implement Methods/],
+    ['Delegate Methods…', /Delegate Methods/],
+];
+
+async function gerar() {
+    const editor = vscode.window.activeTextEditor;
+    if (editor?.document.languageId !== 'java') return;
+    const acoes = await vscode.commands.executeCommand('vscode.executeCodeActionProvider', editor.document.uri, editor.selection, 'source') ?? [];
+    const itens = GERAR.flatMap(([label, titulo]) => {
+        const acao = acoes.find(a => titulo.test(a.title));
+        return acao ? [{ label, acao }] : [];
+    });
+    if (!itens.length) return vscode.window.showInformationMessage('Nothing to generate here. Put the cursor inside a class.');
+    const escolha = await vscode.window.showQuickPick(itens, { placeHolder: 'Generate' });
+    if (escolha) return aplicarAcao(escolha.acao);
 }
 
 // Java só aceita uma pasta vinda do Explorer; pela paleta não há nenhuma
@@ -414,9 +510,9 @@ async function exclusaoSegura(uri) {
     return vscode.commands.executeCommand('moveFileToTrash', alvo);
 }
 
-// Árvore como a do IntelliJ: nome sem .java e o ícone real do tipo
+// Árvore como a do IntelliJ: nome sem .java e um ícone para cada tipo
 const TIPO_JAVA = /^\s*((?:(?:public|protected|private|abstract|final|sealed|non-sealed|static|strictfp)\s+)*)(class|interface|enum|record|@interface)\s+\w+(?:<[^{]*>)?(\s+extends\s+\w*(?:Exception|Error|Throwable))?/m;
-const ICONES = ['class', 'classAbstract', 'exception', 'test', 'interface', 'enum', 'record', 'annotation'];
+const ICONES = ['class', 'classAbstract', 'exception', 'test', 'main', 'interface', 'enum', 'record', 'annotation'];
 
 function tipoJava(conteudo) {
     const achado = conteudo.match(TIPO_JAVA);
@@ -425,14 +521,15 @@ function tipoJava(conteudo) {
     if (achado[2] !== 'class') return achado[2];
     if (achado[3]) return 'exception';
     if (/^\s*@(?:org\.junit\.[\w.]*)?Test\b/m.test(conteudo)) return 'test';
-    return /\babstract\b/.test(achado[1]) ? 'classAbstract' : 'class';
+    if (/\babstract\b/.test(achado[1])) return 'classAbstract';
+    return conteudo.split('\n').some(l => MAIN.test(l)) ? 'main' : 'class';
 }
 
 function cssIcones() {
     const fs = require('fs'), path = require('path');
     const base = `.explorer-folders-view [data-ij]::before { content: '' !important; flex: none !important; width: 16px !important; height: 16px !important; margin: auto 6px auto 0 !important; padding: 0 !important; background-repeat: no-repeat !important; background-position: center !important; background-size: 16px !important; }`;
     return base + ICONES.map(nome => {
-        const svg = fs.readFileSync(path.join(__dirname, 'icones', `${nome}_dark.svg`)).toString('base64');
+        const svg = fs.readFileSync(path.join(__dirname, 'icones', `${nome}.svg`)).toString('base64');
         return `.explorer-folders-view [data-ij="${nome}"]::before { background-image: url(data:image/svg+xml;base64,${svg}) !important; }`;
     }).join('');
 }
@@ -470,6 +567,11 @@ new MutationObserver(() => {
 aplicar();
 })()`;
 
+function estiloSugestoes(context) {
+    const css = '.suggest-widget { border-radius: 8px; overflow: hidden; } .suggest-widget .monaco-list-row .details-label { opacity: 0.65; }';
+    return naJanela(context, `(()=>{const s=document.getElementById('ij-sugestoes')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-sugestoes'}));s.textContent=${JSON.stringify(css)}})()`);
+}
+
 async function tiposJava(context) {
     const tipos = {};
     for (const uri of await vscode.workspace.findFiles('**/*.java', '**/{out,target,bin,build}/**', 3000)) {
@@ -496,6 +598,7 @@ function activate(context) {
     const modelos = carregarModelos(context);
     ativarComum(context, { prefixo: 'ij', saudavel: '!!window.__ijArvore' });
     arvoreJava(context);
+    estiloSugestoes(context).catch(() => {});
     esconderPaineis(context);
     mostrarConfig();
     for (const [id, acao] of Object.entries(ACOES)) {
@@ -504,6 +607,7 @@ function activate(context) {
     }
     context.subscriptions.push(
         vscode.commands.registerCommand('ij.safeDelete', exclusaoSegura),
+        vscode.commands.registerCommand('ij.generate', gerar),
         vscode.commands.registerCommand('ij.newClass', uri => novaClasse(uri)),
         vscode.commands.registerCommand('ij.newClassTop', () => novaClasse()),
         vscode.commands.registerCommand('ij.markSources', uri => marcarFontes('java.project.addToSourcePath', uri)),

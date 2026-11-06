@@ -185,6 +185,108 @@ async function java(h, pasta) {
     }
 }
 
+// Fills the New Java Class dialog the way a person does: name first, then arrows to pick the type.
+async function novoTipo(h, pasta, texto, descidas) {
+    await rpc('executar', { comando: 'ij.newClassTop', limite: 800 });
+    await dormir(500);
+    await h.c('Input.insertText', { text: texto });
+    await dormir(300);
+    for (let i = 0; i < descidas; i++) await tecla(h, [], 'ArrowDown', 'ArrowDown', 40);
+    await dormir(200);
+    if (texto.startsWith('Dog')) await h.foto('audit-java-new-type');
+    await tecla(h, [], 'Enter', 'Enter', 13);
+    return path.join(pasta, 'src', `${texto.split(' ')[0]}.java`);
+}
+
+const texto = arquivo => fs.existsSync(arquivo) ? fs.readFileSync(arquivo, 'utf8') : '';
+
+async function criacao(h, pasta) {
+    await rpc('abrir', { arquivo: path.join(pasta, 'src/Main.java') });
+    const cao = await novoTipo(h, pasta, 'Dog extends Pet implements Runnable', 0);
+    const herdou = await h.ate(async () => /sound\(\)/.test(texto(cao)) && /run\(\)/.test(texto(cao)) && /Dog\(String/.test(texto(cao)), 25000);
+    conferir('new class fills what the parent requires', herdou, texto(cao).replace(/\s+/g, ' ').slice(0, 200));
+    for (const [nome, descidas, marca] of [['Base', 1, 'abstract class'], ['Shape', 2, 'interface'], ['Color', 3, 'FIRST("first")'], ['Point', 4, 'String name, int value'], ['Oops', 5, 'extends Exception'], ['App', 6, 'static void main'], ['Note', 7, '@interface']]) {
+        const arquivo = await novoTipo(h, pasta, nome, descidas);
+        conferir(`new type ${nome}`, await h.ate(async () => texto(arquivo).includes(marca), 4000));
+    }
+    await dormir(5000);
+    for (const nome of ['Dog', 'Base', 'Shape', 'Color', 'Point', 'Oops', 'App', 'Note']) {
+        const erros = await rpc('erros', { arquivo: path.join(pasta, `src/${nome}.java`) });
+        conferir(`${nome} compiles`, !erros.length, erros.join(' / ').slice(0, 160));
+    }
+    await rpc('executar', { comando: 'workbench.view.explorer' });
+    await dormir(800);
+    await h.foto('audit-java-icons');
+    await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
+}
+
+async function gerar(h, pasta) {
+    await rpc('abrir', { arquivo: path.join(pasta, 'src/Sum.java') });
+    await dormir(4000);
+    await rpc('cursor', { linha: 3, coluna: 0 });
+    await rpc('executar', { comando: 'ij.generate', limite: 3000 });
+    await dormir(800);
+    const itens = await h.ev(`[...document.querySelectorAll('.quick-input-list .monaco-list-row')].map(e=>e.innerText.trim())`);
+    relatorio.dados.generate = itens;
+    await h.foto('audit-java-generate');
+    for (const nome of ['Constructor', 'Getter', 'Setter', 'Getter and Setter', 'equals() and hashCode()', 'toString()', 'Override or Implement Methods']) {
+        conferir(`generate offers ${nome}`, itens.some(i => i.startsWith(`${nome}…`)), itens.join(' | '));
+    }
+    await h.c('Input.insertText', { text: 'toString' });
+    await dormir(300);
+    await tecla(h, [], 'Enter', 'Enter', 13);
+    await dormir(1200);
+    await h.foto('audit-java-generate-fields');
+    await tecla(h, [], 'Enter', 'Enter', 13);
+    conferir('generate writes toString', await h.ate(async () => /toString\(\)/.test((await rpc('estado')).texto), 6000));
+    await rpc('executar', { comando: 'undo' });
+    await rpc('executar', { comando: 'workbench.action.files.save' });
+}
+
+async function sugestoes(h, pasta) {
+    const arquivo = path.join(pasta, 'src/Sum.java');
+    await rpc('abrir', { arquivo });
+    await dormir(800);
+    await rpc('cursor', { linha: 5, coluna: 0 });
+    await h.c('Input.insertText', { text: '        name.' });
+    await dormir(1500);
+    const pontos = (await rpc('sugestoes', { linha: 5, coluna: 13, gatilho: '.' })).map(s => s.rotulo);
+    for (const p of ['var', 'sout', 'for', 'if', 'null']) conferir(`postfix .${p}`, pontos.includes(p));
+    conferir('members stay in the list', pontos.some(p => p.startsWith('length')), pontos.slice(0, 6).join(' | '));
+    await rpc('executar', { comando: 'editor.action.triggerSuggest' });
+    await dormir(1500);
+    await h.foto('audit-java-suggest');
+    const lista = await h.ev(`[...document.querySelectorAll('.suggest-widget .monaco-list-row')].map(e=>e.getAttribute('aria-label')||'')`);
+    conferir('members come before postfix', !/^var\b/.test(lista[0] ?? ''), lista.slice(0, 3).join(' | '));
+    await tecla(h, [], 'Escape', 'Escape', 27);
+    await rpc('executar', { comando: 'undo' });
+    await rpc('executar', { comando: 'workbench.action.files.save' });
+    await dormir(800);
+    for (const [escrito, esperado] of [['sout', 'System.out.println(name);'], ['var', 'var valor = name;']]) {
+        await rpc('cursor', { linha: 5, coluna: 0 });
+        await h.c('Input.insertText', { text: `        name.${escrito}` });
+        await rpc('executar', { comando: 'editor.action.triggerSuggest' });
+        await dormir(1500);
+        await tecla(h, [], 'Enter', 'Enter', 13);
+        await dormir(600);
+        const pronto = (await rpc('estado')).texto.split('\n')[5];
+        conferir(`postfix .${escrito} writes the code`, pronto.includes(esperado), pronto.trim());
+        await rpc('executar', { comando: 'leaveSnippet' });
+        await rpc('executar', { comando: 'undo' });
+        await rpc('executar', { comando: 'undo' });
+        await rpc('executar', { comando: 'workbench.action.files.save' });
+        await dormir(600);
+        if ((await rpc('estado')).texto.split('\n')[5].includes('name.')) await rpc('executar', { comando: 'undo' });
+    }
+    await rpc('cursor', { linha: 5, coluna: 0 });
+    await h.c('Input.insertText', { text: '        so' });
+    await dormir(1200);
+    const modelos = (await rpc('sugestoes', { linha: 5, coluna: 10 })).sort((a, b) => a.ordem.localeCompare(b.ordem)).map(s => s.rotulo);
+    conferir('sout comes first', modelos[0] === 'sout', modelos.slice(0, 5).join(' | '));
+    await rpc('executar', { comando: 'undo' });
+    await rpc('executar', { comando: 'workbench.action.files.save' });
+}
+
 async function temas(h) {
     const lista = await rpc('temas');
     relatorio.dados.temas = lista.length;
@@ -230,6 +332,9 @@ return r})()`;
         () => APP === 'java' ? java(h, pasta) : null,
         () => comandos(h),
         () => APP === 'java' ? teclado(h, arquivo) : null,
+        () => APP === 'java' ? criacao(h, pasta) : null,
+        () => APP === 'java' ? gerar(h, pasta) : null,
+        () => APP === 'java' ? sugestoes(h, pasta) : null,
         () => autosave(h, arquivo),
         () => temas(h),
     ]) {

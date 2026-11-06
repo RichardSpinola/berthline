@@ -2,9 +2,6 @@
  "ij.contextActions": {
   "t": "editor.action.quickFix"
  },
- "ij.generate": {
-  "t": "editor.action.sourceAction"
- },
  "ij.findUsages": {
   "t": "references-view.findReferences"
  },

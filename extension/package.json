@@ -451,11 +451,11 @@
       "editor/context": [
         {
           "command": "ij.contextActions",
-          "group": "0_ij@1"
+          "group": "navigation@-10"
         },
         {
           "command": "ij.generate",
-          "group": "0_ij@2",
+          "group": "navigation@-9",
           "when": "editorLangId == java"
         },
         {
@@ -468,7 +468,7 @@
         },
         {
           "command": "ij.findUsages",
-          "group": "2_ij@1"
+          "group": "navigation@-5"
         },
         {
           "submenu": "ij.folding",
@@ -484,16 +484,16 @@
         },
         {
           "submenu": "ij.refactor",
-          "group": "2_ij@5"
+          "group": "navigation@-6"
         },
         {
           "command": "ij.run",
-          "group": "3_ij@1",
+          "group": "navigation@-8",
           "when": "editorLangId == java"
         },
         {
           "command": "ij.debug",
-          "group": "3_ij@2",
+          "group": "navigation@-7",
           "when": "editorLangId == java"
         },
         {
@@ -526,17 +526,17 @@
       "explorer/context": [
         {
           "submenu": "ij.new",
-          "group": "0_ij@1",
+          "group": "navigation@-3",
           "when": "explorerResourceIsFolder"
         },
         {
           "command": "ij.run",
-          "group": "0_ij@2",
+          "group": "navigation@-2",
           "when": "resourceExtname == .java"
         },
         {
           "command": "ij.debug",
-          "group": "0_ij@3",
+          "group": "navigation@-1",
           "when": "resourceExtname == .java"
         },
         {

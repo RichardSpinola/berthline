@@ -29,6 +29,11 @@ const acoes = {
         editor().selection = new vscode.Selection(p, p);
         return true;
     },
+    sugestoes: async ({ linha, coluna, gatilho }) => {
+        const lista = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', editor().document.uri, new vscode.Position(linha, coluna), gatilho);
+        return lista.items.map(i => ({ rotulo: i.label.label ?? i.label, ordem: i.sortText ?? '' }));
+    },
+    erros: ({ arquivo }) => vscode.languages.getDiagnostics(vscode.Uri.file(arquivo)).filter(d => d.severity === 0).map(d => d.message),
     estado: () => {
         const e = editor();
         return e && { texto: e.document.getText(), sujo: e.document.isDirty,

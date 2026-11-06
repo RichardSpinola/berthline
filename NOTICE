@@ -19,10 +19,5 @@ The Language Support for Java extension by Red Hat is under the Eclipse Public
 License 2.0, and it carries its own Java runtime. Source code:
 https://github.com/redhat-developer/vscode-java
 
-Parts included in the Berthline Tools extension:
-
-- Icons in extension/icones, Copyright 2000-2023 JetBrains s.r.o. and contributors,
-  Apache License 2.0 (see extension/icones/LICENSE.txt)
-
 Berthline is not affiliated with or endorsed by JetBrains, Microsoft, Oracle,
 Red Hat or the VSCodium project. All names belong to their owners.

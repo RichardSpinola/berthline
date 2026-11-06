@@ -5,6 +5,7 @@
     { "key": "shift+f9", "command": "ij.debugSelected", "when": "editorLangId == java || ij.temConfig" },
     { "key": "ctrl+shift+f9", "command": "java.workspace.compile" },
     { "key": "alt+insert", "command": "ij.newClass", "when": "explorerViewletFocus" },
+    { "key": "alt+insert", "command": "ij.generate", "when": "editorLangId == java && editorTextFocus" },
     { "key": "ctrl+alt+shift+n", "command": "ij.newProject" },
     {"key": "ctrl+2", "command": "ij.stop", "when": "inDebugMode || ij.emExecucao"},
     {"key": "ctrl+5", "command": "ij.rerun", "when": "inDebugMode"},
