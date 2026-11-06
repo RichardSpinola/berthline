@@ -7,10 +7,9 @@
 
 # Berthline
 
-**Your coding tools, ready to dock on any computer.**
+**A lighter editor that works closer to an IDE.**
 
-Portable Java and Web profiles built on VSCodium.<br>
-Extract, open the Hub and start coding. No install, no admin rights.
+Java and Web profiles built on VSCodium, with one Hub to launch them.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-26313D)](LICENSE)
 ![Platforms: Windows and Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-26313D)
@@ -71,9 +70,11 @@ Each profile keeps its own settings and extensions, so nothing touches an editor
 
 ## Why Berthline
 
-Berthline started with a simple problem: coding on a college computer where you can't install anything. Setting up an editor by hand takes time, and a shared computer may not keep it.
+IntelliJ IDEA is great, but it can use a lot of memory and slow down a modest computer. VS Code is lighter, yet many people complain about how it handles Java.
 
-So everything comes in one folder. You bring the editor, the extensions, Java and Node.js, and your setup works the same on the next computer. Keeping profiles apart also means a Java setup never slows down a Web project.
+Berthline tries to close that gap. Each profile sets up the editor for one kind of work, starting with Java, so it behaves more like an IDE and stays light. Keeping profiles apart also means a Java setup never slows down a Web project.
+
+It suits small and medium projects and modest computers. For large projects, a full IDE is still the better tool.
 
 ### The name
 
@@ -96,7 +97,6 @@ The icons follow the nautical theme. All of them share the same hull and change 
 
 - Early preview: expect rough edges.
 - No automatic updates yet. Download a new release to update.
-- Git Graph is not included, because its license doesn't allow redistribution. You can install it from the Extensions view, and the built-in Source Control view shows a graph.
 - A managed computer can block `.exe` files. Only its administrator can change that.
 
 ## Build from source
