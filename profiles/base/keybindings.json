@@ -1,21 +1,11 @@
 [
-    // Atalhos de executar do IntelliJ que o pacote de atalhos não cobre no Java
-    { "key": "shift+f10", "command": "ij.runSelected", "when": "editorLangId == java || ij.temConfig || editorLangId == html || editorLangId == javascript || editorLangId == typescript" },
-    { "key": "ctrl+shift+f10", "command": "ij.run", "when": "editorLangId == java" },
-    { "key": "shift+f9", "command": "ij.debugSelected", "when": "editorLangId == java || ij.temConfig || editorLangId == html || editorLangId == javascript || editorLangId == typescript" },
+    // Debug
     { "key": "ctrl+f5", "command": "workbench.action.debug.restart", "when": "inDebugMode" },
 
     // Janelas de ferramentas
     { "key": "alt+4", "command": "workbench.action.terminal.focus" },
     { "key": "alt+6", "command": "workbench.actions.view.problems" },
     { "key": "alt+0", "command": "workbench.view.scm" },
-
-    // Ctrl+F9 é do KDE aqui; este recompila o projeto
-    { "key": "ctrl+shift+f9", "command": "java.workspace.compile" },
-
-    // Criar classe e projeto
-    { "key": "alt+insert", "command": "ij.newClass", "when": "explorerViewletFocus" },
-    { "key": "ctrl+alt+shift+n", "command": "ij.newProject" },
 
     // Favoritos
     { "key": "f11", "command": "bookmarks.toggle", "when": "editorTextFocus" },
@@ -47,30 +37,15 @@
     // Teclas do IntelliJ no KDE e ações mapeadas da instalação
     {"key": "ctrl+1", "command": "editor.action.showHover", "when": "editorTextFocus"},
     {"key": "ctrl+shift+p", "command": "editor.action.showHover", "when": "editorTextFocus"},
-    {"key": "ctrl+2", "command": "ij.stop", "when": "inDebugMode || ij.emExecucao"},
-    {"key": "ctrl+5", "command": "ij.rerun", "when": "inDebugMode"},
-    {"key": "ctrl+5", "command": "ij.runSelected", "when": "(editorLangId == java || ij.temConfig || editorLangId == html || editorLangId == javascript || editorLangId == typescript) && !inDebugMode"},
-    {"key": "ctrl+5", "command": "ij.rerun", "when": "ij.rodando && !inDebugMode"},
-    {"key": "shift+f10", "command": "ij.rerun", "when": "!inDebugMode && terminalFocus"},
-    {"key": "ctrl+6", "command": "ij.changeSignature", "when": "editorLangId == java"},
-    {"key": "ctrl+f6", "command": "ij.changeSignature", "when": "editorLangId == java"},
-    {"key": "ctrl+7", "command": "ij.findInFile", "when": "editorTextFocus"},
     {"key": "ctrl+8", "command": "editor.debug.action.toggleBreakpoint", "when": "editorTextFocus"},
     {"key": "ctrl+shift+8", "command": "workbench.debug.action.focusBreakpointsView"},
-    {"key": "ctrl+9", "command": "java.workspace.compile"},
     {"key": "ctrl+0", "command": "workbench.action.gotoSymbol", "when": "editorTextFocus"},
-    {"key": "shift+alt+7", "command": "ij.findUsages", "when": "editorTextFocus"},
-    {"key": "shift+alt+8", "command": "ij.evaluate", "when": "inDebugMode"},
     {"key": "ctrl+alt+8", "command": "editor.debug.action.showDebugHover", "when": "inDebugMode"},
     {"key": "shift+alt+9", "command": "editor.debug.action.runToCursor", "when": "inDebugMode"},
     {"key": "shift+alt+0", "command": "workbench.action.debug.callStackTop", "when": "inDebugMode"},
     {"key": "shift+alt+l", "command": "editor.action.formatDocument", "when": "editorTextFocus"},
     {"key": "ctrl+l", "command": "editor.action.nextMatchFindAction", "when": "editorFocus"},
     {"key": "ctrl+shift+l", "command": "editor.action.previousMatchFindAction", "when": "editorFocus"},
-    {"key": "ctrl+alt+n", "command": "ij.inline", "when": "editorLangId == java"},
-    {"key": "shift+alt+v", "command": "ij.extractVariable", "when": "editorLangId == java"},
-    {"key": "alt+shift+f10", "command": "ij.runConfigs"},
-    {"key": "alt+shift+f9", "command": "ij.runConfigs"},
     {"key": "ctrl+j", "command": "editor.action.insertSnippet", "when": "editorTextFocus"},
     {"key": "ctrl+alt+j", "command": "editor.action.surroundWithSnippet", "when": "editorTextFocus"},
     {"key": "ctrl+alt+t", "command": "editor.action.surroundWithSnippet", "when": "editorTextFocus"},
@@ -79,9 +54,7 @@
     {"key": "ctrl+]", "command": "editor.action.jumpToBracket", "when": "editorTextFocus"},
     {"key": "shift+alt+g", "command": "editor.action.insertCursorAtEndOfEachLineSelected", "when": "editorTextFocus"},
     {"key": "alt+shift+insert", "command": "editor.action.toggleColumnSelection", "when": "editorTextFocus"},
-    {"key": "ctrl+alt+shift+c", "command": "java.action.copyFullyQualifiedName", "when": "editorTextFocus"},
     {"key": "ctrl+alt+shift+insert", "command": "workbench.action.files.newUntitledFile"},
-    {"key": "ctrl+alt+insert", "command": "ij.newClassTop"},
     {"key": "ctrl+alt+y", "command": "workbench.action.files.revert"},
     {"key": "ctrl+shift+f12", "command": "workbench.action.maximizeEditorHideSidebar"},
     {"key": "f12", "command": "workbench.action.focusPanel", "when": "editorTextFocus"},
@@ -89,15 +62,12 @@
     {"key": "shift+f1", "command": "editor.action.showHover", "when": "editorTextFocus"},
     {"key": "ctrl+alt+up", "command": "search.action.focusPreviousSearchResult"},
     {"key": "ctrl+alt+down", "command": "search.action.focusNextSearchResult"},
-    {"key": "alt+up", "command": "ij.prevMethod", "when": "editorLangId == java && editorTextFocus"},
-    {"key": "alt+down", "command": "ij.nextMethod", "when": "editorLangId == java && editorTextFocus"},
     {"key": "ctrl+k", "command": "workbench.view.scm", "when": "!terminalFocus"},
     {"key": "alt+`", "command": "workbench.view.scm"},
     {"key": "alt+2", "command": "workbench.view.extension.bookmarks"},
     {"key": "alt+shift+i", "command": "workbench.actions.view.problems"},
     {"key": "alt+/", "command": "editor.action.triggerSuggest", "when": "editorTextFocus"},
     {"key": "delete", "command": "moveFileToTrash", "when": "explorerViewletFocus && !inputFocus"},
-    {"key": "alt+delete", "command": "ij.safeDelete", "when": "explorerViewletFocus && !inputFocus"},
     {"key": "f5", "command": "filesExplorer.copy", "when": "explorerViewletFocus && !inputFocus"},
     {"key": "shift+enter", "command": "explorer.openToSide", "when": "explorerViewletFocus && !inputFocus"}
 ]

@@ -102,6 +102,10 @@
         "ij.debugSelected",
         "ij.rerun",
         "ij.stop",
+        "web.run",
+        "web.debug",
+        "web.rerun",
+        "web.stop",
         "workbench.action.debug.stop",
         "workbench.action.debug.restart"
     ],

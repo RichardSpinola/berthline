@@ -1,13 +1,21 @@
 const vscode = require('vscode');
+const { ativarComum, abrirRun, naJanela } = require('./comum/comum');
 
-const FERRAMENTAS = process.env.SUITE_TOOLS ?? require('path').join(require('os').homedir(), '.config', 'berthline');
 const ACOES = require('./acoes.json');
 
 const MAIN = /\bstatic\s+void\s+main\s*\(|^\s*(public\s+)?void\s+main\s*\(/;
 
 // Modelos postfix do IntelliJ que a extensão Java não oferece
 const POSTFIX = {
+    var: 'var ${1:valor} = E;$0',
     sout: 'System.out.println(E);$0',
+    if: 'if (E) {\n\t$0\n}',
+    else: 'if (!E) {\n\t$0\n}',
+    not: '!E$0',
+    null: 'if (E == null) {\n\t$0\n}',
+    for: 'for (var ${1:item} : E) {\n\t$0\n}',
+    while: 'while (E) {\n\t$0\n}',
+    cast: '((${1:Tipo}) E)$0',
     soutv: 'System.out.println("E = " + E);$0',
     serr: 'System.err.println(E);$0',
     souf: 'System.out.printf(E$1);$0',
@@ -33,20 +41,24 @@ const POSTFIX = {
     format: 'String.format(E$1)$0',
     reqnonnull: 'java.util.Objects.requireNonNull(E)$0'
 };
-const EXPRESSAO = /((?:"(?:[^"\\]|\\.)*"|\([^()]*\)|[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)(?:\.[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)*)\.(\w*)$/;
+const EXPRESSAO = /((?:new\s+)?(?:"(?:[^"\\]|\\.)*"|\([^()]*\)|[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)(?:\.[\w$]+(?:\([^()]*\)|\[[^\]]*\])*)*)\.(\w*)$/;
 
 function postfix(doc, pos) {
     const m = doc.lineAt(pos.line).text.slice(0, pos.character).match(EXPRESSAO);
     if (!m) return [];
+    // Só a palavra depois do ponto entra na nota da lista; sem isso o postfix passaria à frente dos métodos
     const inicio = pos.character - m[0].length;
-    const faixa = new vscode.Range(pos.line, inicio, pos.line, pos.character);
-    return Object.entries(POSTFIX).map(([nome, corpo]) => {
+    const ponto = pos.character - m[2].length;
+    const faixa = new vscode.Range(pos.line, ponto, pos.line, pos.character);
+    const expressao = new vscode.Range(pos.line, inicio, pos.line, ponto);
+    return Object.entries(POSTFIX).map(([nome, corpo], ordem) => {
         const item = new vscode.CompletionItem(nome, vscode.CompletionItemKind.Keyword);
-        item.insertText = new vscode.SnippetString(corpo.replaceAll('$', '\u0000').replace(/E(?=[^\w]|$)/g, m[1].replaceAll('$', '\\$')).replaceAll('\u0000', '$'));
+        item.insertText = new vscode.SnippetString(corpo.replaceAll('$', '\u0000').replace(/\bE\b/g, () => m[1].replaceAll('$', '\\$')).replaceAll('\u0000', '$'));
         item.range = faixa;
-        item.filterText = `${m[1]}.${nome}`;
+        item.additionalTextEdits = [vscode.TextEdit.delete(expressao)];
+        item.filterText = nome;
         item.detail = 'Postfix';
-        item.sortText = `z${nome}`;
+        item.sortText = `z${String(ordem).padStart(2, '0')}`;
         return item;
     });
 }
@@ -65,17 +77,23 @@ function carregarModelos(context) {
     }
 }
 
+// O que mais se usa em aula vem primeiro; atalhos de uma ou duas letras ficam só no Ctrl+J
+const MODELOS_PRIMEIRO = ['sout', 'psvm', 'main', 'fori', 'iter', 'soutv', 'souf', 'serr', 'ifn', 'inn', 'thr', 'itar'];
+const SO_CTRL_J = /^[A-Z][A-Za-z]?$/;
+
 function sugerirModelos(modelos, doc, pos) {
     const antes = doc.lineAt(pos.line).text.slice(0, pos.character);
     const palavra = antes.match(/(?:^|[^\w.$])([A-Za-z][\w-]*)$/)?.[1];
     if (!palavra || antes.includes('//') || (antes.match(/"/g)?.length ?? 0) % 2) return [];
     const faixa = new vscode.Range(pos.line, pos.character - palavra.length, pos.line, pos.character);
-    return modelos.filter(m => m.prefixo.startsWith(palavra)).map(m => {
+    return modelos.filter(m => m.prefixo.startsWith(palavra) && !SO_CTRL_J.test(m.prefixo)).map(m => {
         const item = new vscode.CompletionItem({ label: m.prefixo, description: m.descricao }, vscode.CompletionItemKind.Keyword);
+        const ordem = MODELOS_PRIMEIRO.indexOf(m.prefixo);
         item.insertText = new vscode.SnippetString(m.corpo);
         item.range = faixa;
         item.filterText = m.prefixo;
-        item.sortText = `!${m.prefixo}`;
+        // Uma letra só ainda pode ser o começo de qualquer nome: não passa à frente deles
+        item.sortText = palavra.length > 1 ? `!${String(ordem < 0 ? 99 : ordem).padStart(2, '0')}${m.prefixo}` : `~${m.prefixo}`;
         item.preselect = m.prefixo === palavra;
         return item;
     });
@@ -83,12 +101,67 @@ function sugerirModelos(modelos, doc, pos) {
 
 // Janela única de New Java Class, como no IntelliJ
 const TIPOS_NOVOS = [
-    { label: 'Class', icone: 'class', codigo: n => `public class ${n} {\n    \n}\n`, cursor: [1, 4] },
-    { label: 'Interface', icone: 'interface', codigo: n => `public interface ${n} {\n    \n}\n`, cursor: [1, 4] },
-    { label: 'Record', icone: 'record', codigo: n => `public record ${n}() {\n}\n`, cursor: [0, n => `public record ${n}(`.length] },
-    { label: 'Enum', icone: 'enum', codigo: n => `public enum ${n} {\n    \n}\n`, cursor: [1, 4] },
-    { label: 'Annotation', icone: 'annotation', codigo: n => `public @interface ${n} {\n    \n}\n`, cursor: [1, 4] },
+    { label: 'Class', icone: 'class', codigo: (n, h) => `public class ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
+    { label: 'Abstract Class', icone: 'classAbstract', codigo: (n, h) => `public abstract class ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
+    { label: 'Interface', icone: 'interface', proibe: 'implements', codigo: (n, h) => `public interface ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
+    {
+        label: 'Enum', icone: 'enum', proibe: 'extends', cursor: [1, 4, 9],
+        codigo: (n, h) => `public enum ${n}${h} {\n    FIRST("first"),\n    SECOND("second");\n\n    private final String label;\n\n    ${n}(String label) {\n        this.label = label;\n    }\n\n    public String getLabel() {\n        return label;\n    }\n}\n`,
+    },
+    {
+        label: 'Record', icone: 'record', proibe: 'extends', cursor: [0, n => `public record ${n}(`.length, n => `public record ${n}(String name, int value`.length],
+        codigo: (n, h) => `public record ${n}(String name, int value)${h} {\n}\n`,
+    },
+    {
+        label: 'Exception', icone: 'exception', pai: 'Exception', cursor: [2, 8],
+        codigo: (n, h) => `public class ${n}${h} {\n    public ${n}(String message) {\n        super(message);\n    }\n}\n`,
+    },
+    {
+        label: 'Main', icone: 'main', cursor: [2, 8],
+        codigo: (n, h) => `public class ${n}${h} {\n    public static void main(String[] args) {\n        \n    }\n}\n`,
+    },
+    { label: 'Annotation', icone: 'annotation', proibe: 'extends implements', codigo: (n, h) => `public @interface ${n}${h} {\n    \n}\n`, cursor: [1, 4] },
 ];
+
+const TIPO = '[A-Za-z_$][\\w$.]*(?:<[^{}]*>)?';
+const LISTA = `${TIPO}(?:\\s*,\\s*${TIPO})*`;
+const PEDIDO = new RegExp(`^([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*?)(?:\\.java)?(?:\\s+extends\\s+(${LISTA}))?(?:\\s+implements\\s+(${LISTA}))?$`);
+
+function lerPedido(texto, tipo) {
+    const achado = texto.trim().match(PEDIDO);
+    if (!achado) return { erro: 'not a valid name' };
+    const [, nome, pai, contratos] = achado;
+    if (pai && tipo.proibe?.includes('extends')) return { erro: `${tipo.label} cannot use extends` };
+    if (contratos && tipo.proibe?.includes('implements')) return { erro: `${tipo.label} cannot use implements` };
+    const base = pai ?? tipo.pai;
+    return { nome, heranca: `${base ? ` extends ${base}` : ''}${contratos ? ` implements ${contratos}` : ''}`, herda: !!(pai || contratos) };
+}
+
+// O que o Java Language Server oferece como conserto para o que a herança exige
+const CONSERTOS = [
+    [/cannot be resolved to a type/, /^Import '/],
+    [/must implement the inherited abstract method/, /^Add unimplemented methods/],
+    [/Implicit super constructor|default constructor/, /^Add constructor/],
+];
+
+async function aplicarAcao(acao) {
+    if (acao.edit) await vscode.workspace.applyEdit(acao.edit);
+    if (acao.command) await vscode.commands.executeCommand(acao.command.command, ...(acao.command.arguments ?? []));
+}
+
+async function completarHeranca(uri) {
+    for (let i = 0; i < 40; i++) {
+        await new Promise(pronto => setTimeout(pronto, 500));
+        for (const [erro, titulo] of CONSERTOS) {
+            const problema = vscode.languages.getDiagnostics(uri).find(d => erro.test(d.message));
+            if (!problema) continue;
+            // O servidor só preenche a edição quando se pede a resolução de cada ação
+            const acoes = await vscode.commands.executeCommand('vscode.executeCodeActionProvider', uri, problema.range, vscode.CodeActionKind.QuickFix.value, 20);
+            const acao = acoes?.find(a => titulo.test(a.title));
+            if (acao) await aplicarAcao(acao);
+        }
+    }
+}
 
 async function pastaDestino(uri) {
     let alvo = uri;
@@ -99,7 +172,8 @@ async function pastaDestino(uri) {
         await vscode.env.clipboard.writeText(guardado);
         if (caminho !== guardado && require('path').isAbsolute(caminho)) alvo = vscode.Uri.file(caminho);
     }
-    alvo ??= vscode.window.activeTextEditor?.document.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri;
+    const ativo = vscode.window.activeTextEditor?.document.uri;
+    alvo ??= (ativo?.scheme === 'file' ? ativo : vscode.workspace.workspaceFolders?.[0]?.uri);
     if (!alvo) return undefined;
     const info = await vscode.workspace.fs.stat(alvo);
     return info.type & vscode.FileType.Directory ? alvo : vscode.Uri.joinPath(alvo, '..');
@@ -112,19 +186,20 @@ function pacoteDe(pasta) {
     return raiz >= 0 ? partes.slice(raiz + 1) : [];
 }
 
-async function criarClasse(pasta, nome, tipo) {
-    const partes = nome.replace(/\.java$/, '').split('.');
+async function criarClasse(pasta, pedido, tipo) {
+    const partes = pedido.nome.split('.');
     const classe = partes.pop();
     const pacote = [...pacoteDe(pasta), ...partes].join('.');
     const arquivo = vscode.Uri.joinPath(pasta, ...partes, `${classe}.java`);
     const existe = await vscode.workspace.fs.stat(arquivo).then(() => true, () => false);
     if (existe) return `${classe} already exists`;
     const cabecalho = pacote ? `package ${pacote};\n\n` : '';
-    await vscode.workspace.fs.writeFile(arquivo, Buffer.from(cabecalho + tipo.codigo(classe)));
+    await vscode.workspace.fs.writeFile(arquivo, Buffer.from(cabecalho + tipo.codigo(classe, pedido.heranca)));
     const linha = tipo.cursor[0] + (pacote ? 2 : 0);
-    const coluna = typeof tipo.cursor[1] === 'function' ? tipo.cursor[1](classe) : tipo.cursor[1];
-    const posicao = new vscode.Position(linha, coluna);
-    await vscode.window.showTextDocument(arquivo, { selection: new vscode.Range(posicao, posicao), preview: false });
+    const coluna = c => (typeof c === 'function' ? c(classe) : c);
+    const inicio = coluna(tipo.cursor[1]);
+    await vscode.window.showTextDocument(arquivo, { selection: new vscode.Range(linha, inicio, linha, coluna(tipo.cursor[2] ?? inicio)), preview: false });
+    if (pedido.herda) completarHeranca(arquivo);
     return undefined;
 }
 
@@ -133,22 +208,19 @@ async function novaClasse(uri) {
     if (!pasta) return vscode.window.showInformationMessage('Open a project first.');
     const janela = vscode.window.createQuickPick();
     janela.title = 'New Java Class';
-    janela.placeholder = 'Name';
+    janela.placeholder = 'Name, optionally: extends Base implements Foo, Bar';
     janela.sortByLabel = false;
     janela.items = TIPOS_NOVOS.map(tipo => ({
         label: tipo.label,
         alwaysShow: true,
-        iconPath: vscode.Uri.file(require('path').join(__dirname, 'icones', `${tipo.icone}_dark.svg`)),
+        iconPath: vscode.Uri.file(require('path').join(__dirname, 'icones', `${tipo.icone}.svg`)),
         tipo,
     }));
     janela.onDidChangeValue(() => { janela.title = 'New Java Class'; });
     janela.onDidAccept(async () => {
-        const nome = janela.value.trim();
-        if (!/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*(\.java)?$/.test(nome)) {
-            janela.title = 'New Java Class: not a valid name';
-            return;
-        }
-        const erro = await criarClasse(pasta, nome, janela.activeItems[0].tipo);
+        const { tipo } = janela.activeItems[0];
+        const pedido = lerPedido(janela.value, tipo);
+        const erro = pedido.erro ?? await criarClasse(pasta, pedido, tipo);
         if (erro) janela.title = `New Java Class: ${erro}`;
         else janela.dispose();
     });
@@ -156,12 +228,63 @@ async function novaClasse(uri) {
     janela.show();
 }
 
-// Pequenas animações, como as do IntelliJ
-function estiloAnimacao(context) {
-    const css = `@keyframes ijEntra { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
-.suggest-widget.visible, .quick-input-widget, .context-view .monaco-menu-container, .monaco-hover, .notification-toast { animation: ijEntra 110ms ease-out; }
-.monaco-list-row, .tabs-container .tab, .action-item .action-label { transition: background-color 90ms ease, color 90ms ease; }`;
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-anim')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-anim'}));s.textContent=${JSON.stringify(css)};})()`);
+// Menu Generate, como o Alt+Insert do IntelliJ, sobre as ações do Java Language Server
+const GERAR = [
+    ['Constructor…', /Constructors/],
+    ['Getter…', /Getters(?! and)/],
+    ['Setter…', /(?<!and )Setters/],
+    ['Getter and Setter…', /Getters and Setters/],
+    ['equals() and hashCode()…', /hashCode\(\) and equals\(\)/],
+    ['toString()…', /toString\(\)/],
+    ['Override or Implement Methods…', /Override\/Implement Methods/],
+    ['Delegate Methods…', /Delegate Methods/],
+];
+
+async function gerar() {
+    const editor = vscode.window.activeTextEditor;
+    if (editor?.document.languageId !== 'java') return;
+    const acoes = await vscode.commands.executeCommand('vscode.executeCodeActionProvider', editor.document.uri, editor.selection, 'source') ?? [];
+    const itens = GERAR.flatMap(([label, titulo]) => {
+        const acao = acoes.find(a => titulo.test(a.title));
+        return acao ? [{ label, acao }] : [];
+    });
+    if (!itens.length) return vscode.window.showInformationMessage('Nothing to generate here. Put the cursor inside a class.');
+    const escolha = await vscode.window.showQuickPick(itens, { placeHolder: 'Generate' });
+    if (escolha) return aplicarAcao(escolha.acao);
+}
+
+// Botão Build: compilar e gerar o .jar sem procurar comando
+async function compilar(completo) {
+    const resultado = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Building' }, () =>
+        vscode.commands.executeCommand('java.workspace.compile', completo)).then(s => s, () => 0);
+    if (resultado === 1) {
+        vscode.window.setStatusBarMessage('$(check) Build finished', 5000);
+        return true;
+    }
+    vscode.commands.executeCommand('workbench.panel.markers.view.focus');
+    vscode.window.showErrorMessage('Build failed. See the Problems panel.');
+    return false;
+}
+
+// Sem classes compiladas o assistente só diz "no valid classpath"; melhor compilar antes
+async function exportarJar() {
+    if (await compilar(true)) return vscode.commands.executeCommand('java.view.package.exportJar');
+}
+
+async function menuBuild() {
+    const itens = [
+        { label: '$(tools) Build Project', description: 'Compile what changed', acao: () => compilar(false) },
+        { label: '$(refresh) Rebuild Project', description: 'Compile everything again', acao: () => compilar(true) },
+        { label: '$(package) Export Runnable JAR…', description: 'Saved in the project folder', acao: exportarJar },
+    ];
+    const escolha = await vscode.window.showQuickPick(itens, { placeHolder: 'Build' });
+    return escolha?.acao();
+}
+
+// Java só aceita uma pasta vinda do Explorer; pela paleta não há nenhuma
+function marcarFontes(comando, uri) {
+    if (!uri) return vscode.window.showInformationMessage('Right-click a folder in the Explorer to use this.');
+    return vscode.commands.executeCommand(comando, uri);
 }
 
 function executar(comando, uri) {
@@ -169,9 +292,6 @@ function executar(comando, uri) {
     if (!alvo) return;
     return vscode.commands.executeCommand(comando, alvo);
 }
-
-// Terminal da execução atual: Run sem sessão de debug, como a janela Run do IntelliJ
-let execucao;
 
 function javaDoEditor() {
     const fs = require('fs'), path = require('path');
@@ -210,95 +330,6 @@ async function rodarDireto(uri, opcoes = {}) {
         comando: [javaDoEditor(), ...(opcoes.vm ?? []), '-cp', classpath, principal, ...(opcoes.args ?? [])],
         repetir: () => rodarDireto(alvo, opcoes),
     });
-}
-
-function nodeDaSuite() {
-    const pronto = process.env.SUITE_NODE;
-    if (pronto) return pronto;
-    return process.platform === 'win32' ? 'node.exe' : process.execPath;
-}
-
-function abrirRun({ nome, cwd, env, aoFim, comando, repetir }) {
-    const fs = require('fs'), path = require('path');
-    execucao?.terminal.dispose();
-    fs.mkdirSync(contexto.globalStorageUri.fsPath, { recursive: true });
-    const marca = path.join(contexto.globalStorageUri.fsPath, `fim-${Date.now()}`);
-    const node = nodeDaSuite();
-    const terminal = vscode.window.createTerminal({
-        name: nome ?? 'Run',
-        iconPath: new vscode.ThemeIcon('play'),
-        cwd,
-        env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-        shellPath: node,
-        shellArgs: [path.join(__dirname, 'runner.js'), marca, ...comando],
-    });
-    execucao = { terminal, repetir, marca };
-    vscode.commands.executeCommand('setContext', 'ij.emExecucao', true);
-    aguardarFim(terminal, marca, () => {
-        vscode.commands.executeCommand('setContext', 'ij.emExecucao', false);
-        aoFim?.();
-    });
-    terminal.show(false);
-    vscode.commands.executeCommand('setContext', 'ij.rodando', true);
-}
-
-// Web: HTML abre no Live Server; JS e TS rodam no Node da suíte
-const LINGUAGENS_WEB = ['html', 'javascript', 'typescript'];
-
-function arquivoWeb() {
-    const doc = vscode.window.activeTextEditor?.document;
-    return doc && LINGUAGENS_WEB.includes(doc.languageId) ? doc : undefined;
-}
-
-async function rodarWeb(doc) {
-    await doc.save();
-    if (doc.languageId === 'html') return vscode.commands.executeCommand('extension.liveServer.goOnline');
-    abrirRun({
-        nome: 'Run',
-        cwd: vscode.workspace.getWorkspaceFolder(doc.uri)?.uri,
-        comando: [nodeDaSuite(), doc.uri.fsPath],
-        repetir: () => rodarWeb(doc),
-    });
-}
-
-function navegadorWeb() {
-    return process.platform === 'win32' ? { type: 'pwa-msedge' } : { type: 'pwa-chrome', runtimeExecutable: process.env.SUITE_BROWSER ?? 'vivaldi' };
-}
-
-async function depurarWeb(doc) {
-    await doc.save();
-    const pasta = vscode.workspace.getWorkspaceFolder(doc.uri);
-    if (doc.languageId === 'html') {
-        return vscode.debug.startDebugging(pasta, { ...navegadorWeb(), request: 'launch', name: 'Debug in Browser', file: doc.uri.fsPath, webRoot: pasta?.uri.fsPath });
-    }
-    return vscode.debug.startDebugging(pasta, { type: 'pwa-node', request: 'launch', name: 'Debug', program: doc.uri.fsPath, runtimeExecutable: nodeDaSuite(), console: 'integratedTerminal' });
-}
-
-function pararExecucao() {
-    if (vscode.debug.activeDebugSession) return vscode.commands.executeCommand('workbench.action.debug.stop');
-    if (!execucao) return;
-    execucao.terminal.sendText('\x03', false);
-    // Reforço para terminais em que o Ctrl+C não chega ao programa
-    const { marca } = execucao;
-    setTimeout(() => {
-        if (execucao?.marca === marca && !require('fs').existsSync(marca)) require('fs').writeFileSync(`${marca}.stop`, '');
-    }, 1500);
-}
-
-function reexecutar() {
-    if (vscode.debug.activeDebugSession) return vscode.commands.executeCommand('workbench.action.debug.restart');
-    return execucao?.repetir();
-}
-
-function aguardarFim(terminal, marca, aoFim) {
-    const fs = require('fs');
-    const espera = setInterval(() => {
-        if (execucao?.terminal !== terminal) return clearInterval(espera);
-        if (!fs.existsSync(marca)) return;
-        clearInterval(espera);
-        fs.rmSync(marca, { force: true });
-        aoFim();
-    }, 500);
 }
 
 // Run Configurations: ficam no launch.json do projeto, as mesmas do Debug
@@ -349,8 +380,6 @@ async function arquivoDe(config) {
 }
 
 async function rodarSelecionado() {
-    const web = arquivoWeb();
-    if (web) return rodarWeb(web);
     const config = configAtual();
     if (!config) return rodarDireto();
     const uri = await arquivoDe(config);
@@ -358,8 +387,6 @@ async function rodarSelecionado() {
 }
 
 function depurarSelecionado() {
-    const web = arquivoWeb();
-    if (web) return depurarWeb(web);
     const config = configAtual();
     if (!config) return executar('java.debug.debugJavaFile');
     return vscode.debug.startDebugging(pastaAtual(), { console: 'integratedTerminal', ...config });
@@ -461,17 +488,6 @@ async function abrirDebugComTerminal() {
 
 const moverTerminal = destino => vscode.commands.executeCommand('vscode.moveViews', { viewIds: ['terminal'], destinationId: destino }).then(undefined, () => {});
 
-// Extensões novas abrem uma aba de novidades na primeira vez; fecha sem incomodar
-function fecharNovidades() {
-    setTimeout(() => {
-        for (const grupo of vscode.window.tabGroups.all) {
-            for (const aba of grupo.tabs) {
-                if (/^What's New/.test(aba.label)) vscode.window.tabGroups.close(aba).then(undefined, () => {});
-            }
-        }
-    }, 6000);
-}
-
 // Esconde uma vez os painéis que o IntelliJ não tem; voltam pelo clique direito nos títulos
 async function esconderPaineis(context) {
     if (context.globalState.get('paineisEscondidos')) return;
@@ -522,163 +538,9 @@ async function exclusaoSegura(uri) {
     return vscode.commands.executeCommand('moveFileToTrash', alvo);
 }
 
-// Caminho do arquivo no rodapé, como a barra de navegação do IntelliJ
-function caminhoRodape(item) {
-    const doc = vscode.window.activeTextEditor?.document;
-    if (!doc || doc.uri.scheme !== 'file') {
-        item.hide();
-        return;
-    }
-    const partes = vscode.workspace.asRelativePath(doc.uri, true).split('/');
-    partes[partes.length - 1] = partes[partes.length - 1].replace(/\.java$/, '');
-    item.text = partes.join(' $(chevron-right) ');
-    item.show();
-}
-
-// Linha com breakpoint fica vermelha, como no IntelliJ
-const LINHA_BREAKPOINT = vscode.window.createTextEditorDecorationType({
-    isWholeLine: true,
-    backgroundColor: '#5A2B2F'
-});
-
-function pintarBreakpoints() {
-    for (const editor of vscode.window.visibleTextEditors) {
-        const faixas = vscode.debug.breakpoints
-            .filter(b => b instanceof vscode.SourceBreakpoint && b.enabled && b.location.uri.toString() === editor.document.uri.toString())
-            .map(b => b.location.range);
-        editor.setDecorations(LINHA_BREAKPOINT, faixas);
-    }
-}
-
-// Comando pedido pela tela de início para a janela que acabou de abrir
-function comandoPendente() {
-    const fs = require('fs');
-    const arquivo = require('path').join(FERRAMENTAS, 'ao-abrir');
-    if (!fs.existsSync(arquivo)) return;
-    const comando = fs.readFileSync(arquivo, 'utf8').trim();
-    fs.unlinkSync(arquivo);
-    if (comando) vscode.commands.executeCommand(comando);
-}
-
-// Foto de fundo aplicada só nesta janela do editor, sem alterar arquivos internos
-const IMAGEM = require('path').join(FERRAMENTAS, 'fundo.jpg');
-const OPCOES = require('path').join(FERRAMENTAS, 'opcoes.json');
-const FORCA_PADRAO = 0.1;
-
-function lerOpcoes() {
-    try {
-        return JSON.parse(require('fs').readFileSync(OPCOES, 'utf8'));
-    } catch {
-        return {};
-    }
-}
-
-async function naJanela(context, expressao) {
-    const fs = require('fs'), path = require('path');
-    const dados = path.resolve(context.globalStorageUri.fsPath, '..', '..', '..');
-    const porta = fs.readFileSync(path.join(dados, 'DevToolsActivePort'), 'utf8').split('\n')[0];
-    const paginas = await (await fetch(`http://127.0.0.1:${porta}/json/list`)).json();
-    let valor;
-    for (const pagina of paginas.filter(p => p.type === 'page')) {
-        await new Promise(pronto => {
-            const ws = new WebSocket(pagina.webSocketDebuggerUrl);
-            ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: expressao } }));
-            ws.onmessage = mensagem => { ws.close(); valor = JSON.parse(mensagem.data).result?.result?.value; pronto(); };
-            ws.onerror = pronto;
-        });
-    }
-    return valor;
-}
-
-// Ícone do app, em cinza, na tela vazia do editor
-function marcaDagua(context) {
-    const fs = require('fs'), arquivo = process.env.SUITE_WATERMARK;
-    if (!arquivo || !fs.existsSync(arquivo)) return Promise.resolve();
-    const url = `data:image/svg+xml;base64,${fs.readFileSync(arquivo).toString('base64')}`;
-    const css = `.editor-group-letterpress, .editor-group-watermark .letterpress { background-image: url(${url}) !important; }`;
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-marca')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-marca'}));s.textContent=${JSON.stringify(css)}})()`);
-}
-
-function fundoEditor(context) {
-    const fs = require('fs');
-    const forca = lerOpcoes().fundo ?? FORCA_PADRAO;
-    const url = fs.existsSync(IMAGEM) ? `data:image/jpeg;base64,${fs.readFileSync(IMAGEM).toString('base64')}` : '';
-    const css = url && `.part.editor .editor-instance::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 30;
-        opacity: var(--ij-fundo, ${forca}); background: url(${url}) center / cover no-repeat; }`;
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-fundo')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-fundo'}));s.textContent=${JSON.stringify(css)};document.documentElement.style.setProperty('--ij-fundo','${forca}')})()`);
-}
-
-function gravarForca(valor) {
-    require('fs').writeFileSync(OPCOES, JSON.stringify({ ...lerOpcoes(), fundo: valor }));
-}
-
-function paginaFundo(forca) {
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 24px; max-width: 460px; }
-h2 { font-size: 15px; margin: 0 0 18px; }
-label { display: block; margin-bottom: 8px; }
-input[type=range] { width: 100%; accent-color: #3574F0; }
-.botoes { margin-top: 20px; display: flex; gap: 8px; }
-button { background: transparent; color: inherit; border: 1px solid #4E5157; border-radius: 4px; padding: 5px 13px; cursor: pointer; }
-button:hover { background: #2B2D30; }
-</style></head><body>
-<h2>Editor Background</h2>
-<label>Strength: <span id="valor">${Math.round(forca * 100)}%</span></label>
-<input id="forca" type="range" min="3" max="40" value="${Math.round(forca * 100)}">
-<div class="botoes"><button id="escolher">Choose Image…</button><button id="remover">Remove Image</button></div>
-<script>
-const vscode = acquireVsCodeApi();
-const forca = document.getElementById('forca');
-forca.addEventListener('input', () => {
-    document.getElementById('valor').textContent = forca.value + '%';
-    vscode.postMessage({ acao: 'forca', valor: Number(forca.value) / 100 });
-});
-for (const acao of ['escolher', 'remover']) {
-    document.getElementById(acao).addEventListener('click', () => vscode.postMessage({ acao }));
-}
-</script></body></html>`;
-}
-
-async function trocarFundo(context) {
-    const [arquivo] = await vscode.window.showOpenDialog({
-        title: 'Background image', filters: { Images: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] },
-    }) ?? [];
-    if (!arquivo) return;
-    const { status } = require('child_process').spawnSync(process.env.SUITE_HUB, ['--background', arquivo.fsPath]);
-    if (status !== 0) return vscode.window.showErrorMessage('Could not read this image.');
-    return fundoEditor(context).catch(avisarReabrir);
-}
-
-function avisarReabrir() {
-    vscode.window.showInformationMessage('Saved. Close the editor and open a project again to see it.');
-}
-
-// Como o IntelliJ: erro só aparece quando a digitação para
-const PAUSA_ANALISE = 500;
-let digitando = false;
-let fimDigitacao;
-
-function estiloPausa(context) {
-    const css = '.ij-digitando .squiggly-error, .ij-digitando .squiggly-warning, .ij-digitando .squiggly-info { visibility: hidden; }';
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-pausa')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-pausa'}));s.textContent=${JSON.stringify(css)}})()`);
-}
-
-function aoDigitar(context, evento) {
-    if (evento.document.uri.scheme !== 'file' || !evento.contentChanges.length) return;
-    if (!digitando) {
-        digitando = true;
-        naJanela(context, "document.body.classList.add('ij-digitando')").catch(() => {});
-    }
-    clearTimeout(fimDigitacao);
-    fimDigitacao = setTimeout(() => {
-        digitando = false;
-        naJanela(context, "document.body.classList.remove('ij-digitando')").catch(() => {});
-    }, PAUSA_ANALISE);
-}
-
-// Árvore como a do IntelliJ: nome sem .java e o ícone real do tipo
+// Árvore e abas como no IntelliJ: nome sem .java e um ícone para cada tipo
 const TIPO_JAVA = /^\s*((?:(?:public|protected|private|abstract|final|sealed|non-sealed|static|strictfp)\s+)*)(class|interface|enum|record|@interface)\s+\w+(?:<[^{]*>)?(\s+extends\s+\w*(?:Exception|Error|Throwable))?/m;
-const ICONES = ['class', 'classAbstract', 'exception', 'test', 'interface', 'enum', 'record', 'annotation'];
+const ICONES = ['class', 'classAbstract', 'exception', 'test', 'main', 'interface', 'enum', 'record', 'annotation'];
 
 function tipoJava(conteudo) {
     const achado = conteudo.match(TIPO_JAVA);
@@ -687,39 +549,33 @@ function tipoJava(conteudo) {
     if (achado[2] !== 'class') return achado[2];
     if (achado[3]) return 'exception';
     if (/^\s*@(?:org\.junit\.[\w.]*)?Test\b/m.test(conteudo)) return 'test';
-    return /\babstract\b/.test(achado[1]) ? 'classAbstract' : 'class';
+    if (/\babstract\b/.test(achado[1])) return 'classAbstract';
+    return conteudo.split('\n').some(l => MAIN.test(l)) ? 'main' : 'class';
 }
 
-function cssIcones() {
+// O tema de ícones só decide pelo nome e não recarrega sem piscar a janela toda.
+// As classes que o editor põe em cada rótulo trazem nome e pasta, então uma regra por arquivo vale em todo lugar.
+function varsIcones() {
     const fs = require('fs'), path = require('path');
-    const base = `.explorer-folders-view [data-ij]::before { content: '' !important; flex: none !important; width: 16px !important; height: 16px !important; margin: auto 6px auto 0 !important; padding: 0 !important; background-repeat: no-repeat !important; background-position: center !important; background-size: 16px !important; }`;
-    return base + ICONES.map(nome => {
-        const svg = fs.readFileSync(path.join(__dirname, 'icones', `${nome}_dark.svg`)).toString('base64');
-        return `.explorer-folders-view [data-ij="${nome}"]::before { background-image: url(data:image/svg+xml;base64,${svg}) !important; }`;
-    }).join('');
+    return `:root { ${ICONES.map(nome => {
+        const svg = fs.readFileSync(path.join(__dirname, 'icones', `${nome}.svg`)).toString('base64');
+        return `--ij-icone-${nome}: url(data:image/svg+xml;base64,${svg});`;
+    }).join(' ')} }`;
 }
 
-const scriptArvore = css => `(()=>{
+const scriptArvore = vars => `(()=>{
 if (window.__ijArvore) return;
-const estilo = document.head.appendChild(document.createElement('style'));
-estilo.textContent = ${JSON.stringify(css)};
+document.head.appendChild(document.createElement('style')).textContent = ${JSON.stringify(vars)};
+const regras = document.head.appendChild(document.createElement('style'));
+regras.id = 'ij-tipos';
+window.__ijIcones = lista => {
+  regras.textContent = lista.map(([pasta, arquivo, tipo]) =>
+    '.show-file-icons .' + CSS.escape(pasta + '-name-dir-icon') + '.' + CSS.escape(arquivo + '-name-file-icon') + '::before { background-image: var(--ij-icone-' + tipo + ') !important; }').join(' ');
+};
 const aplicar = () => {
-  for (const rotulo of document.querySelectorAll('.explorer-folders-view .monaco-icon-label')) {
-    const nome = rotulo.querySelector('.label-name');
-    if (!nome) continue;
-    const texto = document.createTreeWalker(nome, NodeFilter.SHOW_TEXT).nextNode();
-    if (!texto) continue;
-    if (texto.data.endsWith('.java')) {
-      const curto = texto.data.slice(0, -5);
-      texto.data = curto;
-      rotulo.dataset.ijNome = curto;
-    } else if (rotulo.dataset.ijNome !== texto.data) {
-      delete rotulo.dataset.ijNome;
-      delete rotulo.dataset.ij;
-      continue;
-    }
-    const letra = window.__ijTipos?.[rotulo.dataset.ijNome];
-    if (letra && rotulo.dataset.ij !== letra) rotulo.dataset.ij = letra;
+  for (const rotulo of document.querySelectorAll('.explorer-folders-view .monaco-icon-label .label-name')) {
+    const texto = document.createTreeWalker(rotulo, NodeFilter.SHOW_TEXT).nextNode();
+    if (texto?.data.endsWith('.java')) texto.data = texto.data.slice(0, -5);
   }
 };
 window.__ijArvore = aplicar;
@@ -732,104 +588,81 @@ new MutationObserver(() => {
 aplicar();
 })()`;
 
+function estiloSugestoes(context) {
+    const css = '.suggest-widget { border-radius: 8px; overflow: hidden; } .suggest-widget .monaco-list-row .details-label { opacity: 0.65; }';
+    return naJanela(context, `(()=>{const s=document.getElementById('ij-sugestoes')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-sugestoes'}));s.textContent=${JSON.stringify(css)}})()`);
+}
+
+// Tipo de cada .java; só relê o arquivo que mudou
+const TIPOS = new Map();
+
+async function lerTipo(uri) {
+    const tipo = tipoJava(Buffer.from(await vscode.workspace.fs.readFile(uri)).toString());
+    if (tipo) TIPOS.set(uri.fsPath, tipo);
+    else TIPOS.delete(uri.fsPath);
+}
+
+function enviarTipos(context) {
+    const path = require('path');
+    const lista = [...TIPOS].map(([arquivo, tipo]) => [path.basename(path.dirname(arquivo)).toLowerCase(), path.basename(arquivo).toLowerCase(), tipo]);
+    return naJanela(context, `window.__ijIcones?.(${JSON.stringify(lista)})`);
+}
+
 async function tiposJava(context) {
-    const tipos = {};
-    for (const uri of await vscode.workspace.findFiles('**/*.java', '**/{out,target,bin,build}/**', 3000)) {
-        const conteudo = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString();
-        const tipo = tipoJava(conteudo);
-        if (tipo) tipos[require('path').basename(uri.fsPath, '.java')] = tipo;
-    }
-    return naJanela(context, `window.__ijTipos=${JSON.stringify(tipos)};window.__ijArvore?.()`);
+    const arquivos = await vscode.workspace.findFiles('**/*.java', '**/{out,target,bin,build}/**', 3000);
+    TIPOS.clear();
+    await Promise.all(arquivos.map(lerTipo));
+    return enviarTipos(context);
 }
 
 function arvoreJava(context) {
     let espera;
-    const atualizar = () => {
+    const enviar = () => {
         clearTimeout(espera);
-        espera = setTimeout(() => tiposJava(context).catch(() => {}), 500);
+        espera = setTimeout(() => enviarTipos(context).catch(() => {}), 200);
+    };
+    const atualizar = uri => {
+        const antes = TIPOS.get(uri.fsPath);
+        lerTipo(uri).then(() => { if (TIPOS.get(uri.fsPath) !== antes) enviar(); }, () => {});
     };
     const vigia = vscode.workspace.createFileSystemWatcher('**/*.java');
-    context.subscriptions.push(vigia, vigia.onDidCreate(atualizar), vigia.onDidChange(atualizar), vigia.onDidDelete(atualizar));
-    naJanela(context, scriptArvore(cssIcones())).then(() => tiposJava(context)).catch(() => {});
-}
-
-// Avisa no rodapé se uma atualização do editor quebrar os ajustes visuais
-async function conferirSaude(context) {
-    if (process.env.SUITE_VISUAL === '0') return;
-    await new Promise(pronto => setTimeout(pronto, 10000));
-    const expressao = "!!(document.querySelector('.part.editor') && document.querySelector('.part.sidebar') && window.__ijArvore && document.getElementById('ij-pausa'))";
-    const ok = await naJanela(context, expressao).catch(() => false);
-    if (ok) return;
-    const aviso = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 0);
-    aviso.text = '$(warning) Visual extras: partial';
-    aviso.tooltip = 'Visual tweaks are off. Open the editor from the Welcome screen, or the editor update changed something. Your code is safe.';
-    aviso.show();
-    context.subscriptions.push(aviso);
-}
-
-let painelFundo;
-
-function abrirPainelFundo(context) {
-    if (painelFundo) return painelFundo.reveal();
-    painelFundo = vscode.window.createWebviewPanel('ijFundo', 'Editor Background', vscode.ViewColumn.Active, { enableScripts: true });
-    painelFundo.webview.html = paginaFundo(lerOpcoes().fundo ?? FORCA_PADRAO);
-    painelFundo.onDidDispose(() => { painelFundo = undefined; });
-    painelFundo.webview.onDidReceiveMessage(({ acao, valor }) => {
-        if (acao === 'escolher') return trocarFundo(context);
-        if (acao === 'remover') {
-            require('fs').rmSync(IMAGEM, { force: true });
-            return fundoEditor(context).catch(avisarReabrir);
-        }
-        gravarForca(valor);
-        naJanela(context, `document.documentElement.style.setProperty('--ij-fundo','${valor}')`).catch(avisarReabrir);
-    });
-}
-
-async function menuConfiguracoes() {
-    const itens = [
-        { label: 'Settings', comando: 'workbench.action.openSettings' },
-        { label: 'Editor Background…', comando: 'ij.customizeBackground' },
-        { label: 'Theme…', comando: 'workbench.action.selectTheme' },
-        { label: 'Keymap', comando: 'workbench.action.openGlobalKeybindings' },
-        { label: 'Plugins', comando: 'workbench.view.extensions' },
-    ];
-    const escolha = await vscode.window.showQuickPick(itens, { placeHolder: 'Settings' });
-    if (escolha) vscode.commands.executeCommand(escolha.comando);
+    context.subscriptions.push(vigia, vigia.onDidCreate(atualizar), vigia.onDidChange(atualizar), vigia.onDidDelete(uri => {
+        if (TIPOS.delete(uri.fsPath)) enviar();
+    }));
+    // Em pasta nova ou renomeada o vigia só avisa da pasta, não dos arquivos dentro dela
+    const reler = () => tiposJava(context).catch(() => {});
+    context.subscriptions.push(
+        vscode.workspace.onDidRenameFiles(reler),
+        vscode.workspace.onDidCreateFiles(reler),
+        vscode.workspace.onDidOpenTextDocument(doc => {
+            if (doc.languageId === 'java' && doc.uri.scheme === 'file' && !TIPOS.has(doc.uri.fsPath)) atualizar(doc.uri);
+        })
+    );
+    naJanela(context, scriptArvore(varsIcones())).then(reler);
 }
 
 function activate(context) {
     contexto = context;
     const modelos = carregarModelos(context);
-    fundoEditor(context).catch(() => {});
-    estiloPausa(context).catch(() => {});
-    if (process.env.SUITE_ANIMATIONS !== '0') estiloAnimacao(context).catch(() => {});
-    marcaDagua(context).catch(() => {});
+    ativarComum(context, { prefixo: 'ij', saudavel: '!!window.__ijArvore' });
     arvoreJava(context);
-    conferirSaude(context);
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(evento => aoDigitar(context, evento)));
-    comandoPendente();
+    estiloSugestoes(context).catch(() => {});
     esconderPaineis(context);
-    fecharNovidades();
     mostrarConfig();
     for (const [id, acao] of Object.entries(ACOES)) {
-        context.subscriptions.push(vscode.commands.registerCommand(id, (...args) =>
-            acao.a ? vscode.commands.executeCommand(acao.t, acao.a) : vscode.commands.executeCommand(acao.t, ...args)));
+        context.subscriptions.push(vscode.commands.registerCommand(id, (...args) => {
+            if (acao.arquivo && !vscode.window.activeTextEditor) return vscode.window.showInformationMessage('Open a Java file first.');
+            return acao.a ? vscode.commands.executeCommand(acao.t, acao.a) : vscode.commands.executeCommand(acao.t, ...args);
+        }));
     }
-    pintarBreakpoints();
-    context.subscriptions.push(
-        vscode.debug.onDidChangeBreakpoints(pintarBreakpoints),
-        vscode.window.onDidChangeVisibleTextEditors(pintarBreakpoints)
-    );
-
-    const rodape = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
-    rodape.command = 'workbench.action.quickOpen';
-    caminhoRodape(rodape);
-    context.subscriptions.push(rodape, vscode.window.onDidChangeActiveTextEditor(() => caminhoRodape(rodape)));
-
     context.subscriptions.push(
         vscode.commands.registerCommand('ij.safeDelete', exclusaoSegura),
+        vscode.commands.registerCommand('ij.generate', gerar),
+        vscode.commands.registerCommand('ij.build', menuBuild),
         vscode.commands.registerCommand('ij.newClass', uri => novaClasse(uri)),
         vscode.commands.registerCommand('ij.newClassTop', () => novaClasse()),
+        vscode.commands.registerCommand('ij.markSources', uri => marcarFontes('java.project.addToSourcePath', uri)),
+        vscode.commands.registerCommand('ij.unmarkSources', uri => marcarFontes('java.project.removeFromSourcePath', uri)),
         vscode.commands.registerCommand('ij.run', uri => rodarDireto(uri)),
         vscode.commands.registerCommand('ij.runSelected', rodarSelecionado),
         vscode.commands.registerCommand('ij.debugSelected', depurarSelecionado),
@@ -837,18 +670,7 @@ function activate(context) {
         vscode.commands.registerCommand('ij.editConfigs', editarConfigs),
         vscode.commands.registerCommand('ij.profile', uri => perfilar(uri)),
         vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('launch')) mostrarConfig(); }),
-        vscode.commands.registerCommand('ij.stop', pararExecucao),
-        vscode.commands.registerCommand('ij.rerun', reexecutar),
-        vscode.window.onDidCloseTerminal(fechado => {
-            if (fechado !== execucao?.terminal) return;
-            execucao = undefined;
-            vscode.commands.executeCommand('setContext', 'ij.rodando', false);
-            vscode.commands.executeCommand('setContext', 'ij.emExecucao', false);
-        }),
         vscode.commands.registerCommand('ij.debug', uri => executar('java.debug.debugJavaFile', uri)),
-        vscode.commands.registerCommand('ij.search', () => vscode.commands.executeCommand('workbench.action.quickOpen')),
-        vscode.commands.registerCommand('ij.settings', menuConfiguracoes),
-        vscode.commands.registerCommand('ij.customizeBackground', () => abrirPainelFundo(context)),
         vscode.commands.registerCommand('ij.nextMethod', () => irMetodo(1)),
         vscode.commands.registerCommand('ij.prevMethod', () => irMetodo(-1)),
         vscode.languages.registerCompletionItemProvider('java', { provideCompletionItems: postfix }, '.'),

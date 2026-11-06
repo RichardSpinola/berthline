@@ -1,0 +1,26 @@
+{
+  "vscjava.vscode-java-debug": {
+    "editor/title/run": "*",
+    "editor/context": "*",
+    "explorer/context": "*"
+  },
+  "redhat.java": {
+    "editor/context": [
+      "java.action.navigateToSuperImplementation",
+      "java.action.showTypeHierarchy",
+      "java.action.copyFullyQualifiedName"
+    ],
+    "explorer/context": [
+      "java.project.addToSourcePath.command",
+      "java.project.removeFromSourcePath.command"
+    ]
+  },
+  "vscjava.vscode-java-dependency": {
+    "explorer/context": [
+      "javaProject.newJavaFile",
+      "java.view.fileExplorer.newPackage",
+      "_java.project.create.from.fileexplorer.menu",
+      "_java.view.modernizeJavaProject"
+    ]
+  }
+}

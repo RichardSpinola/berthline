@@ -177,6 +177,12 @@ def pasta_usuario(app):
     return DADOS / app / 'user' / 'User'
 
 
+def juntar_teclas(arquivos):
+    """Une listas de atalhos sem perder os comentários."""
+    textos = [a.read_text(encoding='utf8') for a in arquivos]
+    return '[\n' + ',\n'.join(t[t.index('[') + 1:t.rindex(']')].strip('\n') for t in textos) + '\n]\n'
+
+
 def preparar(app):
     """Grava o perfil a cada abertura, mantendo o que a pessoa mudou."""
     usuario = pasta_usuario(app)
@@ -214,10 +220,11 @@ def preparar(app):
         atual['java.jdt.ls.vmargs'] = re.sub(r'-Xmx\S+', f"-Xmx{opcao(app, 'memory')}", args)
     arquivo.write_text(json.dumps(atual, indent=4, ensure_ascii=False), encoding='utf8')
     origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
-    for origem in origens + [PERFIS / app]:
-        teclas = origem / 'keybindings.json'
-        if teclas.exists() and not (usuario / 'keybindings.json').exists():
-            shutil.copy(teclas, usuario)
+    origens.append(PERFIS / app)
+    teclas = [o / 'keybindings.json' for o in origens if (o / 'keybindings.json').exists()]
+    if teclas and not (usuario / 'keybindings.json').exists():
+        (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
+    for origem in origens:
         trechos = origem / 'snippets'
         if trechos.is_dir():
             shutil.copytree(trechos, usuario / 'snippets', dirs_exist_ok=True)

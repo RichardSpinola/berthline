@@ -2,9 +2,6 @@
  "ij.contextActions": {
   "t": "editor.action.quickFix"
  },
- "ij.generate": {
-  "t": "editor.action.sourceAction"
- },
  "ij.findUsages": {
   "t": "references-view.findReferences"
  },
@@ -122,7 +119,8 @@
   "t": "editor.action.organizeImports"
  },
  "ij.codeCleanup": {
-  "t": "java.action.doCleanup"
+  "t": "java.action.doCleanup",
+  "arquivo": true
  },
  "ij.inspectCode": {
   "t": "workbench.actions.view.problems"
@@ -243,12 +241,6 @@
  },
  "ij.newProject": {
   "t": "java.project.create"
- },
- "ij.markSources": {
-  "t": "java.project.addToSourcePath"
- },
- "ij.unmarkSources": {
-  "t": "java.project.removeFromSourcePath"
  },
  "ij.renameFile": {
   "t": "renameFile"

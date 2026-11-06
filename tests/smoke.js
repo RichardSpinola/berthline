@@ -79,7 +79,10 @@ async function java(pasta) {
     await h.clica('.explorer-folders-view .monaco-list-row', 'src');
     await dormir(400);
     await h.clica('a.action-label', '^New Java Class');
-    await dormir(900);
+    const inicio = Date.now();
+    await h.ate(() => h.acha('.quick-input-widget .quick-input-title', 'New Java Class'), 8000);
+    console.log('new class dialog ms', Date.now() - inicio);
+    await dormir(200);
     await h.escreve('Boat');
     await h.tecla('Enter', 'Enter', 13);
     passo('new java class', await h.ate(() => fs.existsSync(path.join(pasta, 'src/Boat.java')), 6000));

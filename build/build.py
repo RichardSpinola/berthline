@@ -19,6 +19,7 @@ CACHE = RAIZ / 'build/cache'
 DESTINO = RAIZ / 'dist' / ('berthline-windows' if JANELAS else 'berthline-linux')
 VERSOES = json.loads((RAIZ / 'build/versions.json').read_text())
 SEM_VERIFICAR = '--no-signature-check' in sys.argv
+EXTENSOES = {'java': 'extension', 'web': 'extension-web'}
 
 
 def baixar(url, nome):
@@ -88,6 +89,9 @@ def vsix(pasta):
         for f in (RAIZ / pasta).rglob('*'):
             if f.is_file():
                 z.write(f, Path('extension') / f.relative_to(RAIZ / pasta))
+        if pasta in EXTENSOES.values():
+            for f in (RAIZ / 'extension-common').iterdir():
+                z.write(f, Path('extension/comum') / f.name)
     return alvo
 
 
@@ -101,6 +105,21 @@ def instalar(app, nome, pacote):
     if 'successfully installed' not in r.stdout + r.stderr:
         sys.exit(f'{nome} failed: {(r.stdout + r.stderr)[-400:]}')
     print('ok', app, nome, flush=True)
+
+
+def enxugar_menus(app, destino=DESTINO):
+    """Tira das extensões de terceiros os itens de menu que repetem os nossos."""
+    regras = RAIZ / 'profiles' / app / 'menus.json'
+    if not regras.exists():
+        return
+    for extensao, cortes in json.loads(regras.read_text(encoding='utf8')).items():
+        pasta = next((destino / 'data' / app / 'extensions').glob(f'{extensao}-*'))
+        arquivo = pasta / 'package.json'
+        dados = json.loads(arquivo.read_text(encoding='utf8'))
+        menus = dados['contributes']['menus']
+        for menu, itens in cortes.items():
+            menus[menu] = [i for i in menus[menu] if itens != '*' and i.get('command', i.get('submenu')) not in itens]
+        arquivo.write_text(json.dumps(dados, indent='\t', ensure_ascii=False), encoding='utf8')
 
 
 def hub():
@@ -200,15 +219,16 @@ def main():
     shutil.copy(RAIZ / 'NOTICE', DESTINO)
     shutil.copy(RAIZ / 'LICENSE', DESTINO)
     hub()
-    pacote, leve = vsix('extension'), vsix('extension-lite')
+    leve = vsix('extension-lite')
     for lista in sorted((RAIZ / 'profiles').glob('*/extensions.txt')):
         app = lista.parent.name
         itens = [l.strip() for l in lista.read_text().splitlines() if l.strip()]
         for item in itens:
             instalar(app, item, item)
-        if itens:
-            instalar(app, 'berthline-tools', pacote)
+        if app in EXTENSOES:
+            instalar(app, f'{EXTENSOES[app]} package', vsix(EXTENSOES[app]))
         instalar(app, 'berthline-hub', leve)
+        enxugar_menus(app)
     if JANELAS:
         (DESTINO / 'Start-Java.bat').write_text('@start "" "%~dp0Hub.exe" --open java\r\n')
         (DESTINO / 'Start-Web.bat').write_text('@start "" "%~dp0Hub.exe" --open web\r\n')
