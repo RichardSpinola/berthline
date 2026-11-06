@@ -1,14 +1,28 @@
+Berthline's own code is under the MIT License (see LICENSE).
+
 This package bundles third-party software under its own terms:
 
 - VSCodium, MIT License
 - Node.js, MIT License
 - Inter font, SIL Open Font License 1.1
 - Qt for Python (PySide6), LGPL v3
-- Editor extensions, each under the license in its own folder
+- Editor extensions, each under the license in its own folder (data/<app>/extensions)
+
+Extensions under the GNU GPL v3, included unmodified. Their source code is at:
+
+- Bookmarks 14.1.1 by Alessandro Fragnani
+  https://github.com/alefragnani/vscode-bookmarks
+- Color Highlight 2.8.0 by Sergii Naumov
+  https://github.com/naumovs/vscode-ext-color-highlight
+
+The Language Support for Java extension by Red Hat is under the Eclipse Public
+License 2.0, and it carries its own Java runtime. Source code:
+https://github.com/redhat-developer/vscode-java
 
 Parts included in the Berthline Tools extension:
 
 - Icons in extension/icones, Copyright 2000-2023 JetBrains s.r.o. and contributors,
   Apache License 2.0 (see extension/icones/LICENSE.txt)
 
-Berthline is not affiliated with or endorsed by JetBrains.
+Berthline is not affiliated with or endorsed by JetBrains, Microsoft, Oracle,
+Red Hat or the VSCodium project. All names belong to their owners.

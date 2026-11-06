@@ -192,6 +192,7 @@ def main():
     shutil.copytree(RAIZ / 'hub/assets', DESTINO / 'assets')
     shutil.copy(RAIZ / 'README.md', DESTINO)
     shutil.copy(RAIZ / 'NOTICE', DESTINO)
+    shutil.copy(RAIZ / 'LICENSE', DESTINO)
     hub()
     pacote, leve = vsix('extension'), vsix('extension-lite')
     for lista in sorted((RAIZ / 'profiles').glob('*/extensions.txt')):

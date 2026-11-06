@@ -212,7 +212,7 @@
   "t": "git.stage"
  },
  "ij.gitGraph": {
-  "t": "git-graph.view"
+  "t": "workbench.view.scm"
  },
  "ij.newInterface": {
   "t": "java.view.package.newJavaInterface"

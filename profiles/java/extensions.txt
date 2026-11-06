@@ -7,7 +7,6 @@ vscjava.vscode-java-dependency@0.27.7
 alefragnani.bookmarks@14.1.1
 gruntfuggly.todo-tree@0.0.215
 editorconfig.editorconfig@0.18.2
-gxl.git-graph-3@1.37.19
 k--kato.intellij-idea-keybindings@1.7.8
 fogio.jetbrains-color-theme@1.0.3
 fogio.jetbrains-file-icon-theme@1.8.0
