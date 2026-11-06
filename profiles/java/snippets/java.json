@@ -55,7 +55,7 @@
     "fori": {
         "prefix": "fori",
         "body": [
-            "for (int ${1:i} = 0; $1 < ${2:n}; $1++) {",
+            "for (int i = 0; i < ${1:n}; i++) {",
             "\t$0",
             "}"
         ],
@@ -133,7 +133,7 @@
     "forr": {
         "prefix": "forr",
         "body": [
-            "for (int ${1:i} = ${2:n} - 1; $1 >= 0; $1--) {",
+            "for (int i = ${1:n} - 1; i >= 0; i--) {",
             "\t$0",
             "}"
         ],
@@ -142,8 +142,8 @@
     "itli": {
         "prefix": "itli",
         "body": [
-            "for (int ${1:i} = 0; $1 < ${2:lista}.size(); $1++) {",
-            "\tvar ${3:item} = $2.get($1);",
+            "for (int i = 0; i < ${1:lista}.size(); i++) {",
+            "\tvar ${2:item} = $1.get(i);",
             "\t$0",
             "}"
         ],
@@ -189,8 +189,8 @@
     "ij-itar": {
         "prefix": "itar",
         "body": [
-            "for(int ${1:i} = 0; $1 < ${2:array}.length; $1++) {",
-            "  ${3:var} ${4:item} = $2[$1];",
+            "for (int i = 0; i < ${1:array}.length; i++) {",
+            "  ${2:var} ${3:item} = $1[i];",
             "  $0",
             "}"
         ],
@@ -251,8 +251,8 @@
     "ij-ritar": {
         "prefix": "ritar",
         "body": [
-            "for(int ${1:i} = ${2:array}.length - 1; $1 >= 0; $1--) {",
-            "  ${3:var} ${4:item} = $2[$1];",
+            "for (int i = ${1:array}.length - 1; i >= 0; i--) {",
+            "  ${2:var} ${3:item} = $1[i];",
             "  $0",
             "}"
         ],

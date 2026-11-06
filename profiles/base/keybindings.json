@@ -38,6 +38,8 @@
 
     // Edição que o pacote de atalhos não cobre
     { "key": "alt+shift+up", "command": "editor.action.moveLinesUpAction", "when": "editorTextFocus && !editorReadonly" },
+    { "key": "alt+shift+right", "command": "editor.action.smartSelect.expand", "when": "editorTextFocus" },
+    { "key": "alt+shift+left", "command": "editor.action.smartSelect.shrink", "when": "editorTextFocus" },
     { "key": "alt+shift+down", "command": "editor.action.moveLinesDownAction", "when": "editorTextFocus && !editorReadonly" },
     { "key": "ctrl+shift+u", "command": "editor.action.transformToUppercase", "when": "editorTextFocus && !editorReadonly" },
     { "key": "ctrl+alt+shift+j", "command": "editor.action.selectHighlights", "when": "editorFocus" },

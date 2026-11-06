@@ -1,46 +1,50 @@
 {
     "workbench.colorTheme": "Islands Dark",
     "editor.semanticTokenColorCustomizations": {
-        "rules": {
-            "property.static": {
-                "foreground": "#C77DBB",
-                "fontStyle": "italic"
-            },
-            "method.static": {
-                "fontStyle": "italic"
-            },
-            "property": "#C77DBB"
+        "[Islands Dark]": {
+            "rules": {
+                "property.static": {
+                    "foreground": "#C77DBB",
+                    "fontStyle": "italic"
+                },
+                "method.static": {
+                    "fontStyle": "italic"
+                },
+                "property": "#C77DBB"
+            }
         }
     },
     "workbench.colorCustomizations": {
-        "titleBar.activeBackground": "#26282C",
-        "titleBar.inactiveBackground": "#26282C",
-        "activityBar.background": "#26282C",
-        "statusBar.background": "#26282C",
-        "statusBar.noFolderBackground": "#26282C",
-        "sideBar.background": "#191A1C",
-        "sideBarSectionHeader.background": "#191A1C",
-        "panel.background": "#191A1C",
-        "terminal.background": "#191A1C",
-        "editorGroupHeader.tabsBackground": "#191A1C",
-        "tab.inactiveBackground": "#191A1C",
-        "sideBar.border": "#26282C",
-        "panel.border": "#26282C",
-        "titleBar.border": "#26282C",
-        "activityBar.border": "#26282C",
-        "statusBar.border": "#26282C",
-        "editorGroup.border": "#26282C",
-        "editor.lineHighlightBackground": "#1F2024",
-        "editor.stackFrameHighlightBackground": "#2E4D89",
-        "editor.focusedStackFrameHighlightBackground": "#2E4D89",
-        "editorInlayHint.foreground": "#7A7E85",
-        "editor.inlineValuesForeground": "#7A7E85",
-        "editor.inlineValuesBackground": "#00000000",
-        "editorLineNumber.activeForeground": "#BCBEC4",
-        "tab.activeBackground": "#233558",
-        "tab.activeBorder": "#00000000",
-        "tab.border": "#191A1C",
-        "tab.activeForeground": "#FFFFFF"
+        "[Islands Dark]": {
+            "titleBar.activeBackground": "#26282C",
+            "titleBar.inactiveBackground": "#26282C",
+            "activityBar.background": "#26282C",
+            "statusBar.background": "#26282C",
+            "statusBar.noFolderBackground": "#26282C",
+            "sideBar.background": "#191A1C",
+            "sideBarSectionHeader.background": "#191A1C",
+            "panel.background": "#191A1C",
+            "terminal.background": "#191A1C",
+            "editorGroupHeader.tabsBackground": "#191A1C",
+            "tab.inactiveBackground": "#191A1C",
+            "sideBar.border": "#26282C",
+            "panel.border": "#26282C",
+            "titleBar.border": "#26282C",
+            "activityBar.border": "#26282C",
+            "statusBar.border": "#26282C",
+            "editorGroup.border": "#26282C",
+            "editor.lineHighlightBackground": "#1F2024",
+            "editor.stackFrameHighlightBackground": "#2E4D89",
+            "editor.focusedStackFrameHighlightBackground": "#2E4D89",
+            "editorInlayHint.foreground": "#7A7E85",
+            "editor.inlineValuesForeground": "#7A7E85",
+            "editor.inlineValuesBackground": "#00000000",
+            "editorLineNumber.activeForeground": "#BCBEC4",
+            "tab.activeBackground": "#233558",
+            "tab.activeBorder": "#00000000",
+            "tab.border": "#191A1C",
+            "tab.activeForeground": "#FFFFFF"
+        }
     },
     "workbench.iconTheme": "jetbrains-file-icon-theme-auto",
     "workbench.productIconTheme": "jetbrains-product-icon-theme",
@@ -128,7 +132,8 @@
     "workbench.tree.indent": 16,
     "explorer.compactFolders": false,
     "breadcrumbs.enabled": false,
-    "files.autoSave": "onFocusChange",
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
     "files.encoding": "utf8",
     "editor.minimap.enabled": false,
     "editor.rulers": [

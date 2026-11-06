@@ -3,7 +3,9 @@ import ctypes
 import hashlib
 import json
 import math
+import ntpath
 import os
+import posixpath
 import re
 import shutil
 import sqlite3
@@ -288,24 +290,35 @@ def abrir_app(app, alvos=(), porta=None, comando_=None):
 
 def registrar(app, alvo):
     tudo = opcoes()
-    lista = [p for p in tudo.setdefault('recent', []) if p['path'] != str(alvo)]
+    lista = [p for p in tudo.setdefault('recent', []) if chave_caminho(p['path']) != chave_caminho(alvo)]
     tudo['recent'] = [{'path': str(alvo), 'app': app}] + lista[:29]
     OPCOES.parent.mkdir(parents=True, exist_ok=True)
     OPCOES.write_text(json.dumps(tudo, indent=2), encoding='utf8')
 
 
+def chave_caminho(caminho, janelas=JANELAS):
+    """Identifica uma pasta: no Windows, a mesma pasta aparece com barras e letras diferentes."""
+    texto = str(caminho)
+    if not janelas:
+        return posixpath.normpath(texto)
+    return ntpath.normcase(ntpath.normpath(texto.lstrip('/') if ntpath.splitdrive(texto.lstrip('/'))[0] else texto))
+
+
 def recentes(so_app=None):
-    vistos = {p['path']: (p['app'], float('inf')) for p in opcoes().get('recent', [])}
+    vistos = {}
+    for p in opcoes().get('recent', []):
+        vistos.setdefault(chave_caminho(p['path']), (p['path'], p['app'], float('inf')))
     for app in aplicativos():
         for w in (pasta_usuario(app) / 'workspaceStorage').glob('*/workspace.json'):
             try:
                 u = urlparse(json.loads(w.read_text(encoding='utf8'))['folder'])
                 if u.scheme == 'file':
-                    vistos.setdefault(unquote(u.path).lstrip('/') if JANELAS else unquote(u.path), (app, w.stat().st_mtime))
+                    caminho = unquote(u.path).lstrip('/') if JANELAS else unquote(u.path)
+                    vistos.setdefault(chave_caminho(caminho), (caminho, app, w.stat().st_mtime))
             except (OSError, KeyError, ValueError):
                 pass
-    fora = set(opcoes().get('hidden', []))
-    bons = [(Path(p), a, t) for p, (a, t) in vistos.items() if p not in fora and Path(p).is_dir()
+    fora = {chave_caminho(p) for p in opcoes().get('hidden', [])}
+    bons = [(Path(p), a, t) for c, (p, a, t) in vistos.items() if c not in fora and Path(p).is_dir()
             and (so_app is None or a == so_app) and not (TEMPORARIO and p.startswith(TEMPORARIO))]
     return [(p, a) for p, a, _ in sorted(bons, key=lambda x: -x[2])]
 
@@ -313,7 +326,7 @@ def recentes(so_app=None):
 def ocultar_recente(caminho):
     tudo = opcoes()
     tudo['hidden'] = sorted(set(tudo.get('hidden', [])) | {str(caminho)})
-    tudo['recent'] = [p for p in tudo.get('recent', []) if p['path'] != str(caminho)]
+    tudo['recent'] = [p for p in tudo.get('recent', []) if chave_caminho(p['path']) != chave_caminho(caminho)]
     OPCOES.write_text(json.dumps(tudo, indent=2), encoding='utf8')
 
 

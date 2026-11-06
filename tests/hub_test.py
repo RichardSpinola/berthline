@@ -75,6 +75,9 @@ def esperar(ms):
 def roteiro():
     painel = next(w for w in QApplication.topLevelWidgets() if hasattr(w, 'miolo'))
     passo('window title', painel.windowTitle() == 'Berthline Hub', painel.windowTitle())
+    passo('windows paths collapse', len({hub.chave_caminho(p, True) for p in (
+        'C:\\Users\\Ana\\Projects\\loja', 'c:/Users/Ana/Projects/loja', '/c:/users/ana/Projects/loja/')}) == 1)
+    passo('other windows folder stays', hub.chave_caminho('C:\\a\\b', True) != hub.chave_caminho('C:\\a\\c', True))
     passo('apps listed', {f.app for f in painel.findChildren(QFrame) if hasattr(f, 'mais')} == {'java', 'web', 'standard'})
 
     hub.gravar_geral('transitions', False)
