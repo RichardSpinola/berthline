@@ -9,7 +9,8 @@
 
 **A lighter editor that works closer to an IDE.**
 
-Java and Web profiles built on VSCodium, with one Hub to launch them.
+A suite of ready-made editor profiles built on VSCodium, with one Hub to launch them.<br>
+Java and Web today, more over time.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-26313D)](LICENSE)
 ![Platforms: Windows and Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-26313D)
@@ -79,7 +80,7 @@ My computer is modest, and IntelliJ IDEA, which I use for my Java studies, was t
 
 The goal isn't to turn an editor into a complete IDE. That barely makes sense. The goal is to get close enough that you can work comfortably on small and medium projects, and move to a full IDE when a project outgrows it.
 
-Then the idea grew. If a profile could do this for Java, others could do it for other kinds of work. Web came next, and more can follow over time. Keeping profiles apart also means a Java setup never slows down a Web project.
+Then the idea grew. Java was only the start. Berthline is meant to become a complete suite of profiles for different kinds of work, ready for anyone to use and change. Web came next, and more will follow. Keeping profiles apart also means a Java setup never slows down a Web project.
 
 Berthline won't replace an IDE, and it has its own problems. It is one way to spend less of your computer's power while you code.
 
