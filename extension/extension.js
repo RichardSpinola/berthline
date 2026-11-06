@@ -590,6 +590,15 @@ async function naJanela(context, expressao) {
     return valor;
 }
 
+// Ícone do app, em cinza, na tela vazia do editor
+function marcaDagua(context) {
+    const fs = require('fs'), arquivo = process.env.SUITE_WATERMARK;
+    if (!arquivo || !fs.existsSync(arquivo)) return Promise.resolve();
+    const url = `data:image/svg+xml;base64,${fs.readFileSync(arquivo).toString('base64')}`;
+    const css = `.editor-group-letterpress, .editor-group-watermark .letterpress { background-image: url(${url}) !important; }`;
+    return naJanela(context, `(()=>{const s=document.getElementById('ij-marca')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-marca'}));s.textContent=${JSON.stringify(css)}})()`);
+}
+
 function fundoEditor(context) {
     const fs = require('fs');
     const forca = lerOpcoes().fundo ?? FORCA_PADRAO;
@@ -635,8 +644,7 @@ async function trocarFundo(context) {
         title: 'Background image', filters: { Images: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] },
     }) ?? [];
     if (!arquivo) return;
-    const { status } = require('child_process').spawnSync('/usr/bin/python3',
-        [require('path').join(FERRAMENTAS, 'welcome.py'), '--fundo', arquivo.fsPath]);
+    const { status } = require('child_process').spawnSync(process.env.SUITE_HUB, ['--background', arquivo.fsPath]);
     if (status !== 0) return vscode.window.showErrorMessage('Could not read this image.');
     return fundoEditor(context).catch(avisarReabrir);
 }
@@ -794,7 +802,8 @@ function activate(context) {
     const modelos = carregarModelos(context);
     fundoEditor(context).catch(() => {});
     estiloPausa(context).catch(() => {});
-    estiloAnimacao(context).catch(() => {});
+    if (process.env.SUITE_ANIMATIONS !== '0') estiloAnimacao(context).catch(() => {});
+    marcaDagua(context).catch(() => {});
     arvoreJava(context);
     conferirSaude(context);
     context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(evento => aoDigitar(context, evento)));

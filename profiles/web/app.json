@@ -7,5 +7,23 @@
   "templates": [
     "HTML, CSS and JS",
     "TypeScript"
+  ],
+  "accent": "#3B82C4",
+  "required": [
+    "berthline.berthline-tools"
+  ],
+  "learn": [
+    [
+      "MDN Web Docs",
+      "https://developer.mozilla.org/"
+    ],
+    [
+      "web.dev",
+      "https://web.dev/learn"
+    ],
+    [
+      "TypeScript handbook",
+      "https://www.typescriptlang.org/docs/"
+    ]
   ]
 }

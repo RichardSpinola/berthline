@@ -4,5 +4,12 @@
   "order": 3,
   "base": false,
   "memory": false,
-  "templates": []
+  "templates": [],
+  "accent": "#8C939E",
+  "learn": [
+    [
+      "VSCodium docs",
+      "https://vscodium.com/"
+    ]
+  ]
 }

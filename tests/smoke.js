@@ -71,6 +71,7 @@ async function java(pasta) {
     console.log('actions:', await h.ev(`[...document.querySelectorAll('a.action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')).join(' | ')`));
     await dormir(5000);
     passo('visual extras', await h.ev(`!!window.__ijArvore`) && !/partial/.test(await h.status()));
+    passo('app watermark', await h.ev(`!!document.getElementById('ij-marca')`));
     await h.foto('java-1-editor');
     console.log('run clicked', await h.clica('a.action-label', RODAR));
     passo('run asks input', await h.ate(async () => /Name\?/.test(await h.terminal()), 40000));

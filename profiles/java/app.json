@@ -6,5 +6,21 @@
   "memory": true,
   "templates": [
     "Java"
+  ],
+  "accent": "#E0641B",
+  "required": [
+    "redhat.java",
+    "vscjava.vscode-java-debug",
+    "berthline.berthline-tools"
+  ],
+  "learn": [
+    [
+      "Java tutorials",
+      "https://dev.java/learn/"
+    ],
+    [
+      "Java API reference",
+      "https://docs.oracle.com/en/java/javase/"
+    ]
   ]
 }
