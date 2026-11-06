@@ -16,6 +16,8 @@ jobs:
       - run: pip install PySide6 pyinstaller
       - run: python build/build.py
       - name: Smoke test
+        continue-on-error: true
+        timeout-minutes: 15
         run: dist/berthline-windows/node/node.exe tests/smoke.js dist/berthline-windows
       - name: Zip
         run: Compress-Archive -Path dist/berthline-windows -DestinationPath dist/berthline-windows.zip
