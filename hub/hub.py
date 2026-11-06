@@ -85,8 +85,20 @@ def gravar_confiaveis(pastas):
     OPCOES.write_text(json.dumps(tudo, indent=2), encoding='utf8')
 
 
+def caminho_real(caminho):
+    """Devolve o caminho como o editor o vê, sem nomes curtos do Windows."""
+    if not JANELAS:
+        return Path(caminho).resolve()
+    # Path.resolve trocaria uma unidade mapeada por um caminho de rede, que o editor recusa.
+    import ctypes
+    absoluto = os.path.abspath(caminho)
+    saida = ctypes.create_unicode_buffer(32768)
+    tamanho = ctypes.windll.kernel32.GetLongPathNameW(absoluto, saida, len(saida))
+    return Path(saida.value if 0 < tamanho < len(saida) else absoluto)
+
+
 def confiar(pasta):
-    gravar_confiaveis(pastas_confiaveis() + [Path(pasta).resolve()])
+    gravar_confiaveis(pastas_confiaveis() + [caminho_real(pasta)])
 
 
 def caminho_uri(pasta):
@@ -249,6 +261,7 @@ def ambiente(app):
 
 
 def abrir_app(app, alvos=(), porta=None, comando_=None):
+    alvos = [caminho_real(a) for a in alvos]
     preparar(app)
     if comando_:
         (ferramentas(app) / 'ao-abrir').write_text(comando_, encoding='utf8')

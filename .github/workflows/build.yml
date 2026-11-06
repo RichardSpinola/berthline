@@ -15,10 +15,6 @@ jobs:
           python-version: '3.13'
       - run: pip install PySide6 pyinstaller
       - run: python build/build.py
-      - name: Smoke test
-        continue-on-error: true
-        timeout-minutes: 15
-        run: dist/berthline-windows/node/node.exe tests/smoke.js dist/berthline-windows
       - name: Zip
         run: Compress-Archive -Path dist/berthline-windows -DestinationPath dist/berthline-windows.zip
       - uses: actions/upload-artifact@v4
@@ -26,6 +22,19 @@ jobs:
           name: berthline-windows
           path: dist/berthline-windows.zip
           compression-level: 0
+      - name: Smoke test
+        timeout-minutes: 15
+        run: dist/berthline-windows/node/node.exe tests/smoke.js dist/berthline-windows
+      - name: Trust state
+        if: always()
+        shell: python
+        run: |
+          import os, pathlib, sqlite3
+          print('tmp', os.environ.get('TEMP'))
+          banco = pathlib.Path.home() / '.berthline-shared/sharedStorage/state.vscdb'
+          print(banco, banco.exists())
+          if banco.exists():
+              print(sqlite3.connect(banco).execute("SELECT value FROM ItemTable WHERE key = 'content.trust.model.key'").fetchall())
       - uses: actions/upload-artifact@v4
         if: always()
         with:
