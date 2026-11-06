@@ -262,28 +262,34 @@ async function sugestoes(h, pasta) {
     await rpc('executar', { comando: 'undo' });
     await rpc('executar', { comando: 'workbench.action.files.save' });
     await dormir(800);
+    const limpo = (await rpc('estado')).texto;
     for (const [escrito, esperado] of [['sout', 'System.out.println(name);'], ['var', 'var valor = name;']]) {
         await rpc('cursor', { linha: 5, coluna: 0 });
-        await h.c('Input.insertText', { text: `        name.${escrito}` });
-        await rpc('executar', { comando: 'editor.action.triggerSuggest' });
-        await dormir(1500);
+        // Real key presses: this is what opens and filters the list for a person
+        for (const text of `name.${escrito}`) {
+            await h.c('Input.dispatchKeyEvent', { type: 'keyDown', text, key: text, unmodifiedText: text });
+            await h.c('Input.dispatchKeyEvent', { type: 'keyUp', key: text });
+            await dormir(120);
+        }
+        const noTopo = () => h.ev(`document.querySelector('.suggest-widget.visible .monaco-list-row.focused')?.getAttribute('aria-label') ?? ''`);
+        await h.ate(async () => (await noTopo()).startsWith(escrito), 5000);
+        const topo = await noTopo();
         await tecla(h, [], 'Enter', 'Enter', 13);
         await dormir(600);
         const pronto = (await rpc('estado')).texto.split('\n')[5];
-        conferir(`postfix .${escrito} writes the code`, pronto.includes(esperado), pronto.trim());
+        conferir(`postfix .${escrito} writes the code`, pronto.includes(esperado), `${pronto.trim()} (list top: ${topo})`);
         await rpc('executar', { comando: 'leaveSnippet' });
-        await rpc('executar', { comando: 'undo' });
-        await rpc('executar', { comando: 'undo' });
+        await tecla(h, [], 'Escape', 'Escape', 27);
+        await rpc('texto', { texto: limpo });
         await rpc('executar', { comando: 'workbench.action.files.save' });
-        await dormir(600);
-        if ((await rpc('estado')).texto.split('\n')[5].includes('name.')) await rpc('executar', { comando: 'undo' });
+        await dormir(400);
     }
     await rpc('cursor', { linha: 5, coluna: 0 });
     await h.c('Input.insertText', { text: '        so' });
     await dormir(1200);
     const modelos = (await rpc('sugestoes', { linha: 5, coluna: 10 })).sort((a, b) => a.ordem.localeCompare(b.ordem)).map(s => s.rotulo);
     conferir('sout comes first', modelos[0] === 'sout', modelos.slice(0, 5).join(' | '));
-    await rpc('executar', { comando: 'undo' });
+    await rpc('texto', { texto: limpo });
     await rpc('executar', { comando: 'workbench.action.files.save' });
 }
 

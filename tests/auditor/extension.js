@@ -34,6 +34,10 @@ const acoes = {
         return lista.items.map(i => ({ rotulo: i.label.label ?? i.label, ordem: i.sortText ?? '' }));
     },
     erros: ({ arquivo }) => vscode.languages.getDiagnostics(vscode.Uri.file(arquivo)).filter(d => d.severity === 0).map(d => d.message),
+    texto: ({ texto }) => {
+        const doc = editor().document;
+        return editor().edit(e => e.replace(new vscode.Range(0, 0, doc.lineCount, 0), texto));
+    },
     estado: () => {
         const e = editor();
         return e && { texto: e.document.getText(), sujo: e.document.isDirty,

@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="#6B9E2E"/><text x="8" y="11.6" font-family="Arial, Helvetica, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" fill="#FFFFFF">T</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<g fill="#6F9C2E"><circle cx="2.1" cy="2.1" r=".6"/><circle cx="13.9" cy="2.1" r=".6"/><circle cx="2.1" cy="13.9" r=".6"/><circle cx="13.9" cy="13.9" r=".6"/></g>
+<circle cx="8" cy="8" r="6.2" fill="#6F9C2E" fill-opacity=".2" stroke="#6F9C2E" stroke-width="1.2"/>
+<g fill="none" stroke="#6F9C2E" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 5.2h4.8M8 5.2v5.6"/></g>
+</svg>
