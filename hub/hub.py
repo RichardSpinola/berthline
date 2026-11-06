@@ -90,7 +90,6 @@ def caminho_real(caminho):
     if not JANELAS:
         return Path(caminho).resolve()
     # Path.resolve trocaria uma unidade mapeada por um caminho de rede, que o editor recusa.
-    import ctypes
     absoluto = os.path.abspath(caminho)
     saida = ctypes.create_unicode_buffer(32768)
     tamanho = ctypes.windll.kernel32.GetLongPathNameW(absoluto, saida, len(saida))
