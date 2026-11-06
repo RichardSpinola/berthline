@@ -1,5 +1,6 @@
-"""Clicks through a fresh package with the real mouse: Hub, Java, New Project, Create."""
+"""Clicks through a fresh package with the real mouse: Hub, app, New Project, Create."""
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -43,36 +44,45 @@ def clicar(pid, nome):
     time.sleep(1.5)
 
 
-def main():
+def fechar_editor():
+    filtro = f"Get-Process | Where-Object {{ $_.Path -like '{PACOTE}*' }} | Stop-Process -Force"
+    subprocess.run(['powershell', '-NoProfile', '-Command', filtro], check=False)
+    time.sleep(3)
+    shutil.rmtree(Path.home() / 'Projects/untitled', ignore_errors=True)
+
+
+def testar(app):
+    pasta = app.lower()
     hub = subprocess.Popen([PACOTE / 'Hub.exe'])
     try:
-        achar(hub.pid, 'Java', 60)
-        foto('1-panel')
-        clicar(hub.pid, 'Java')
+        achar(hub.pid, app, 60)
+        foto(f'{pasta}-1-panel')
+        clicar(hub.pid, app)
         achar(hub.pid, 'New Project.*')
-        foto('2-welcome')
+        foto(f'{pasta}-2-welcome')
         clicar(hub.pid, 'New Project.*')
         achar(hub.pid, 'Create')
-        foto('3-new-project')
+        foto(f'{pasta}-3-new-project')
         clicar(hub.pid, 'Create')
         time.sleep(3)
-        foto('4-boat')
+        foto(f'{pasta}-4-boat')
         hub.wait(timeout=150)
     except BaseException:
-        foto('failed')
+        foto(f'{pasta}-failed')
         raise
-    print('hub closed', hub.returncode, flush=True)
+    print(app, 'hub closed', hub.returncode, flush=True)
     time.sleep(6)
-    foto('5-editor')
-    etapa = (PACOTE / 'data/java/tools/etapa').read_text(encoding='utf8').strip()
-    print('stage', etapa, flush=True)
-    if etapa != 'ready':
-        raise SystemExit(f'editor not ready: {etapa}')
+    foto(f'{pasta}-5-editor')
+    etapa = (PACOTE / f'data/{pasta}/tools/etapa').read_text(encoding='utf8').strip()
     titulos = [j.window_text() for j in Desktop(backend='uia').windows()]
-    print('windows', titulos, flush=True)
+    print(app, 'stage', etapa, 'windows', titulos, flush=True)
+    if etapa != 'ready':
+        raise SystemExit(f'{app} editor not ready: {etapa}')
     if not any('untitled' in t for t in titulos):
-        raise SystemExit('project window missing')
+        raise SystemExit(f'{app} project window missing')
+    fechar_editor()
 
 
 if __name__ == '__main__':
-    main()
+    for app_ in ('Java', 'Web', 'Standard'):
+        testar(app_)

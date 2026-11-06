@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
 
 jobs:
   windows:
@@ -25,18 +26,56 @@ jobs:
       - name: Smoke test
         timeout-minutes: 15
         run: dist/berthline-windows/node/node.exe tests/smoke.js dist/berthline-windows
-      - name: Trust state
-        if: always()
-        shell: python
-        run: |
-          import os, pathlib, sqlite3
-          print('tmp', os.environ.get('TEMP'))
-          banco = pathlib.Path.home() / '.berthline-shared/sharedStorage/state.vscdb'
-          print(banco, banco.exists())
-          if banco.exists():
-              print(sqlite3.connect(banco).execute("SELECT value FROM ItemTable WHERE key = 'content.trust.model.key'").fetchall())
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-output
           path: tests/out
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libegl1 libnss3 libgbm1 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0
+      - run: pip install PySide6 pyinstaller
+      - run: python build/build.py
+      - name: Archive
+        run: tar -C dist -czf dist/berthline-linux.tar.gz berthline-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: berthline-linux
+          path: dist/berthline-linux.tar.gz
+          compression-level: 0
+      - name: Smoke test
+        timeout-minutes: 15
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          xvfb-run -a --server-args='-screen 0 1280x800x24' dist/berthline-linux/node/bin/node tests/smoke.js dist/berthline-linux
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-output-linux
+          path: tests/out
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: berthline-*
+          merge-multiple: true
+      - run: sha256sum berthline-windows.zip berthline-linux.tar.gz > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" berthline-windows.zip berthline-linux.tar.gz SHA256SUMS --repo "$GITHUB_REPOSITORY" --prerelease --generate-notes

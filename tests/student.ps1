@@ -20,8 +20,6 @@ Get-ChildItem $pacote | Select-Object -ExpandProperty Name
 
 & "$Python\python.exe" C:\check\tests\hub_clicks.py $pacote C:\check\tests\out
 $cliques = $LASTEXITCODE
-Get-Process | Where-Object { $_.Path -like "$pacote*" } | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 3
 
 & "$pacote\node\node.exe" C:\check\tests\smoke.js $pacote
 $smoke = $LASTEXITCODE
