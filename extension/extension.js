@@ -1,6 +1,6 @@
 const vscode = require('vscode');
+const { ativarComum, abrirRun, naJanela } = require('./comum/comum');
 
-const FERRAMENTAS = process.env.SUITE_TOOLS ?? require('path').join(require('os').homedir(), '.config', 'berthline');
 const ACOES = require('./acoes.json');
 
 const MAIN = /\bstatic\s+void\s+main\s*\(|^\s*(public\s+)?void\s+main\s*\(/;
@@ -157,14 +157,6 @@ async function novaClasse(uri) {
     janela.show();
 }
 
-// Pequenas animações, como as do IntelliJ
-function estiloAnimacao(context) {
-    const css = `@keyframes ijEntra { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
-.suggest-widget.visible, .quick-input-widget, .context-view .monaco-menu-container, .monaco-hover, .notification-toast { animation: ijEntra 110ms ease-out; }
-.monaco-list-row, .tabs-container .tab, .action-item .action-label { transition: background-color 90ms ease, color 90ms ease; }`;
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-anim')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-anim'}));s.textContent=${JSON.stringify(css)};})()`);
-}
-
 // Java só aceita uma pasta vinda do Explorer; pela paleta não há nenhuma
 function marcarFontes(comando, uri) {
     if (!uri) return vscode.window.showInformationMessage('Right-click a folder in the Explorer to use this.');
@@ -176,9 +168,6 @@ function executar(comando, uri) {
     if (!alvo) return;
     return vscode.commands.executeCommand(comando, alvo);
 }
-
-// Terminal da execução atual: Run sem sessão de debug, como a janela Run do IntelliJ
-let execucao;
 
 function javaDoEditor() {
     const fs = require('fs'), path = require('path');
@@ -217,95 +206,6 @@ async function rodarDireto(uri, opcoes = {}) {
         comando: [javaDoEditor(), ...(opcoes.vm ?? []), '-cp', classpath, principal, ...(opcoes.args ?? [])],
         repetir: () => rodarDireto(alvo, opcoes),
     });
-}
-
-function nodeDaSuite() {
-    const pronto = process.env.SUITE_NODE;
-    if (pronto) return pronto;
-    return process.platform === 'win32' ? 'node.exe' : process.execPath;
-}
-
-function abrirRun({ nome, cwd, env, aoFim, comando, repetir }) {
-    const fs = require('fs'), path = require('path');
-    execucao?.terminal.dispose();
-    fs.mkdirSync(contexto.globalStorageUri.fsPath, { recursive: true });
-    const marca = path.join(contexto.globalStorageUri.fsPath, `fim-${Date.now()}`);
-    const node = nodeDaSuite();
-    const terminal = vscode.window.createTerminal({
-        name: nome ?? 'Run',
-        iconPath: new vscode.ThemeIcon('play'),
-        cwd,
-        env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
-        shellPath: node,
-        shellArgs: [path.join(__dirname, 'runner.js'), marca, ...comando],
-    });
-    execucao = { terminal, repetir, marca };
-    vscode.commands.executeCommand('setContext', 'ij.emExecucao', true);
-    aguardarFim(terminal, marca, () => {
-        vscode.commands.executeCommand('setContext', 'ij.emExecucao', false);
-        aoFim?.();
-    });
-    terminal.show(false);
-    vscode.commands.executeCommand('setContext', 'ij.rodando', true);
-}
-
-// Web: HTML abre no Live Server; JS e TS rodam no Node da suíte
-const LINGUAGENS_WEB = ['html', 'javascript', 'typescript'];
-
-function arquivoWeb() {
-    const doc = vscode.window.activeTextEditor?.document;
-    return doc && LINGUAGENS_WEB.includes(doc.languageId) ? doc : undefined;
-}
-
-async function rodarWeb(doc) {
-    await doc.save();
-    if (doc.languageId === 'html') return vscode.commands.executeCommand('extension.liveServer.goOnline');
-    abrirRun({
-        nome: 'Run',
-        cwd: vscode.workspace.getWorkspaceFolder(doc.uri)?.uri,
-        comando: [nodeDaSuite(), doc.uri.fsPath],
-        repetir: () => rodarWeb(doc),
-    });
-}
-
-function navegadorWeb() {
-    return process.platform === 'win32' ? { type: 'pwa-msedge' } : { type: 'pwa-chrome', runtimeExecutable: process.env.SUITE_BROWSER ?? 'vivaldi' };
-}
-
-async function depurarWeb(doc) {
-    await doc.save();
-    const pasta = vscode.workspace.getWorkspaceFolder(doc.uri);
-    if (doc.languageId === 'html') {
-        return vscode.debug.startDebugging(pasta, { ...navegadorWeb(), request: 'launch', name: 'Debug in Browser', file: doc.uri.fsPath, webRoot: pasta?.uri.fsPath });
-    }
-    return vscode.debug.startDebugging(pasta, { type: 'pwa-node', request: 'launch', name: 'Debug', program: doc.uri.fsPath, runtimeExecutable: nodeDaSuite(), console: 'integratedTerminal' });
-}
-
-function pararExecucao() {
-    if (vscode.debug.activeDebugSession) return vscode.commands.executeCommand('workbench.action.debug.stop');
-    if (!execucao) return;
-    execucao.terminal.sendText('\x03', false);
-    // Reforço para terminais em que o Ctrl+C não chega ao programa
-    const { marca } = execucao;
-    setTimeout(() => {
-        if (execucao?.marca === marca && !require('fs').existsSync(marca)) require('fs').writeFileSync(`${marca}.stop`, '');
-    }, 1500);
-}
-
-function reexecutar() {
-    if (vscode.debug.activeDebugSession) return vscode.commands.executeCommand('workbench.action.debug.restart');
-    return execucao?.repetir();
-}
-
-function aguardarFim(terminal, marca, aoFim) {
-    const fs = require('fs');
-    const espera = setInterval(() => {
-        if (execucao?.terminal !== terminal) return clearInterval(espera);
-        if (!fs.existsSync(marca)) return;
-        clearInterval(espera);
-        fs.rmSync(marca, { force: true });
-        aoFim();
-    }, 500);
 }
 
 // Run Configurations: ficam no launch.json do projeto, as mesmas do Debug
@@ -356,8 +256,6 @@ async function arquivoDe(config) {
 }
 
 async function rodarSelecionado() {
-    const web = arquivoWeb();
-    if (web) return rodarWeb(web);
     const config = configAtual();
     if (!config) return rodarDireto();
     const uri = await arquivoDe(config);
@@ -365,8 +263,6 @@ async function rodarSelecionado() {
 }
 
 function depurarSelecionado() {
-    const web = arquivoWeb();
-    if (web) return depurarWeb(web);
     const config = configAtual();
     if (!config) return executar('java.debug.debugJavaFile');
     return vscode.debug.startDebugging(pastaAtual(), { console: 'integratedTerminal', ...config });
@@ -468,17 +364,6 @@ async function abrirDebugComTerminal() {
 
 const moverTerminal = destino => vscode.commands.executeCommand('vscode.moveViews', { viewIds: ['terminal'], destinationId: destino }).then(undefined, () => {});
 
-// Extensões novas abrem uma aba de novidades na primeira vez; fecha sem incomodar
-function fecharNovidades() {
-    setTimeout(() => {
-        for (const grupo of vscode.window.tabGroups.all) {
-            for (const aba of grupo.tabs) {
-                if (/^What's New/.test(aba.label)) vscode.window.tabGroups.close(aba).then(undefined, () => {});
-            }
-        }
-    }, 6000);
-}
-
 // Esconde uma vez os painéis que o IntelliJ não tem; voltam pelo clique direito nos títulos
 async function esconderPaineis(context) {
     if (context.globalState.get('paineisEscondidos')) return;
@@ -527,161 +412,6 @@ async function exclusaoSegura(uri) {
         if (escolha !== 'Delete Anyway') return;
     }
     return vscode.commands.executeCommand('moveFileToTrash', alvo);
-}
-
-// Caminho do arquivo no rodapé, como a barra de navegação do IntelliJ
-function caminhoRodape(item) {
-    const doc = vscode.window.activeTextEditor?.document;
-    if (!doc || doc.uri.scheme !== 'file') {
-        item.hide();
-        return;
-    }
-    const partes = vscode.workspace.asRelativePath(doc.uri, true).split('/');
-    partes[partes.length - 1] = partes[partes.length - 1].replace(/\.java$/, '');
-    item.text = partes.join(' $(chevron-right) ');
-    item.show();
-}
-
-// Linha com breakpoint fica vermelha, como no IntelliJ
-const LINHA_BREAKPOINT = vscode.window.createTextEditorDecorationType({
-    isWholeLine: true,
-    light: { backgroundColor: '#FAD4D4' },
-    dark: { backgroundColor: '#5A2B2F' }
-});
-
-function pintarBreakpoints() {
-    for (const editor of vscode.window.visibleTextEditors) {
-        const faixas = vscode.debug.breakpoints
-            .filter(b => b instanceof vscode.SourceBreakpoint && b.enabled && b.location.uri.toString() === editor.document.uri.toString())
-            .map(b => b.location.range);
-        editor.setDecorations(LINHA_BREAKPOINT, faixas);
-    }
-}
-
-// Comando pedido pela tela de início para a janela que acabou de abrir
-function comandoPendente() {
-    const fs = require('fs');
-    const arquivo = require('path').join(FERRAMENTAS, 'ao-abrir');
-    if (!fs.existsSync(arquivo)) return;
-    const comando = fs.readFileSync(arquivo, 'utf8').trim();
-    fs.unlinkSync(arquivo);
-    if (comando) vscode.commands.executeCommand(comando);
-}
-
-// Foto de fundo aplicada só nesta janela do editor, sem alterar arquivos internos
-const IMAGEM = require('path').join(FERRAMENTAS, 'fundo.jpg');
-const OPCOES = require('path').join(FERRAMENTAS, 'opcoes.json');
-const FORCA_PADRAO = 0.1;
-
-function lerOpcoes() {
-    try {
-        return JSON.parse(require('fs').readFileSync(OPCOES, 'utf8'));
-    } catch {
-        return {};
-    }
-}
-
-async function naJanela(context, expressao) {
-    const fs = require('fs'), path = require('path');
-    const dados = path.resolve(context.globalStorageUri.fsPath, '..', '..', '..');
-    const porta = fs.readFileSync(path.join(dados, 'DevToolsActivePort'), 'utf8').split('\n')[0];
-    const paginas = await (await fetch(`http://127.0.0.1:${porta}/json/list`)).json();
-    let valor;
-    for (const pagina of paginas.filter(p => p.type === 'page')) {
-        await new Promise(pronto => {
-            const ws = new WebSocket(pagina.webSocketDebuggerUrl);
-            ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: expressao } }));
-            ws.onmessage = mensagem => { ws.close(); valor = JSON.parse(mensagem.data).result?.result?.value; pronto(); };
-            ws.onerror = pronto;
-        });
-    }
-    return valor;
-}
-
-// Ícone do app, em cinza, na tela vazia do editor
-function marcaDagua(context) {
-    const fs = require('fs'), arquivo = process.env.SUITE_WATERMARK;
-    if (!arquivo || !fs.existsSync(arquivo)) return Promise.resolve();
-    const url = `data:image/svg+xml;base64,${fs.readFileSync(arquivo).toString('base64')}`;
-    const css = `.editor-group-letterpress, .editor-group-watermark .letterpress { background-image: url(${url}) !important; }`;
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-marca')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-marca'}));s.textContent=${JSON.stringify(css)}})()`);
-}
-
-function fundoEditor(context) {
-    const fs = require('fs');
-    const forca = lerOpcoes().fundo ?? FORCA_PADRAO;
-    const url = fs.existsSync(IMAGEM) ? `data:image/jpeg;base64,${fs.readFileSync(IMAGEM).toString('base64')}` : '';
-    const css = url && `.part.editor .editor-instance::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 30;
-        opacity: var(--ij-fundo, ${forca}); background: url(${url}) center / cover no-repeat; }`;
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-fundo')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-fundo'}));s.textContent=${JSON.stringify(css)};document.documentElement.style.setProperty('--ij-fundo','${forca}')})()`);
-}
-
-function gravarForca(valor) {
-    require('fs').writeFileSync(OPCOES, JSON.stringify({ ...lerOpcoes(), fundo: valor }));
-}
-
-function paginaFundo(forca) {
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 24px; max-width: 460px; }
-h2 { font-size: 15px; margin: 0 0 18px; }
-label { display: block; margin-bottom: 8px; }
-input[type=range] { width: 100%; accent-color: var(--vscode-focusBorder); }
-.botoes { margin-top: 20px; display: flex; gap: 8px; }
-button { background: transparent; color: inherit; border: 1px solid var(--vscode-panel-border, currentColor); border-radius: 4px; padding: 5px 13px; cursor: pointer; }
-button:hover { background: var(--vscode-toolbar-hoverBackground); }
-</style></head><body>
-<h2>Editor Background</h2>
-<label>Strength: <span id="valor">${Math.round(forca * 100)}%</span></label>
-<input id="forca" type="range" min="3" max="40" value="${Math.round(forca * 100)}">
-<div class="botoes"><button id="escolher">Choose Image…</button><button id="remover">Remove Image</button></div>
-<script>
-const vscode = acquireVsCodeApi();
-const forca = document.getElementById('forca');
-forca.addEventListener('input', () => {
-    document.getElementById('valor').textContent = forca.value + '%';
-    vscode.postMessage({ acao: 'forca', valor: Number(forca.value) / 100 });
-});
-for (const acao of ['escolher', 'remover']) {
-    document.getElementById(acao).addEventListener('click', () => vscode.postMessage({ acao }));
-}
-</script></body></html>`;
-}
-
-async function trocarFundo(context) {
-    const [arquivo] = await vscode.window.showOpenDialog({
-        title: 'Background image', filters: { Images: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] },
-    }) ?? [];
-    if (!arquivo) return;
-    const { status } = require('child_process').spawnSync(process.env.SUITE_HUB, ['--background', arquivo.fsPath]);
-    if (status !== 0) return vscode.window.showErrorMessage('Could not read this image.');
-    return fundoEditor(context).catch(avisarReabrir);
-}
-
-function avisarReabrir() {
-    vscode.window.showInformationMessage('Saved. Close the editor and open a project again to see it.');
-}
-
-// Como o IntelliJ: erro só aparece quando a digitação para
-const PAUSA_ANALISE = 500;
-let digitando = false;
-let fimDigitacao;
-
-function estiloPausa(context) {
-    const css = '.ij-digitando .squiggly-error, .ij-digitando .squiggly-warning, .ij-digitando .squiggly-info { visibility: hidden; }';
-    return naJanela(context, `(()=>{const s=document.getElementById('ij-pausa')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-pausa'}));s.textContent=${JSON.stringify(css)}})()`);
-}
-
-function aoDigitar(context, evento) {
-    if (evento.document.uri.scheme !== 'file' || !evento.contentChanges.length) return;
-    if (!digitando) {
-        digitando = true;
-        naJanela(context, "document.body.classList.add('ij-digitando')").catch(() => {});
-    }
-    clearTimeout(fimDigitacao);
-    fimDigitacao = setTimeout(() => {
-        digitando = false;
-        naJanela(context, "document.body.classList.remove('ij-digitando')").catch(() => {});
-    }, PAUSA_ANALISE);
 }
 
 // Árvore como a do IntelliJ: nome sem .java e o ícone real do tipo
@@ -761,79 +491,17 @@ function arvoreJava(context) {
     naJanela(context, scriptArvore(cssIcones())).then(() => tiposJava(context)).catch(() => {});
 }
 
-// Avisa no rodapé se uma atualização do editor quebrar os ajustes visuais
-async function conferirSaude(context) {
-    if (process.env.SUITE_VISUAL === '0') return;
-    await new Promise(pronto => setTimeout(pronto, 10000));
-    const expressao = "!!(document.querySelector('.part.editor') && document.querySelector('.part.sidebar') && window.__ijArvore && document.getElementById('ij-pausa'))";
-    const ok = await naJanela(context, expressao).catch(() => false);
-    if (ok) return;
-    const aviso = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 0);
-    aviso.text = '$(warning) Visual extras: partial';
-    aviso.tooltip = 'Visual tweaks are off. Open the editor from the Welcome screen, or the editor update changed something. Your code is safe.';
-    aviso.show();
-    context.subscriptions.push(aviso);
-}
-
-let painelFundo;
-
-function abrirPainelFundo(context) {
-    if (painelFundo) return painelFundo.reveal();
-    painelFundo = vscode.window.createWebviewPanel('ijFundo', 'Editor Background', vscode.ViewColumn.Active, { enableScripts: true });
-    painelFundo.webview.html = paginaFundo(lerOpcoes().fundo ?? FORCA_PADRAO);
-    painelFundo.onDidDispose(() => { painelFundo = undefined; });
-    painelFundo.webview.onDidReceiveMessage(({ acao, valor }) => {
-        if (acao === 'escolher') return trocarFundo(context);
-        if (acao === 'remover') {
-            require('fs').rmSync(IMAGEM, { force: true });
-            return fundoEditor(context).catch(avisarReabrir);
-        }
-        gravarForca(valor);
-        naJanela(context, `document.documentElement.style.setProperty('--ij-fundo','${valor}')`).catch(avisarReabrir);
-    });
-}
-
-async function menuConfiguracoes() {
-    const itens = [
-        { label: 'Settings', comando: 'workbench.action.openSettings' },
-        { label: 'Editor Background…', comando: 'ij.customizeBackground' },
-        { label: 'Theme…', comando: 'workbench.action.selectTheme' },
-        { label: 'Keymap', comando: 'workbench.action.openGlobalKeybindings' },
-        { label: 'Plugins', comando: 'workbench.view.extensions' },
-    ];
-    const escolha = await vscode.window.showQuickPick(itens, { placeHolder: 'Settings' });
-    if (escolha) vscode.commands.executeCommand(escolha.comando);
-}
-
 function activate(context) {
     contexto = context;
     const modelos = carregarModelos(context);
-    fundoEditor(context).catch(() => {});
-    estiloPausa(context).catch(() => {});
-    if (process.env.SUITE_ANIMATIONS !== '0') estiloAnimacao(context).catch(() => {});
-    marcaDagua(context).catch(() => {});
+    ativarComum(context, { prefixo: 'ij', saudavel: '!!window.__ijArvore' });
     arvoreJava(context);
-    conferirSaude(context);
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(evento => aoDigitar(context, evento)));
-    comandoPendente();
     esconderPaineis(context);
-    fecharNovidades();
     mostrarConfig();
     for (const [id, acao] of Object.entries(ACOES)) {
         context.subscriptions.push(vscode.commands.registerCommand(id, (...args) =>
             acao.a ? vscode.commands.executeCommand(acao.t, acao.a) : vscode.commands.executeCommand(acao.t, ...args)));
     }
-    pintarBreakpoints();
-    context.subscriptions.push(
-        vscode.debug.onDidChangeBreakpoints(pintarBreakpoints),
-        vscode.window.onDidChangeVisibleTextEditors(pintarBreakpoints)
-    );
-
-    const rodape = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
-    rodape.command = 'workbench.action.quickOpen';
-    caminhoRodape(rodape);
-    context.subscriptions.push(rodape, vscode.window.onDidChangeActiveTextEditor(() => caminhoRodape(rodape)));
-
     context.subscriptions.push(
         vscode.commands.registerCommand('ij.safeDelete', exclusaoSegura),
         vscode.commands.registerCommand('ij.newClass', uri => novaClasse(uri)),
@@ -847,18 +515,7 @@ function activate(context) {
         vscode.commands.registerCommand('ij.editConfigs', editarConfigs),
         vscode.commands.registerCommand('ij.profile', uri => perfilar(uri)),
         vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('launch')) mostrarConfig(); }),
-        vscode.commands.registerCommand('ij.stop', pararExecucao),
-        vscode.commands.registerCommand('ij.rerun', reexecutar),
-        vscode.window.onDidCloseTerminal(fechado => {
-            if (fechado !== execucao?.terminal) return;
-            execucao = undefined;
-            vscode.commands.executeCommand('setContext', 'ij.rodando', false);
-            vscode.commands.executeCommand('setContext', 'ij.emExecucao', false);
-        }),
         vscode.commands.registerCommand('ij.debug', uri => executar('java.debug.debugJavaFile', uri)),
-        vscode.commands.registerCommand('ij.search', () => vscode.commands.executeCommand('workbench.action.quickOpen')),
-        vscode.commands.registerCommand('ij.settings', menuConfiguracoes),
-        vscode.commands.registerCommand('ij.customizeBackground', () => abrirPainelFundo(context)),
         vscode.commands.registerCommand('ij.nextMethod', () => irMetodo(1)),
         vscode.commands.registerCommand('ij.prevMethod', () => irMetodo(-1)),
         vscode.languages.registerCompletionItemProvider('java', { provideCompletionItems: postfix }, '.'),

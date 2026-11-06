@@ -1,0 +1,9 @@
+[
+    // Run and debug: HTML goes to Live Server, JS and TS to the bundled Node
+    { "key": "shift+f10", "command": "web.run", "when": "editorLangId == html || editorLangId == javascript || editorLangId == typescript" },
+    { "key": "shift+f9", "command": "web.debug", "when": "editorLangId == html || editorLangId == javascript || editorLangId == typescript" },
+    { "key": "ctrl+5", "command": "web.run", "when": "(editorLangId == html || editorLangId == javascript || editorLangId == typescript) && !inDebugMode && !web.rodando" },
+    { "key": "ctrl+5", "command": "web.rerun", "when": "inDebugMode || web.rodando" },
+    { "key": "shift+f10", "command": "web.rerun", "when": "!inDebugMode && terminalFocus" },
+    { "key": "ctrl+2", "command": "web.stop", "when": "inDebugMode || web.emExecucao" }
+]

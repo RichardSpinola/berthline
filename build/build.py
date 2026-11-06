@@ -19,6 +19,7 @@ CACHE = RAIZ / 'build/cache'
 DESTINO = RAIZ / 'dist' / ('berthline-windows' if JANELAS else 'berthline-linux')
 VERSOES = json.loads((RAIZ / 'build/versions.json').read_text())
 SEM_VERIFICAR = '--no-signature-check' in sys.argv
+EXTENSOES = {'java': 'extension', 'web': 'extension-web'}
 
 
 def baixar(url, nome):
@@ -88,6 +89,9 @@ def vsix(pasta):
         for f in (RAIZ / pasta).rglob('*'):
             if f.is_file():
                 z.write(f, Path('extension') / f.relative_to(RAIZ / pasta))
+        if pasta in EXTENSOES.values():
+            for f in (RAIZ / 'extension-common').iterdir():
+                z.write(f, Path('extension/comum') / f.name)
     return alvo
 
 
@@ -215,14 +219,14 @@ def main():
     shutil.copy(RAIZ / 'NOTICE', DESTINO)
     shutil.copy(RAIZ / 'LICENSE', DESTINO)
     hub()
-    pacote, leve = vsix('extension'), vsix('extension-lite')
+    leve = vsix('extension-lite')
     for lista in sorted((RAIZ / 'profiles').glob('*/extensions.txt')):
         app = lista.parent.name
         itens = [l.strip() for l in lista.read_text().splitlines() if l.strip()]
         for item in itens:
             instalar(app, item, item)
-        if itens:
-            instalar(app, 'berthline-tools', pacote)
+        if app in EXTENSOES:
+            instalar(app, f'{EXTENSOES[app]} package', vsix(EXTENSOES[app]))
         instalar(app, 'berthline-hub', leve)
         enxugar_menus(app)
     if JANELAS:

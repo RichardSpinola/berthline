@@ -1,0 +1,81 @@
+{
+  "name": "berthline-web",
+  "displayName": "Berthline Web",
+  "description": "Run and debug for the Berthline Web profile",
+  "version": "0.1.0",
+  "publisher": "berthline",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "web.run",
+        "title": "Run",
+        "icon": "$(play)"
+      },
+      {
+        "command": "web.debug",
+        "title": "Debug",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "web.stop",
+        "title": "Stop",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "web.rerun",
+        "title": "Rerun"
+      },
+      {
+        "command": "web.search",
+        "title": "Search Everywhere",
+        "icon": "$(search)"
+      },
+      {
+        "command": "web.settings",
+        "title": "Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "web.customizeBackground",
+        "title": "Customize Editor Background"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "web.run",
+          "group": "navigation@-3",
+          "when": "editorLangId == html || editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "web.debug",
+          "group": "navigation@-2",
+          "when": "editorLangId == html || editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "web.stop",
+          "group": "navigation@-1",
+          "when": "inDebugMode || web.emExecucao"
+        },
+        {
+          "command": "web.search",
+          "group": "navigation@90"
+        },
+        {
+          "command": "web.settings",
+          "group": "navigation@91"
+        }
+      ]
+    }
+  }
+}

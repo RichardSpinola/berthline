@@ -65,14 +65,6 @@ async function focarEditor(h) {
 async function comandos(h) {
     const todos = new Set(await rpc('comandos'));
     relatorio.dados.comandos = todos.size;
-    const nossa = await rpc('contribuicoes', { id: 'berthline.berthline-tools' });
-    if (!nossa) return aviso('no Berthline Tools in this profile');
-    const proprios = nossa.commands.map(c => c.command);
-    for (const c of proprios) if (!todos.has(c)) falha('command not registered', c);
-
-    const acoes = JSON.parse(fs.readFileSync(path.join(PACOTE, `data/${APP}/extensions`, fs.readdirSync(path.join(PACOTE, `data/${APP}/extensions`)).find(n => n.startsWith('berthline.berthline-tools')), 'acoes.json')));
-    // Commands of idle extensions only show up after they activate, so running them is the real check.
-    const alvos = Object.fromEntries(Object.entries(acoes).map(([c, a]) => [c, a.t]));
 
     const atalhos = fs.readFileSync(path.join(PACOTE, `data/${APP}/user/User/keybindings.json`), 'utf8').replace(/^\s*\/\/.*$/gm, '');
     const lista = JSON.parse(atalhos.replace(/,(\s*[\]}])/g, '$1'));
@@ -84,6 +76,20 @@ async function comandos(h) {
     }
     for (const [k, v] of Object.entries(vistos)) if (v.length > 1) falha('shortcut conflict', `${k}: ${v.join(', ')}`);
     relatorio.dados.atalhos = lista.length;
+
+    const nome = APP === 'java' ? 'berthline-tools' : 'berthline-web';
+    const nossa = await rpc('contribuicoes', { id: `berthline.${nome}` });
+    conferir(`${nome} installed`, !!nossa);
+    if (!nossa) return;
+    const estranha = APP === 'java' ? 'web' : 'ij';
+    conferir('no commands from the other profile', ![...todos].some(c => c.startsWith(`${estranha}.`)));
+    const proprios = nossa.commands.map(c => c.command);
+    for (const c of proprios) if (!todos.has(c)) falha('command not registered', c);
+
+    const pasta = path.join(PACOTE, `data/${APP}/extensions`, fs.readdirSync(path.join(PACOTE, `data/${APP}/extensions`)).find(n => n.startsWith(`berthline.${nome}`)));
+    const arquivoAcoes = path.join(pasta, 'acoes.json');
+    // Commands of idle extensions only show up after they activate, so running them is the real check.
+    const alvos = fs.existsSync(arquivoAcoes) ? Object.fromEntries(Object.entries(JSON.parse(fs.readFileSync(arquivoAcoes))).map(([c, a]) => [c, a.t])) : {};
 
     const texto = await h.ev(`document.querySelector('.part.statusbar').innerText`);
     relatorio.dados.statusbar = texto;

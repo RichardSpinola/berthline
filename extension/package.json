@@ -1,7 +1,7 @@
 {
   "name": "berthline-tools",
   "displayName": "Berthline Tools",
-  "description": "Run, debug, templates and navigation for the Berthline profiles",
+  "description": "Run, debug, templates and navigation for the Berthline Java profile",
   "version": "0.1.0",
   "publisher": "berthline",
   "engines": {
@@ -836,12 +836,12 @@
         {
           "command": "ij.runSelected",
           "group": "navigation@-3",
-          "when": "editorLangId == java || ij.temConfig || editorLangId == html || editorLangId == javascript || editorLangId == typescript"
+          "when": "editorLangId == java || ij.temConfig"
         },
         {
           "command": "ij.debugSelected",
           "group": "navigation@-2",
-          "when": "editorLangId == java || ij.temConfig || editorLangId == html || editorLangId == javascript || editorLangId == typescript"
+          "when": "editorLangId == java || ij.temConfig"
         },
         {
           "command": "ij.stop",
