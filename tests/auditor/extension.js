@@ -34,10 +34,13 @@ const acoes = {
         return lista.items.map(i => ({ rotulo: i.label.label ?? i.label, ordem: i.sortText ?? '' }));
     },
     erros: ({ arquivo }) => vscode.languages.getDiagnostics(vscode.Uri.file(arquivo)).filter(d => d.severity === 0).map(d => d.message),
+    todosErros: () => vscode.languages.getDiagnostics().flatMap(([uri, lista]) => lista.filter(d => d.severity === 0).map(d => `${uri.path.split('/').pop()}: ${d.message}`)),
+    compilar: () => vscode.commands.executeCommand('java.workspace.compile', false),
     renomear: ({ de, para }) => {
         const edicao = new vscode.WorkspaceEdit();
         edicao.renameFile(vscode.Uri.file(de), vscode.Uri.file(para));
-        return vscode.workspace.applyEdit(edicao);
+        // The Java extension may stop the rename to ask about references; the file moves anyway
+        return Promise.race([vscode.workspace.applyEdit(edicao), new Promise(ok => setTimeout(() => ok(false), 5000))]);
     },
     texto: ({ texto }) => {
         const doc = editor().document;

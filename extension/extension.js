@@ -253,6 +253,34 @@ async function gerar() {
     if (escolha) return aplicarAcao(escolha.acao);
 }
 
+// Botão Build: compilar e gerar o .jar sem procurar comando
+async function compilar(completo) {
+    const resultado = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Building' }, () =>
+        vscode.commands.executeCommand('java.workspace.compile', completo)).then(s => s, () => 0);
+    if (resultado === 1) {
+        vscode.window.setStatusBarMessage('$(check) Build finished', 5000);
+        return true;
+    }
+    vscode.commands.executeCommand('workbench.panel.markers.view.focus');
+    vscode.window.showErrorMessage('Build failed. See the Problems panel.');
+    return false;
+}
+
+// Sem classes compiladas o assistente só diz "no valid classpath"; melhor compilar antes
+async function exportarJar() {
+    if (await compilar(true)) return vscode.commands.executeCommand('java.view.package.exportJar');
+}
+
+async function menuBuild() {
+    const itens = [
+        { label: '$(tools) Build Project', description: 'Compile what changed', acao: () => compilar(false) },
+        { label: '$(refresh) Rebuild Project', description: 'Compile everything again', acao: () => compilar(true) },
+        { label: '$(package) Export Runnable JAR…', description: 'Saved in the project folder', acao: exportarJar },
+    ];
+    const escolha = await vscode.window.showQuickPick(itens, { placeHolder: 'Build' });
+    return escolha?.acao();
+}
+
 // Java só aceita uma pasta vinda do Explorer; pela paleta não há nenhuma
 function marcarFontes(comando, uri) {
     if (!uri) return vscode.window.showInformationMessage('Right-click a folder in the Explorer to use this.');
@@ -622,12 +650,15 @@ function activate(context) {
     esconderPaineis(context);
     mostrarConfig();
     for (const [id, acao] of Object.entries(ACOES)) {
-        context.subscriptions.push(vscode.commands.registerCommand(id, (...args) =>
-            acao.a ? vscode.commands.executeCommand(acao.t, acao.a) : vscode.commands.executeCommand(acao.t, ...args)));
+        context.subscriptions.push(vscode.commands.registerCommand(id, (...args) => {
+            if (acao.arquivo && !vscode.window.activeTextEditor) return vscode.window.showInformationMessage('Open a Java file first.');
+            return acao.a ? vscode.commands.executeCommand(acao.t, acao.a) : vscode.commands.executeCommand(acao.t, ...args);
+        }));
     }
     context.subscriptions.push(
         vscode.commands.registerCommand('ij.safeDelete', exclusaoSegura),
         vscode.commands.registerCommand('ij.generate', gerar),
+        vscode.commands.registerCommand('ij.build', menuBuild),
         vscode.commands.registerCommand('ij.newClass', uri => novaClasse(uri)),
         vscode.commands.registerCommand('ij.newClassTop', () => novaClasse()),
         vscode.commands.registerCommand('ij.markSources', uri => marcarFontes('java.project.addToSourcePath', uri)),

@@ -395,6 +395,11 @@
         "command": "ij.profile",
         "title": "Run with Profiler",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "ij.build",
+        "title": "Build and Export",
+        "icon": "$(package)"
       }
     ],
     "submenus": [
@@ -849,6 +854,11 @@
           "when": "inDebugMode || ij.emExecucao"
         },
         {
+          "command": "ij.build",
+          "group": "navigation@0",
+          "when": "editorLangId == java"
+        },
+        {
           "command": "ij.search",
           "group": "navigation@90"
         },
@@ -866,6 +876,11 @@
         {
           "command": "ij.newProject",
           "group": "navigation@1",
+          "when": "view == workbench.explorer.fileView"
+        },
+        {
+          "command": "ij.build",
+          "group": "navigation@2",
           "when": "view == workbench.explorer.fileView"
         }
       ]

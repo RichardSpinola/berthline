@@ -338,6 +338,57 @@ async function sugestoes(h, pasta) {
     await rpc('executar', { comando: 'workbench.action.files.save' });
 }
 
+async function exportar(h, pasta) {
+    await rpc('abrir', { arquivo: path.join(pasta, 'src/Main.java') });
+    await dormir(800);
+    const botoes = await h.ev(`[...document.querySelectorAll('.part.titlebar a.action-label, .editor-actions a.action-label')].map(e=>e.getAttribute('aria-label')||'')`);
+    conferir('build button in the bar', botoes.some(b => b.startsWith('Build and Export')));
+    const escolher = async nome => {
+        await rpc('executar', { comando: 'ij.build', limite: 800 });
+        await dormir(700);
+        await h.c('Input.insertText', { text: nome });
+        await dormir(300);
+        await tecla(h, [], 'Enter', 'Enter', 13);
+    };
+    await escolher('Build Project');
+    conferir('build reports success', await h.ate(async () => /Build finished/.test(await h.ev(`document.querySelector('.part.statusbar').innerText`)), 15000),
+        `compile ${await rpc('compilar')}; ${(await rpc('todosErros')).join(' / ').slice(0, 300)}`);
+    const quebrado = path.join(pasta, 'src/Broken.java');
+    fs.writeFileSync(quebrado, 'public class Broken {\n    int x = ;\n}\n');
+    await dormir(3000);
+    await escolher('Rebuild Project');
+    conferir('build reports failure', await h.ate(async () => /Build failed/.test(await h.ev(`[...document.querySelectorAll('.notification-toast')].map(e=>e.innerText).join(' ')`)), 20000));
+    await rpc('executar', { comando: 'notifications.clearAll' });
+    fs.rmSync(quebrado);
+    await dormir(3000);
+    await rpc('executar', { comando: 'ij.build', limite: 800 });
+    await dormir(700);
+    await h.foto('audit-java-build');
+    await h.c('Input.insertText', { text: 'Export' });
+    await dormir(300);
+    await tecla(h, [], 'Enter', 'Enter', 13);
+    const jar = path.join(pasta, `${path.basename(pasta)}.jar`);
+    // The wizard asks for the main class only when it can't tell; Loop also has one and never ends, so name Main
+    const pergunta = await h.ate(async () => /main/i.test(await h.ev(`document.querySelector('.quick-input-title')?.innerText ?? ''`)) || fs.existsSync(jar), 20000);
+    if (pergunta && !fs.existsSync(jar)) {
+        await h.foto('audit-java-export');
+        await h.c('Input.insertText', { text: 'Main' });
+        await dormir(500);
+        await tecla(h, [], 'Enter', 'Enter', 13);
+    }
+    // The last step lists what goes in the jar; the defaults are fine
+    for (let i = 0; i < 6 && !fs.existsSync(jar); i++) {
+        await dormir(1500);
+        if (await h.ev(`document.querySelector('.quick-input-widget')?.style.display !== 'none'`)) await tecla(h, [], 'Enter', 'Enter', 13);
+    }
+    conferir('jar exported', await h.ate(() => fs.existsSync(jar), 15000), jar);
+    const jre = path.join(PACOTE, `data/${APP}/extensions`, fs.readdirSync(path.join(PACOTE, `data/${APP}/extensions`)).find(n => n.startsWith('redhat.java')), 'jre');
+    const javaBin = path.join(jre, fs.readdirSync(jre)[0], 'bin', JANELAS ? 'java.exe' : 'java');
+    const saida = spawnSync(javaBin, ['-jar', jar], { input: 'Ana\n', encoding: 'utf8', timeout: 15000 });
+    conferir('exported jar runs', /Hello, Ana!/.test(saida.stdout), (saida.stdout + saida.stderr).slice(0, 160));
+    await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
+}
+
 async function temas(h) {
     const lista = await rpc('temas');
     relatorio.dados.temas = lista.length;
@@ -381,6 +432,7 @@ return r})()`;
     const arquivo = path.join(pasta, APP === 'java' ? 'src/Main.java' : 'app.js');
     for (const etapa of [
         () => APP === 'java' ? java(h, pasta) : null,
+        () => APP === 'java' ? exportar(h, pasta) : null, // needs the clean fixture, before other steps add files
         () => comandos(h),
         () => APP === 'java' ? teclado(h, arquivo) : null,
         () => APP === 'java' ? criacao(h, pasta) : null,

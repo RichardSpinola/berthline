@@ -119,7 +119,8 @@
   "t": "editor.action.organizeImports"
  },
  "ij.codeCleanup": {
-  "t": "java.action.doCleanup"
+  "t": "java.action.doCleanup",
+  "arquivo": true
  },
  "ij.inspectCode": {
   "t": "workbench.actions.view.problems"
