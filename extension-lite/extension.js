@@ -26,8 +26,15 @@ function activate(context) {
     botao.command = 'berthline.openHub';
     botao.show();
     context.subscriptions.push(botao, vscode.commands.registerCommand('berthline.openHub', () => {
-        spawn(process.env.SUITE_HUB, [], { detached: true, stdio: 'ignore' }).unref();
+        const ambiente = { ...process.env };
+        // Variáveis do editor fariam a próxima janela abrir como Node e fechar
+        for (const chave of Object.keys(ambiente)) {
+            if (chave === 'ELECTRON_RUN_AS_NODE' || chave.startsWith('VSCODE_')) delete ambiente[chave];
+        }
+        spawn(process.env.SUITE_HUB, [], { detached: true, stdio: 'ignore', env: ambiente }).unref();
+        vscode.commands.executeCommand('workbench.action.closeWindow');
     }));
+    etapa('extensions');
     esperarJava().catch(() => {}).finally(() => etapa('ready'));
 }
 

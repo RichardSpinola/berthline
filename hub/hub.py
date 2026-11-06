@@ -241,6 +241,9 @@ def ambiente(app):
     if node().exists():
         amb['SUITE_NODE'] = str(node())
     amb['SUITE_HUB'] = sys.executable
+    for chave in list(amb):
+        if chave == 'ELECTRON_RUN_AS_NODE' or chave.startswith('VSCODE_'):
+            del amb[chave]
     amb.pop('SUITE_ROOT', None)
     return amb
 
@@ -389,8 +392,24 @@ def marca_dagua(app):
     (DADOS / app / 'watermark.svg').write_text(cinza, encoding='utf8')
 
 
-def janela_aberta(app, desde):
-    return any(p.stat().st_mtime >= desde - 1 for p in (DADOS / app / 'user/logs').glob('*/window*'))
+def janelas_editor(pid):
+    """Janelas X11 de um processo; no Windows a espera é só a animação por cima."""
+    if JANELAS or not pid or not shutil.which('xprop'):
+        return set()
+    r = subprocess.run(['xprop', '-root', '_NET_CLIENT_LIST'], capture_output=True, text=True)
+    achadas = set()
+    for janela_ in re.findall(r'0x[0-9a-f]+', r.stdout):
+        dono = subprocess.run(['xprop', '-id', janela_, '_NET_WM_PID'], capture_output=True, text=True).stdout
+        if dono.strip().endswith(f'= {pid}'):
+            achadas.add(janela_)
+    return achadas
+
+
+def opacidade_editor(janela_, visivel):
+    """Deixa o editor carregar invisível, sem mudar nada nele."""
+    nome = '_NET_WM_WINDOW_OPACITY'
+    args = ['-remove', nome] if visivel else ['-f', nome, '32c', '-set', nome, '0']
+    subprocess.run(['xprop', '-id', janela_, *args], capture_output=True)
 
 
 def ajuste(app, chave):
@@ -563,10 +582,10 @@ def criar_projeto(app, modelo_, nome, local, git=False):
     return raiz
 
 
-def janela(inicial=None):
+def janela(inicial=None, lancar=None):
     if not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ:
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
-    from PySide6.QtCore import QEasingCurve, QProcess, QProcessEnvironment, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
+    from PySide6.QtCore import Property, QEasingCurve, QProcess, QProcessEnvironment, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
     from PySide6.QtGui import (
         QColor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QImage, QPainter, QPainterPath, QPen,
     )
@@ -719,8 +738,9 @@ def janela(inicial=None):
             super().__init__()
             self.setFixedSize(largura, altura)
             self.fase = 0.0
+            self.viagem = None
             self.desenho = QSvgRenderer(str(ASSETS / f'{app}.svg'), self)
-            self.cor = QColor(aplicativos()[app].get('accent', '#8C939E'))
+            self.cor = QColor(aplicativos().get(app, {}).get('accent', '#8C939E'))
             relogio = QTimer(self)
             relogio.timeout.connect(self.passo)
             relogio.start(33)
@@ -736,7 +756,8 @@ def janela(inicial=None):
             agua = self.height() - 22
             lado = self.height() * .62
             p.save()
-            p.translate(largura / 2, agua - lado * .36 + math.sin(self.fase) * 4)
+            x = largura / 2 if self.viagem is None else -lado + self.viagem * (largura + 2 * lado)
+            p.translate(x, agua - lado * .36 + math.sin(self.fase) * 4)
             p.rotate(math.sin(self.fase * .8) * 3)
             self.desenho.render(p, QRectF(-lado / 2, -lado * .62, lado, lado))
             p.restore()
@@ -769,6 +790,10 @@ def janela(inicial=None):
             tela = QGuiApplication.primaryScreen().availableGeometry()
             self.move(tela.center() - self.rect().center())
 
+        def mouseReleaseEvent(self, _):
+            if getattr(self, 'pular', None):
+                self.pular()
+
         def sair(self, depois):
             animacao = QPropertyAnimation(self, b'windowOpacity', self)
             animacao.setDuration(240)
@@ -778,34 +803,89 @@ def janela(inicial=None):
             animacao.start()
             self.saida = animacao
 
-    ETAPAS = {'': 'Loading extensions…', 'java': 'Starting the Java server…', 'ready': 'Ready'}
+    class Abertura(Raiz):
+        """Logo navegando pelo mar ao abrir o Hub."""
+
+        def __init__(self, depois):
+            super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+            self.setObjectName('raiz')
+            com_vidro(self)
+            self.setFixedSize(460, 230)
+            self.depois = depois
+            v = QVBoxLayout(self)
+            v.setContentsMargins(0, 26, 0, 22)
+            self.barco = Barco('hub', 460, 140)
+            self.barco.cor = QColor('#7FA6C9')
+            self.barco.viagem = 0.0
+            nome = rotulo(marca()['name'], 'grande')
+            nome.setAlignment(Qt.AlignCenter)
+            v.addWidget(self.barco)
+            v.addWidget(nome)
+            tela = QGuiApplication.primaryScreen().availableGeometry()
+            self.move(tela.center() - self.rect().center())
+            self.curso = QPropertyAnimation(self, b'percurso', self)
+            self.curso.setDuration(1700)
+            self.curso.setStartValue(0.0)
+            self.curso.setEndValue(1.0)
+            self.curso.setEasingCurve(QEasingCurve.InOutSine)
+            self.curso.finished.connect(self.fim)
+
+        def ler(self):
+            return self.barco.viagem
+
+        def mudar(self, valor):
+            self.barco.viagem = valor
+
+        percurso = Property(float, ler, mudar)
+
+        def comecar(self):
+            surgir(self)
+            self.curso.start()
+
+        def fim(self):
+            animacao = QPropertyAnimation(self, b'windowOpacity', self)
+            animacao.setDuration(220)
+            animacao.setStartValue(1.0)
+            animacao.setEndValue(0.0)
+            animacao.finished.connect(lambda: (self.depois(), self.close()))
+            animacao.start()
+            self.saida = animacao
+
+    ETAPAS = {'': 'Starting the editor…', 'extensions': 'Loading extensions…', 'java': 'Starting the Java server…', 'ready': 'Ready'}
 
     def abrir(app, *alvos, comando_=None):
         if alvos and not pode_abrir(alvos[0]):
             return
         inicio = time.time()
         limite = 110 if aplicativos()[app].get('memory') else 30
-        partida = Partida(app, f'Starting {nome_app(app)}…')
+        partida = Partida(app, ETAPAS[''])
         for w in QApplication.topLevelWidgets():
             if w is not partida and not isinstance(w, QMenu):
                 w.hide()
         surgir(partida)
         QApplication.processEvents()
         limpar_etapa(app)
-        abrir_app(app, alvos, comando_=comando_)
+        escondidas = set()
+        processo = abrir_app(app, alvos, comando_=comando_)
+
+        def terminar():
+            relogio.stop()
+            for janela_ in escondidas:
+                opacidade_editor(janela_, True)
+            partida.sair(QApplication.quit)
 
         def conferir():
-            passou = time.time() - inicio
-            if not janela_aberta(app, inicio) and passou < limite:
-                return
+            for janela_ in janelas_editor(getattr(processo, 'pid', None)) - escondidas:
+                opacidade_editor(janela_, False)
+                escondidas.add(janela_)
             agora = etapa_atual(app)
             partida.texto.setText(ETAPAS.get(agora, ETAPAS['']))
-            if agora == 'ready' or passou > limite:
-                relogio.stop()
-                partida.sair(QApplication.quit)
+            if agora == 'ready' or time.time() - inicio > limite:
+                terminar()
         relogio = QTimer(partida)
         relogio.timeout.connect(conferir)
-        relogio.start(200)
+        relogio.start(120)
+        partida.pular = terminar
 
     def entrar(app, depois):
         """Mostra o barco por um instante ao trocar de app."""
@@ -1614,8 +1694,15 @@ def janela(inicial=None):
             s.grab().save(str(destino / f'{app}-partida.png'))
             s.close()
         return 0
+    if lancar:
+        QTimer.singleShot(0, lambda: abrir(*lancar))
+        return aplicacao.exec()
     j = Boasvindas(inicial) if inicial else Painel()
-    surgir(j)
+    if inicial or not opcoes().get('transitions', True):
+        surgir(j)
+    else:
+        abertura = Abertura(lambda: surgir(j))
+        abertura.comecar()
     return aplicacao.exec()
 
 
@@ -1627,6 +1714,8 @@ def main():
         processo = abrir_app(args[1], alvos, porta)
         print(processo.pid)
         return 0
+    if args[:1] == ['--launch']:
+        return janela(lancar=args[1:])
     if args[:1] == ['--welcome']:
         return janela(args[1])
     if args[:1] == ['--background']:

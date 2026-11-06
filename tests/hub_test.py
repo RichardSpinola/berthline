@@ -32,7 +32,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QFrame, QMessageBox, QP
 falhas = []
 abertos = []
 hub.abrir_app = lambda app, alvos=(), porta=None, comando_=None: abertos.append((app, [str(a) for a in alvos], comando_))
-hub.janela_aberta = lambda *a: True
+hub.janelas_editor = lambda pid: set()
 hub.etapa_atual = lambda app: 'ready'
 hub.TEMPORARIO = None
 QApplication.quit = staticmethod(lambda: None)

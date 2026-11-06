@@ -175,6 +175,9 @@ def so_hub():
     shutil.copytree(RAIZ / 'profiles', DESTINO / 'profiles')
     shutil.copytree(RAIZ / 'hub/assets', DESTINO / 'assets', dirs_exist_ok=True)
     hub()
+    leve = vsix('extension-lite')
+    for app in ('java', 'web', 'standard'):
+        instalar(app, 'berthline-hub', leve)
 
 
 def main():

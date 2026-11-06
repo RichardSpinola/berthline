@@ -134,6 +134,7 @@ async function java(pasta) {
 }
 
 async function web(pasta) {
+    process.env.ELECTRON_RUN_AS_NODE = '1';
     // Evita abrir o navegador durante o teste
     const ajustes = path.join(PACOTE, 'data/web/user/User');
     fs.mkdirSync(ajustes, { recursive: true });
