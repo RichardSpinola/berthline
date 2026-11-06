@@ -1,0 +1,127 @@
+hub-projects/ListaProjetos:
+hub-projects/QLineEdit:Search projects
+hub-projects/QPushButton:Projects
+hub-projects/QPushButton:Tools
+hub-projects/QToolButton:
+hub-projects/QToolButton:Settings
+hub-settings/QCheckBox:Transitions and boat animation
+hub-settings/QCheckBox:Window blur
+hub-settings/QListWidget:
+hub-settings/QPushButton:Add Berthline Hub to Desktop
+hub-settings/QPushButton:Add…
+hub-settings/QPushButton:Projects
+hub-settings/QPushButton:Remove
+hub-settings/QPushButton:Tools
+hub-settings/QToolButton:Settings
+hub-tools/QPushButton:Projects
+hub-tools/QPushButton:Tools
+hub-tools/QToolButton:Settings
+java-customize/Combo:
+java-customize/QCheckBox:Allow editor telemetry
+java-customize/QCheckBox:Animations
+java-customize/QCheckBox:Enable AI features
+java-customize/QCheckBox:Visual extras: tree icons and app watermark (needs
+java-customize/QPushButton:All settings…
+java-customize/QPushButton:Back to Hub
+java-customize/QPushButton:Choose wallpaper…
+java-customize/QPushButton:Customize
+java-customize/QPushButton:Keyboard shortcuts…
+java-customize/QPushButton:Learn
+java-customize/QPushButton:Plugins
+java-customize/QPushButton:Projects
+java-customize/QPushButton:Remove wallpaper
+java-customize/QSlider:
+java-learn/QPushButton:Back to Hub
+java-learn/QPushButton:Customize
+java-learn/QPushButton:Java API reference
+java-learn/QPushButton:Java tutorials
+java-learn/QPushButton:Keymap Reference
+java-learn/QPushButton:Learn
+java-learn/QPushButton:Plugins
+java-learn/QPushButton:Projects
+java-plugins/QCheckBox:Enabled
+java-plugins/QLineEdit:Search installed plugins
+java-plugins/QListWidget:
+java-plugins/QPushButton:Back to Hub
+java-plugins/QPushButton:Customize
+java-plugins/QPushButton:Learn
+java-plugins/QPushButton:Marketplace
+java-plugins/QPushButton:Plugins
+java-plugins/QPushButton:Projects
+java-plugins/QToolButton:
+java-projects/Clone Repository/QLineEdit:
+java-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
+java-projects/Clone Repository/QPushButton:Cancel
+java-projects/Clone Repository/QPushButton:Clone
+java-projects/ListaProjetos:
+java-projects/New Project/QCheckBox:Create Git repository
+java-projects/New Project/QLineEdit:
+java-projects/New Project/QListWidget:
+java-projects/New Project/QPushButton:Browse…
+java-projects/New Project/QPushButton:Cancel
+java-projects/New Project/QPushButton:Create
+java-projects/QLineEdit:Search projects
+java-projects/QPushButton:Back to Hub
+java-projects/QPushButton:Clone Repository
+java-projects/QPushButton:Customize
+java-projects/QPushButton:Learn
+java-projects/QPushButton:New Project
+java-projects/QPushButton:Open
+java-projects/QPushButton:Plugins
+java-projects/QPushButton:Projects
+java-projects/QToolButton:
+web-customize/Combo:
+web-customize/QCheckBox:Allow editor telemetry
+web-customize/QCheckBox:Animations
+web-customize/QCheckBox:Enable AI features
+web-customize/QCheckBox:Visual extras: tree icons and app watermark (needs
+web-customize/QPushButton:All settings…
+web-customize/QPushButton:Back to Hub
+web-customize/QPushButton:Choose wallpaper…
+web-customize/QPushButton:Customize
+web-customize/QPushButton:Keyboard shortcuts…
+web-customize/QPushButton:Learn
+web-customize/QPushButton:Plugins
+web-customize/QPushButton:Projects
+web-customize/QPushButton:Remove wallpaper
+web-customize/QSlider:
+web-learn/QPushButton:Back to Hub
+web-learn/QPushButton:Customize
+web-learn/QPushButton:Keymap Reference
+web-learn/QPushButton:Learn
+web-learn/QPushButton:MDN Web Docs
+web-learn/QPushButton:Plugins
+web-learn/QPushButton:Projects
+web-learn/QPushButton:TypeScript handbook
+web-learn/QPushButton:web.dev
+web-plugins/QCheckBox:Enabled
+web-plugins/QLineEdit:Search installed plugins
+web-plugins/QListWidget:
+web-plugins/QPushButton:Back to Hub
+web-plugins/QPushButton:Customize
+web-plugins/QPushButton:Learn
+web-plugins/QPushButton:Marketplace
+web-plugins/QPushButton:Plugins
+web-plugins/QPushButton:Projects
+web-plugins/QToolButton:
+web-projects/Clone Repository/QLineEdit:
+web-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
+web-projects/Clone Repository/QPushButton:Cancel
+web-projects/Clone Repository/QPushButton:Clone
+web-projects/ListaProjetos:
+web-projects/New Project/QCheckBox:Create Git repository
+web-projects/New Project/QLineEdit:
+web-projects/New Project/QListWidget:
+web-projects/New Project/QPushButton:Browse…
+web-projects/New Project/QPushButton:Cancel
+web-projects/New Project/QPushButton:Create
+web-projects/QLineEdit:Search projects
+web-projects/QPushButton:Back to Hub
+web-projects/QPushButton:Clone Repository
+web-projects/QPushButton:Customize
+web-projects/QPushButton:Learn
+web-projects/QPushButton:New Project
+web-projects/QPushButton:Open
+web-projects/QPushButton:Plugins
+web-projects/QPushButton:Projects
+web-projects/QToolButton:
