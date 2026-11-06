@@ -11,6 +11,7 @@ const JANELAS = process.platform === 'win32';
 const HUB = path.join(PACOTE, JANELAS ? 'Hub.exe' : 'Hub');
 const INSEGUROS = /^ij\.(newProject|reload|gitPush|gitPull|safeDelete|openFiles)$/;
 const MODIF = { alt: 1, ctrl: 2, shift: 8 };
+const MOLDURA = '38,40,44'; // #26282C, the Islands Dark frame set in profiles/base/settings.json
 const relatorio = { app: APP, plataforma: process.platform, falhas: [], avisos: [], dados: {} };
 
 const falha = (nome, extra = '') => { relatorio.falhas.push(`${nome} ${extra}`.trim()); console.log('FAIL ', nome, extra); };
@@ -113,6 +114,12 @@ async function teclado(h, arquivo) {
     const estado = () => rpc('estado');
     for (const [nome, key, code, vk] of [['up', 'ArrowUp', 'ArrowUp', 38], ['down', 'ArrowDown', 'ArrowDown', 40], ['left', 'ArrowLeft', 'ArrowLeft', 37], ['right', 'ArrowRight', 'ArrowRight', 39]]) {
         await rpc('cursor', { linha: 5, coluna: 12 });
+        // Shrink only does something after an expand
+        if (nome === 'left') {
+            await tecla(h, ['shift', 'alt'], 'ArrowRight', 'ArrowRight', 39);
+            await tecla(h, ['shift', 'alt'], 'ArrowRight', 'ArrowRight', 39);
+            await dormir(500);
+        }
         const antes = await estado();
         await tecla(h, ['shift', 'alt'], key, code, vk);
         await dormir(500);
@@ -148,7 +155,7 @@ async function java(h, pasta) {
     await dormir(4000);
     const botoes = await h.ev(`[...document.querySelectorAll('.part.titlebar a.action-label, .editor-actions a.action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')||e.innerText)`);
     relatorio.dados.barra = botoes;
-    const rodar = botoes.filter(b => /^Run( Java| \()/.test(b));
+    const rodar = botoes.filter(b => /^Run( Java| or Debug| \()/.test(b));
     conferir('single run button', rodar.length === 1, rodar.join(' | '));
     await h.foto(`audit-${APP}-bar`);
 
@@ -180,7 +187,9 @@ const lum=c=>{const v=c.map(x=>{x/=255;return x<=.03928?x/12.92:((x+.055)/1.055)
 const rgb=s=>(s.match(/[\\d.]+/g)||[]).map(Number);
 const fundo=e=>{while(e){const c=rgb(getComputedStyle(e).backgroundColor);if(c.length<4||c[3]>0)return c.slice(0,3);e=e.parentElement}return [255,255,255]};
 const partes={title:'.part.titlebar',activity:'.part.activitybar',side:'.part.sidebar',editor:'.part.editor .monaco-editor-background',status:'.part.statusbar',panel:'.part.panel'};
-const r={};for(const[k,s]of Object.entries(partes)){const e=document.querySelector(s);if(!e||!e.getBoundingClientRect().width)continue;const b=fundo(e),t=rgb(getComputedStyle(e).color).slice(0,3),l=lum(b),m=lum(t);r[k]={fundo:+l.toFixed(3),contraste:+(((Math.max(l,m)+.05)/(Math.min(l,m)+.05)).toFixed(1))}}
+const tinta={activity:'--vscode-activityBar-foreground',status:'--vscode-statusBar-foreground'};
+const cor=(e,v)=>{if(!v)return rgb(getComputedStyle(e).color).slice(0,3);const p=document.querySelector('.monaco-workbench').appendChild(document.createElement('i'));p.style.color='var('+v+')';const c=rgb(getComputedStyle(p).color).slice(0,3);p.remove();return c};
+const r={};for(const[k,s]of Object.entries(partes)){const e=document.querySelector(s);if(!e||!e.getBoundingClientRect().width)continue;const b=fundo(e),t=cor(e,tinta[k]),l=lum(b),m=lum(t);r[k]={rgb:b.join(','),fundo:+l.toFixed(3),contraste:+(((Math.max(l,m)+.05)/(Math.min(l,m)+.05)).toFixed(1))}}
 return r})()`;
     const original = await rpc('ajuste', { chave: 'workbench.colorTheme' });
     for (const t of lista) {
@@ -188,7 +197,13 @@ return r})()`;
         await dormir(1200);
         const r = await h.ev(medir);
         const claro = t.tipo === 'vs' || t.tipo === 'hc-light';
-        const erradas = Object.entries(r).filter(([, v]) => (claro ? v.fundo < 0.3 : v.fundo > 0.6) || v.contraste < 3);
+        // Light themes paint these two dark on purpose (Light+ uses #007ACC), so only our own frame colour counts there
+        const nativas = ['activity', 'status'];
+        const erradas = Object.entries(r).filter(([k, v]) => {
+            if (v.contraste < 3) return true;
+            if (claro && nativas.includes(k)) return v.rgb === MOLDURA;
+            return claro ? v.fundo < 0.3 : v.fundo > 0.6;
+        });
         conferir(`theme ${t.id}`, !erradas.length, erradas.map(([k, v]) => `${k} ${JSON.stringify(v)}`).join(', '));
         await h.foto(`audit-${APP}-theme-${t.id.replace(/\W+/g, '-')}`);
     }

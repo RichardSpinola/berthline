@@ -244,12 +244,6 @@
  "ij.newProject": {
   "t": "java.project.create"
  },
- "ij.markSources": {
-  "t": "java.project.addToSourcePath"
- },
- "ij.unmarkSources": {
-  "t": "java.project.removeFromSourcePath"
- },
  "ij.renameFile": {
   "t": "renameFile"
  },

@@ -99,7 +99,8 @@ async function pastaDestino(uri) {
         await vscode.env.clipboard.writeText(guardado);
         if (caminho !== guardado && require('path').isAbsolute(caminho)) alvo = vscode.Uri.file(caminho);
     }
-    alvo ??= vscode.window.activeTextEditor?.document.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri;
+    const ativo = vscode.window.activeTextEditor?.document.uri;
+    alvo ??= (ativo?.scheme === 'file' ? ativo : vscode.workspace.workspaceFolders?.[0]?.uri);
     if (!alvo) return undefined;
     const info = await vscode.workspace.fs.stat(alvo);
     return info.type & vscode.FileType.Directory ? alvo : vscode.Uri.joinPath(alvo, '..');
@@ -162,6 +163,12 @@ function estiloAnimacao(context) {
 .suggest-widget.visible, .quick-input-widget, .context-view .monaco-menu-container, .monaco-hover, .notification-toast { animation: ijEntra 110ms ease-out; }
 .monaco-list-row, .tabs-container .tab, .action-item .action-label { transition: background-color 90ms ease, color 90ms ease; }`;
     return naJanela(context, `(()=>{const s=document.getElementById('ij-anim')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-anim'}));s.textContent=${JSON.stringify(css)};})()`);
+}
+
+// Java só aceita uma pasta vinda do Explorer; pela paleta não há nenhuma
+function marcarFontes(comando, uri) {
+    if (!uri) return vscode.window.showInformationMessage('Right-click a folder in the Explorer to use this.');
+    return vscode.commands.executeCommand(comando, uri);
 }
 
 function executar(comando, uri) {
@@ -538,7 +545,8 @@ function caminhoRodape(item) {
 // Linha com breakpoint fica vermelha, como no IntelliJ
 const LINHA_BREAKPOINT = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
-    backgroundColor: '#5A2B2F'
+    light: { backgroundColor: '#FAD4D4' },
+    dark: { backgroundColor: '#5A2B2F' }
 });
 
 function pintarBreakpoints() {
@@ -617,10 +625,10 @@ function paginaFundo(forca) {
 body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 24px; max-width: 460px; }
 h2 { font-size: 15px; margin: 0 0 18px; }
 label { display: block; margin-bottom: 8px; }
-input[type=range] { width: 100%; accent-color: #3574F0; }
+input[type=range] { width: 100%; accent-color: var(--vscode-focusBorder); }
 .botoes { margin-top: 20px; display: flex; gap: 8px; }
-button { background: transparent; color: inherit; border: 1px solid #4E5157; border-radius: 4px; padding: 5px 13px; cursor: pointer; }
-button:hover { background: #2B2D30; }
+button { background: transparent; color: inherit; border: 1px solid var(--vscode-panel-border, currentColor); border-radius: 4px; padding: 5px 13px; cursor: pointer; }
+button:hover { background: var(--vscode-toolbar-hoverBackground); }
 </style></head><body>
 <h2>Editor Background</h2>
 <label>Strength: <span id="valor">${Math.round(forca * 100)}%</span></label>
@@ -830,6 +838,8 @@ function activate(context) {
         vscode.commands.registerCommand('ij.safeDelete', exclusaoSegura),
         vscode.commands.registerCommand('ij.newClass', uri => novaClasse(uri)),
         vscode.commands.registerCommand('ij.newClassTop', () => novaClasse()),
+        vscode.commands.registerCommand('ij.markSources', uri => marcarFontes('java.project.addToSourcePath', uri)),
+        vscode.commands.registerCommand('ij.unmarkSources', uri => marcarFontes('java.project.removeFromSourcePath', uri)),
         vscode.commands.registerCommand('ij.run', uri => rodarDireto(uri)),
         vscode.commands.registerCommand('ij.runSelected', rodarSelecionado),
         vscode.commands.registerCommand('ij.debugSelected', depurarSelecionado),

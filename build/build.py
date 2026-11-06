@@ -103,6 +103,21 @@ def instalar(app, nome, pacote):
     print('ok', app, nome, flush=True)
 
 
+def enxugar_menus(app, destino=DESTINO):
+    """Tira das extensões de terceiros os itens de menu que repetem os nossos."""
+    regras = RAIZ / 'profiles' / app / 'menus.json'
+    if not regras.exists():
+        return
+    for extensao, cortes in json.loads(regras.read_text(encoding='utf8')).items():
+        pasta = next((destino / 'data' / app / 'extensions').glob(f'{extensao}-*'))
+        arquivo = pasta / 'package.json'
+        dados = json.loads(arquivo.read_text(encoding='utf8'))
+        menus = dados['contributes']['menus']
+        for menu, itens in cortes.items():
+            menus[menu] = [i for i in menus[menu] if itens != '*' and i.get('command', i.get('submenu')) not in itens]
+        arquivo.write_text(json.dumps(dados, indent='\t', ensure_ascii=False), encoding='utf8')
+
+
 def hub():
     trabalho = RAIZ / 'build/work'
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--windowed', '--onedir', '--name', 'Hub',
@@ -209,6 +224,7 @@ def main():
         if itens:
             instalar(app, 'berthline-tools', pacote)
         instalar(app, 'berthline-hub', leve)
+        enxugar_menus(app)
     if JANELAS:
         (DESTINO / 'Start-Java.bat').write_text('@start "" "%~dp0Hub.exe" --open java\r\n')
         (DESTINO / 'Start-Web.bat').write_text('@start "" "%~dp0Hub.exe" --open web\r\n')

@@ -1,0 +1,7 @@
+{
+  "vscjava.vscode-java-debug": {
+    "editor/title/run": "*",
+    "editor/context": "*",
+    "explorer/context": "*"
+  }
+}
