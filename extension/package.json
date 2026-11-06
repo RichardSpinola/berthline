@@ -310,7 +310,10 @@
       {
         "command": "ij.newClassTop",
         "title": "New Java Class",
-        "icon": "$(new-file)"
+        "icon": {
+          "light": "icones/newClass.svg",
+          "dark": "icones/newClass.svg"
+        }
       },
       {
         "command": "ij.markSources",
@@ -399,7 +402,7 @@
       {
         "command": "ij.build",
         "title": "Build and Export",
-        "icon": "$(package)"
+        "icon": "$(tools)"
       }
     ],
     "submenus": [
@@ -876,11 +879,6 @@
         {
           "command": "ij.newProject",
           "group": "navigation@1",
-          "when": "view == workbench.explorer.fileView"
-        },
-        {
-          "command": "ij.build",
-          "group": "navigation@2",
           "when": "view == workbench.explorer.fileView"
         }
       ]

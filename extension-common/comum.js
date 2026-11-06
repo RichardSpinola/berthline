@@ -285,6 +285,12 @@ async function menuConfiguracoes() {
     if (escolha) vscode.commands.executeCommand(escolha.comando);
 }
 
+// A engrenagem do topo já leva a tudo; a do canto só repetia o mesmo botão
+function umaEngrenagem(context) {
+    const css = '.part.activitybar .action-item:has(.action-label[aria-label^="Manage"]) { display: none !important; }';
+    return naJanela(context, `(()=>{const s=document.getElementById('ij-gear')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-gear'}));s.textContent=${JSON.stringify(css)}})()`);
+}
+
 function ativarComum(context, opcoes) {
     contexto = context;
     prefixo = opcoes.prefixo;
@@ -292,6 +298,7 @@ function ativarComum(context, opcoes) {
     estiloPausa(context).catch(() => {});
     if (process.env.SUITE_ANIMATIONS !== '0') estiloAnimacao(context).catch(() => {});
     marcaDagua(context).catch(() => {});
+    umaEngrenagem(context).catch(() => {});
     conferirSaude(context, opcoes.saudavel ?? 'true');
     comandoPendente();
     fecharNovidades();

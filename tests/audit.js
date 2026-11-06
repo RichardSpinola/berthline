@@ -389,6 +389,15 @@ async function exportar(h, pasta) {
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
 }
 
+async function botoes(h) {
+    await dormir(1000);
+    const canto = await h.ev(`[...document.querySelectorAll('.part.activitybar .action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')||'')`);
+    conferir('one settings button', !canto.some(b => b.startsWith('Manage')), canto.join(' | '));
+    await rpc('executar', { comando: 'workbench.view.explorer' });
+    await dormir(600);
+    await h.foto(`audit-${APP}-buttons`);
+}
+
 async function temas(h) {
     const lista = await rpc('temas');
     relatorio.dados.temas = lista.length;
@@ -433,6 +442,7 @@ return r})()`;
     for (const etapa of [
         () => APP === 'java' ? java(h, pasta) : null,
         () => APP === 'java' ? exportar(h, pasta) : null, // needs the clean fixture, before other steps add files
+        () => botoes(h),
         () => comandos(h),
         () => APP === 'java' ? teclado(h, arquivo) : null,
         () => APP === 'java' ? criacao(h, pasta) : null,
