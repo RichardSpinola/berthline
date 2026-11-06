@@ -1,0 +1,874 @@
+{
+  "name": "suite-tools",
+  "displayName": "Code Suite Tools",
+  "description": "Run, debug, templates and navigation for the Code Suite profiles",
+  "version": "0.1.0",
+  "publisher": "code-suite",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:java",
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ij.contextActions",
+        "title": "Show Context Actions"
+      },
+      {
+        "command": "ij.generate",
+        "title": "Generate..."
+      },
+      {
+        "command": "ij.findUsages",
+        "title": "Find Usages"
+      },
+      {
+        "command": "ij.findInFile",
+        "title": "Find Usages in File"
+      },
+      {
+        "command": "ij.findInFiles",
+        "title": "Find in Files..."
+      },
+      {
+        "command": "ij.gotoDeclaration",
+        "title": "Declaration or Usages"
+      },
+      {
+        "command": "ij.gotoImplementation",
+        "title": "Implementation(s)"
+      },
+      {
+        "command": "ij.gotoTypeDefinition",
+        "title": "Type Declaration"
+      },
+      {
+        "command": "ij.gotoSuper",
+        "title": "Super Method"
+      },
+      {
+        "command": "ij.gotoTest",
+        "title": "Test"
+      },
+      {
+        "command": "ij.rename",
+        "title": "Rename..."
+      },
+      {
+        "command": "ij.refactorThis",
+        "title": "Refactor This..."
+      },
+      {
+        "command": "ij.changeSignature",
+        "title": "Change Signature..."
+      },
+      {
+        "command": "ij.inline",
+        "title": "Inline..."
+      },
+      {
+        "command": "ij.move",
+        "title": "Move..."
+      },
+      {
+        "command": "ij.extractVariable",
+        "title": "Variable..."
+      },
+      {
+        "command": "ij.extractConstant",
+        "title": "Constant..."
+      },
+      {
+        "command": "ij.extractField",
+        "title": "Field..."
+      },
+      {
+        "command": "ij.extractParameter",
+        "title": "Parameter..."
+      },
+      {
+        "command": "ij.extractMethod",
+        "title": "Method..."
+      },
+      {
+        "command": "ij.extractInterface",
+        "title": "Interface..."
+      },
+      {
+        "command": "ij.typeHierarchy",
+        "title": "Type Hierarchy"
+      },
+      {
+        "command": "ij.callHierarchy",
+        "title": "Call Hierarchy"
+      },
+      {
+        "command": "ij.overrideMethods",
+        "title": "Override Methods..."
+      },
+      {
+        "command": "ij.surround",
+        "title": "Surround With..."
+      },
+      {
+        "command": "ij.liveTemplate",
+        "title": "Insert Live Template..."
+      },
+      {
+        "command": "ij.reformat",
+        "title": "Reformat Code"
+      },
+      {
+        "command": "ij.optimizeImports",
+        "title": "Optimize Imports"
+      },
+      {
+        "command": "ij.codeCleanup",
+        "title": "Code Cleanup..."
+      },
+      {
+        "command": "ij.inspectCode",
+        "title": "Inspect Code..."
+      },
+      {
+        "command": "ij.evaluate",
+        "title": "Evaluate Expression..."
+      },
+      {
+        "command": "ij.runToCursor",
+        "title": "Run to Cursor"
+      },
+      {
+        "command": "ij.toggleBreakpoint",
+        "title": "Toggle Line Breakpoint"
+      },
+      {
+        "command": "ij.stop",
+        "title": "Stop",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "ij.rerun",
+        "title": "Rerun"
+      },
+      {
+        "command": "ij.rebuild",
+        "title": "Rebuild Project"
+      },
+      {
+        "command": "ij.buildProject",
+        "title": "Build Project"
+      },
+      {
+        "command": "ij.localHistory",
+        "title": "Local History"
+      },
+      {
+        "command": "ij.compareClipboard",
+        "title": "Compare with Clipboard"
+      },
+      {
+        "command": "ij.copyReference",
+        "title": "Copy Reference"
+      },
+      {
+        "command": "ij.copyPath",
+        "title": "Copy Path"
+      },
+      {
+        "command": "ij.copyRich",
+        "title": "Copy as Rich Text"
+      },
+      {
+        "command": "ij.columnSelection",
+        "title": "Column Selection Mode"
+      },
+      {
+        "command": "ij.foldExpand",
+        "title": "Expand"
+      },
+      {
+        "command": "ij.foldCollapse",
+        "title": "Collapse"
+      },
+      {
+        "command": "ij.foldExpandRec",
+        "title": "Expand Recursively"
+      },
+      {
+        "command": "ij.foldCollapseRec",
+        "title": "Collapse Recursively"
+      },
+      {
+        "command": "ij.foldExpandAll",
+        "title": "Expand All"
+      },
+      {
+        "command": "ij.foldCollapseAll",
+        "title": "Collapse All"
+      },
+      {
+        "command": "ij.openFiles",
+        "title": "Files"
+      },
+      {
+        "command": "ij.openTerminal",
+        "title": "Terminal"
+      },
+      {
+        "command": "ij.openSplit",
+        "title": "Open in Right Split"
+      },
+      {
+        "command": "ij.openSplitTree",
+        "title": "Open in Right Split"
+      },
+      {
+        "command": "ij.gitCommit",
+        "title": "Commit..."
+      },
+      {
+        "command": "ij.gitPush",
+        "title": "Push..."
+      },
+      {
+        "command": "ij.gitPull",
+        "title": "Update Project..."
+      },
+      {
+        "command": "ij.gitDiff",
+        "title": "Show Diff"
+      },
+      {
+        "command": "ij.gitBlame",
+        "title": "Annotate with Git Blame"
+      },
+      {
+        "command": "ij.gitRollback",
+        "title": "Rollback"
+      },
+      {
+        "command": "ij.gitAdd",
+        "title": "Add"
+      },
+      {
+        "command": "ij.gitGraph",
+        "title": "Show Git Log"
+      },
+      {
+        "command": "ij.newClass",
+        "title": "Java Class"
+      },
+      {
+        "command": "ij.newInterface",
+        "title": "Interface"
+      },
+      {
+        "command": "ij.newEnum",
+        "title": "Enum"
+      },
+      {
+        "command": "ij.newRecord",
+        "title": "Record"
+      },
+      {
+        "command": "ij.newAnnotation",
+        "title": "Annotation"
+      },
+      {
+        "command": "ij.newAbstract",
+        "title": "Abstract Class"
+      },
+      {
+        "command": "ij.newPackage",
+        "title": "Package"
+      },
+      {
+        "command": "ij.newFile",
+        "title": "File"
+      },
+      {
+        "command": "ij.newFolder",
+        "title": "Directory"
+      },
+      {
+        "command": "ij.newScratch",
+        "title": "Scratch File"
+      },
+      {
+        "command": "ij.newProject",
+        "title": "Java Project...",
+        "icon": "$(project)"
+      },
+      {
+        "command": "ij.newClassTop",
+        "title": "New Java Class",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "ij.markSources",
+        "title": "Sources Root"
+      },
+      {
+        "command": "ij.unmarkSources",
+        "title": "Unmark as Sources Root"
+      },
+      {
+        "command": "ij.safeDelete",
+        "title": "Safe Delete..."
+      },
+      {
+        "command": "ij.renameFile",
+        "title": "Rename..."
+      },
+      {
+        "command": "ij.reload",
+        "title": "Reload from Disk"
+      },
+      {
+        "command": "ij.replaceInFiles",
+        "title": "Replace in Files..."
+      },
+      {
+        "command": "ij.run",
+        "title": "Run",
+        "icon": "$(play)"
+      },
+      {
+        "command": "ij.debug",
+        "title": "Debug",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "ij.nextMethod",
+        "title": "Next Method"
+      },
+      {
+        "command": "ij.prevMethod",
+        "title": "Previous Method"
+      },
+      {
+        "command": "ij.editConfigurations",
+        "title": "Edit Configurations..."
+      },
+      {
+        "command": "ij.search",
+        "title": "Search Everywhere",
+        "icon": "$(search)"
+      },
+      {
+        "command": "ij.settings",
+        "title": "Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "ij.customizeBackground",
+        "title": "Customize Editor Background"
+      },
+      {
+        "command": "ij.runSelected",
+        "title": "Run",
+        "icon": "$(play)"
+      },
+      {
+        "command": "ij.debugSelected",
+        "title": "Debug",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "ij.runConfigs",
+        "title": "Run Configurations",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "ij.editConfigs",
+        "title": "Edit Run Configurations..."
+      },
+      {
+        "command": "ij.profile",
+        "title": "Run with Profiler",
+        "icon": "$(pulse)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "ij.new",
+        "label": "New"
+      },
+      {
+        "id": "ij.special",
+        "label": "Copy / Paste Special"
+      },
+      {
+        "id": "ij.goto",
+        "label": "Go To"
+      },
+      {
+        "id": "ij.refactor",
+        "label": "Refactor"
+      },
+      {
+        "id": "ij.refactorTree",
+        "label": "Refactor"
+      },
+      {
+        "id": "ij.extract",
+        "label": "Extract/Introduce"
+      },
+      {
+        "id": "ij.folding",
+        "label": "Folding"
+      },
+      {
+        "id": "ij.analyze",
+        "label": "Analyze"
+      },
+      {
+        "id": "ij.openIn",
+        "label": "Open In"
+      },
+      {
+        "id": "ij.openInTree",
+        "label": "Open In"
+      },
+      {
+        "id": "ij.git",
+        "label": "Git"
+      },
+      {
+        "id": "ij.mark",
+        "label": "Mark Directory as"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "ij.contextActions",
+          "group": "0_ij@1"
+        },
+        {
+          "command": "ij.generate",
+          "group": "0_ij@2",
+          "when": "editorLangId == java"
+        },
+        {
+          "submenu": "ij.special",
+          "group": "1_ij@1"
+        },
+        {
+          "command": "ij.columnSelection",
+          "group": "1_ij@2"
+        },
+        {
+          "command": "ij.findUsages",
+          "group": "2_ij@1"
+        },
+        {
+          "submenu": "ij.folding",
+          "group": "2_ij@2"
+        },
+        {
+          "submenu": "ij.analyze",
+          "group": "2_ij@3"
+        },
+        {
+          "submenu": "ij.goto",
+          "group": "2_ij@4"
+        },
+        {
+          "submenu": "ij.refactor",
+          "group": "2_ij@5"
+        },
+        {
+          "command": "ij.run",
+          "group": "3_ij@1",
+          "when": "editorLangId == java"
+        },
+        {
+          "command": "ij.debug",
+          "group": "3_ij@2",
+          "when": "editorLangId == java"
+        },
+        {
+          "command": "ij.evaluate",
+          "group": "3_ij@3",
+          "when": "inDebugMode"
+        },
+        {
+          "command": "ij.runToCursor",
+          "group": "3_ij@4",
+          "when": "inDebugMode"
+        },
+        {
+          "submenu": "ij.openIn",
+          "group": "4_ij@1"
+        },
+        {
+          "command": "ij.localHistory",
+          "group": "4_ij@2"
+        },
+        {
+          "submenu": "ij.git",
+          "group": "4_ij@3"
+        },
+        {
+          "command": "ij.compareClipboard",
+          "group": "4_ij@4"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "ij.new",
+          "group": "0_ij@1",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "ij.run",
+          "group": "0_ij@2",
+          "when": "resourceExtname == .java"
+        },
+        {
+          "command": "ij.debug",
+          "group": "0_ij@3",
+          "when": "resourceExtname == .java"
+        },
+        {
+          "command": "ij.findInFiles",
+          "group": "4_ij@1",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "ij.replaceInFiles",
+          "group": "4_ij@2",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "submenu": "ij.refactorTree",
+          "group": "4_ij@3"
+        },
+        {
+          "command": "ij.rebuild",
+          "group": "5_ij@1",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "submenu": "ij.openInTree",
+          "group": "6_ij@1"
+        },
+        {
+          "command": "ij.openSplitTree",
+          "group": "6_ij@2",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "ij.localHistory",
+          "group": "6_ij@3",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "submenu": "ij.git",
+          "group": "6_ij@4"
+        },
+        {
+          "submenu": "ij.mark",
+          "group": "7_ij@1",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "ij.new": [
+        {
+          "command": "ij.newClass",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.newFile",
+          "group": "2@0"
+        },
+        {
+          "command": "ij.newScratch",
+          "group": "2@1"
+        },
+        {
+          "command": "ij.newFolder",
+          "group": "2@2"
+        },
+        {
+          "command": "ij.newPackage",
+          "group": "2@3"
+        },
+        {
+          "command": "ij.newProject",
+          "group": "3@0"
+        }
+      ],
+      "ij.special": [
+        {
+          "command": "ij.copyReference",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.copyPath",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.copyRich",
+          "group": "1@2"
+        }
+      ],
+      "ij.goto": [
+        {
+          "command": "ij.gotoDeclaration",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.gotoImplementation",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.gotoTypeDefinition",
+          "group": "1@2"
+        },
+        {
+          "command": "ij.gotoSuper",
+          "group": "1@3"
+        },
+        {
+          "command": "ij.gotoTest",
+          "group": "1@4"
+        },
+        {
+          "command": "ij.findInFile",
+          "group": "1@5"
+        }
+      ],
+      "ij.refactor": [
+        {
+          "command": "ij.rename",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.refactorThis",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.changeSignature",
+          "group": "1@2"
+        },
+        {
+          "submenu": "ij.extract",
+          "group": "2@0"
+        },
+        {
+          "command": "ij.inline",
+          "group": "2@1"
+        },
+        {
+          "command": "ij.move",
+          "group": "2@2"
+        }
+      ],
+      "ij.refactorTree": [
+        {
+          "command": "ij.renameFile",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.safeDelete",
+          "group": "1@1"
+        }
+      ],
+      "ij.extract": [
+        {
+          "command": "ij.extractVariable",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.extractConstant",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.extractField",
+          "group": "1@2"
+        },
+        {
+          "command": "ij.extractParameter",
+          "group": "1@3"
+        },
+        {
+          "command": "ij.extractMethod",
+          "group": "1@4"
+        },
+        {
+          "command": "ij.extractInterface",
+          "group": "1@5"
+        }
+      ],
+      "ij.folding": [
+        {
+          "command": "ij.foldExpand",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.foldCollapse",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.foldExpandRec",
+          "group": "1@2"
+        },
+        {
+          "command": "ij.foldCollapseRec",
+          "group": "1@3"
+        },
+        {
+          "command": "ij.foldExpandAll",
+          "group": "1@4"
+        },
+        {
+          "command": "ij.foldCollapseAll",
+          "group": "1@5"
+        }
+      ],
+      "ij.analyze": [
+        {
+          "command": "ij.inspectCode",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.codeCleanup",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.callHierarchy",
+          "group": "1@2"
+        },
+        {
+          "command": "ij.typeHierarchy",
+          "group": "1@3"
+        },
+        {
+          "command": "ij.profile",
+          "group": "2@0",
+          "when": "editorLangId == java"
+        }
+      ],
+      "ij.openIn": [
+        {
+          "command": "ij.openFiles",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.openTerminal",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.openSplit",
+          "group": "1@2"
+        }
+      ],
+      "ij.openInTree": [
+        {
+          "command": "ij.openFiles",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.openTerminal",
+          "group": "1@1"
+        }
+      ],
+      "ij.git": [
+        {
+          "command": "ij.gitCommit",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.gitPush",
+          "group": "1@1"
+        },
+        {
+          "command": "ij.gitPull",
+          "group": "1@2"
+        },
+        {
+          "command": "ij.gitAdd",
+          "group": "1@3"
+        },
+        {
+          "command": "ij.gitDiff",
+          "group": "1@4"
+        },
+        {
+          "command": "ij.gitBlame",
+          "group": "1@5"
+        },
+        {
+          "command": "ij.gitRollback",
+          "group": "1@6"
+        },
+        {
+          "command": "ij.gitGraph",
+          "group": "1@7"
+        }
+      ],
+      "ij.mark": [
+        {
+          "command": "ij.markSources",
+          "group": "1@0"
+        },
+        {
+          "command": "ij.unmarkSources",
+          "group": "1@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "ij.runConfigs",
+          "group": "navigation@-4",
+          "when": "editorLangId == java || ij.temConfig"
+        },
+        {
+          "command": "ij.runSelected",
+          "group": "navigation@-3",
+          "when": "editorLangId == java || ij.temConfig || editorLangId == html || editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "ij.debugSelected",
+          "group": "navigation@-2",
+          "when": "editorLangId == java || ij.temConfig || editorLangId == html || editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "ij.stop",
+          "group": "navigation@-1",
+          "when": "inDebugMode || ij.emExecucao"
+        },
+        {
+          "command": "ij.search",
+          "group": "navigation@90"
+        },
+        {
+          "command": "ij.settings",
+          "group": "navigation@91"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "ij.newClassTop",
+          "group": "navigation@0",
+          "when": "view == workbench.explorer.fileView"
+        },
+        {
+          "command": "ij.newProject",
+          "group": "navigation@1",
+          "when": "view == workbench.explorer.fileView"
+        }
+      ]
+    }
+  }
+}

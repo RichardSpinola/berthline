@@ -1,0 +1,11 @@
+{
+  "title": "Web",
+  "description": "HTML, CSS, JavaScript and TypeScript.",
+  "order": 2,
+  "base": true,
+  "memory": false,
+  "templates": [
+    "HTML, CSS and JS",
+    "TypeScript"
+  ]
+}

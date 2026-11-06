@@ -1,0 +1,31 @@
+name: build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install PySide6 pyinstaller
+      - run: python build/build.py
+      - name: Smoke test
+        run: dist/code-suite-windows/node/node.exe tests/smoke.js dist/code-suite-windows
+      - name: Zip
+        run: Compress-Archive -Path dist/code-suite-windows -DestinationPath dist/code-suite-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: code-suite-windows
+          path: dist/code-suite-windows.zip
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-output
+          path: tests/out

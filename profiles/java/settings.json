@@ -1,0 +1,60 @@
+{
+    "java.server.launchMode": "Standard",
+    "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx1G -Xms100m -Xlog:disable -XX:TieredStopAtLevel=1",
+    "java.maxConcurrentBuilds": 2,
+    "java.import.exclusions": [
+        "**/node_modules/**",
+        "**/.metadata/**",
+        "**/archetype-resources/**",
+        "**/META-INF/maven/**",
+        "**/out/**"
+    ],
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.import.generatesMetadataFilesAtProjectRoot": false,
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar"
+    ],
+    "java.saveActions.organizeImports": true,
+    "java.updateImportsOnPaste.enabled": true,
+    "java.sources.organizeImports.starThreshold": 5,
+    "java.sources.organizeImports.staticStarThreshold": 3,
+    "java.completion.importOrder": [
+        "",
+        "javax",
+        "java",
+        "#"
+    ],
+    "java.completion.chain.enabled": true,
+    "java.completion.postfix.enabled": false,
+    "java.completion.matchCase": "off",
+    "java.inlayHints.parameterNames.enabled": "literals",
+    "java.inlayHints.variableTypes.enabled": true,
+    "java.inlayHints.parameterTypes.enabled": true,
+    "java.signatureHelp.enabled": true,
+    "java.signatureHelp.description.enabled": true,
+    "java.edit.smartSemicolonDetection.enabled": true,
+    "java.referencesCodeLens.enabled": false,
+    "java.implementationCodeLens": "none",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.quickfix.showAt": "line",
+    "java.settings.url": "${SUITE}/profiles/java/inspecoes.prefs",
+    "java.format.settings.url": "${SUITE}/profiles/java/estilo.xml",
+    "java.format.settings.profile": "IntelliJ",
+    "java.codeGeneration.hashCodeEquals.useJava7Objects": true,
+    "java.codeGeneration.hashCodeEquals.useInstanceof": true,
+    "java.codeGeneration.useBlocks": true,
+    "java.typeHierarchy.lazyLoad": false,
+    "java.eclipse.downloadSources": true,
+    "java.maven.downloadSources": true,
+    "[java]": {
+        "editor.defaultFormatter": "redhat.java",
+        "editor.formatOnSave": false,
+        "editor.snippetSuggestions": "none"
+    },
+    "java.debug.settings.console": "integratedTerminal",
+    "java.debug.settings.hotCodeReplace": "auto",
+    "java.debug.settings.enableRunDebugCodeLens": false,
+    "java.debug.settings.showToString": true,
+    "java.dependency.packagePresentation": "hierarchical",
+    "java.dependency.enableDependencyCheckup": false
+}

@@ -1,0 +1,124 @@
+// Opens each profile from a built package and checks the main flows over CDP.
+const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
+const { spawn, spawnSync } = require('child_process');
+
+const PACOTE = path.resolve(process.argv[2]);
+const SO = process.argv[3] ? process.argv[3].split(',') : ['java', 'web'];
+const SAIDA = path.join(__dirname, 'out');
+const PORTA = 9333;
+const RODAR = '^Run \\(';
+const HUB = path.join(PACOTE, process.platform === 'win32' ? 'Hub.exe' : 'Hub');
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+let falhas = 0;
+const passo = (nome, ok, extra = '') => { if (!ok) falhas++; console.log(ok ? 'OK   ' : 'FAIL ', nome, extra); };
+
+const obter = url => new Promise((ok, no) => http.get(url, r => {
+    let b = ''; r.on('data', d => b += d); r.on('end', () => ok(JSON.parse(b)));
+}).on('error', no));
+
+async function conectar() {
+    let alvo;
+    for (let i = 0; i < 120 && !alvo; i++) {
+        try { alvo = (await obter(`http://127.0.0.1:${PORTA}/json/list`)).find(t => t.type === 'page'); } catch { /* still starting */ }
+        if (!alvo) await dormir(500);
+    }
+    if (!alvo) throw new Error('no editor window');
+    const w = new WebSocket(alvo.webSocketDebuggerUrl);
+    await new Promise(r => { w.onopen = r; });
+    let id = 0; const pend = {};
+    w.onmessage = m => { const d = JSON.parse(m.data); pend[d.id]?.(d); };
+    const c = (method, params = {}) => new Promise(r => { const i = ++id; pend[i] = r; w.send(JSON.stringify({ id: i, method, params })); });
+    const ev = async e => (await c('Runtime.evaluate', { expression: e, returnByValue: true })).result?.result?.value;
+    const h = { c, ev };
+    h.foto = async n => {
+        const s = await c('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync(path.join(SAIDA, `${n}.png`), Buffer.from(s.result.data, 'base64'));
+    };
+    h.xy = async (x, y) => { for (const type of ['mousePressed', 'mouseReleased']) await c('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); };
+    h.acha = (sel, re = '') => ev(`(()=>{const R=new RegExp(${JSON.stringify(re)});const e=[...document.querySelectorAll(${JSON.stringify(sel)})].filter(e=>e.getBoundingClientRect().width>0).find(e=>R.test(e.getAttribute('aria-label')||e.innerText||''));if(!e)return null;const b=e.getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2}})()`);
+    h.clica = async (sel, re) => { const r = await h.acha(sel, re); if (r) await h.xy(r.x, r.y); return !!r; };
+    h.tecla = async (key, code, vk) => { for (const type of ['keyDown', 'keyUp']) await c('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, text: type === 'keyDown' && key === 'Enter' ? '\r' : undefined }); };
+    h.escreve = async t => { for (const text of t) await c('Input.insertText', { text }); };
+    h.terminal = () => ev(`[...document.querySelectorAll('.xterm-rows')].map(e=>e.innerText).join(' / ').replace(/\\s+/g,' ').trim()`);
+    h.status = () => ev(`[...document.querySelectorAll('.statusbar-item')].map(e=>e.innerText).join(' ; ')`);
+    h.ate = async (f, ms = 30000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await f()) return true; await dormir(300); } return false; };
+    h.fechar = () => Promise.race([c('Browser.close'), dormir(1500)]);
+    return h;
+}
+
+async function abrir(perfil, pasta) {
+    spawnSync(HUB, ['--trust', pasta], { env: { ...process.env, SUITE_ROOT: PACOTE } });
+    const p = spawn(HUB, ['--open', perfil, '--port', String(PORTA), pasta], { env: { ...process.env, SUITE_ROOT: PACOTE }, stdio: 'ignore' });
+    p.on('error', e => { throw e; });
+    return conectar();
+}
+
+async function arquivo(h, nome) {
+    if (!await h.acha('.explorer-folders-view .monaco-list-row', `^${nome}`)) await h.clica('.explorer-folders-view .monaco-list-row', 'src');
+    await dormir(600);
+    const ok = await h.clica('.explorer-folders-view .monaco-list-row', `^${nome}`);
+    await dormir(1500);
+    return ok;
+}
+
+async function java(pasta) {
+    const h = await abrir('java', pasta);
+    await dormir(12000);
+    passo('workspace trusted', !/Restricted Mode/.test(await h.status()), await h.status());
+    await arquivo(h, 'Main');
+    passo('java server ready', await h.ate(async () => /Java: Ready/.test(await h.status()), 120000));
+    console.log('status:', await h.status());
+    console.log('actions:', await h.ev(`[...document.querySelectorAll('a.action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')).join(' | ')`));
+    await dormir(5000);
+    passo('visual extras', await h.ev(`!!window.__ijArvore`) && !/partial/.test(await h.status()));
+    await h.foto('java-1-editor');
+    console.log('run clicked', await h.clica('a.action-label', RODAR));
+    passo('run asks input', await h.ate(async () => /Name\?/.test(await h.terminal()), 40000));
+    await dormir(800);
+    await h.clica('.terminal-wrapper .xterm');
+    await dormir(400);
+    await h.escreve('Ana');
+    await h.tecla('Enter', 'Enter', 13);
+    passo('run reads input', await h.ate(async () => /Hello, Ana!/.test(await h.terminal()), 10000));
+    passo('exit code shown', await h.ate(async () => /Process finished with exit code 0/.test(await h.terminal()), 10000));
+    await h.foto('java-2-run');
+    await arquivo(h, 'Loop');
+    await h.clica('a.action-label', RODAR);
+    passo('loop runs', await h.ate(async () => /tick 2/.test(await h.terminal()), 40000));
+    await h.clica('a.action-label', '^Stop');
+    passo('stop ends loop', await h.ate(async () => /Process finished with exit code/.test((await h.terminal()).split('tick').pop()), 10000));
+    passo('stop button leaves', await h.ate(async () => !await h.acha('a.action-label', '^Stop'), 6000));
+    await h.foto('java-3-stop');
+    await h.fechar();
+}
+
+async function web(pasta) {
+    const h = await abrir('web', pasta);
+    await dormir(6000);
+    await h.clica('.explorer-folders-view .monaco-list-row', '^app\\.js');
+    await dormir(1500);
+    await h.foto('web-1-editor');
+    await h.clica('a.action-label', RODAR);
+    passo('js runs', await h.ate(async () => /fixture 42/.test(await h.terminal()), 20000));
+    await h.clica('.explorer-folders-view .monaco-list-row', '^main\\.ts');
+    await dormir(1500);
+    await h.clica('a.action-label', RODAR);
+    passo('ts runs', await h.ate(async () => /typed 42/.test(await h.terminal()), 20000));
+    await h.foto('web-2-run');
+    await h.fechar();
+}
+
+(async () => {
+    fs.mkdirSync(SAIDA, { recursive: true });
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'suite-'));
+    for (const perfil of SO) {
+        const pasta = path.join(temp, perfil);
+        fs.cpSync(path.join(__dirname, 'fixture', perfil), pasta, { recursive: true });
+        console.log('--', perfil);
+        await ({ java, web })[perfil](pasta);
+        await dormir(3000);
+    }
+    fs.rmSync(temp, { recursive: true, force: true });
+    console.log(falhas ? `${falhas} failed` : 'all passed');
+    process.exit(falhas ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(1); });

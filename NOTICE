@@ -1,0 +1,7 @@
+This package bundles third-party software under its own terms:
+
+- Visual Studio Code, Microsoft Software License Terms
+- Node.js, MIT License
+- Inter font, SIL Open Font License 1.1
+- Qt for Python (PySide6), LGPL v3
+- Editor extensions, each under the license in its own folder

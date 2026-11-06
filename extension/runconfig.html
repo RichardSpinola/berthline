@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body { display: flex; height: 100vh; margin: 0; padding: 0; color: var(--vscode-foreground); font: 13px var(--vscode-font-family); }
+aside { width: 210px; border-right: 1px solid var(--vscode-panel-border); padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; }
+main { flex: 1; padding: 16px 24px; max-width: 640px; }
+.barra { display: flex; gap: 4px; margin-bottom: 6px; }
+ul { list-style: none; margin: 0; padding: 0; flex: 1; overflow: auto; }
+li { padding: 4px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+li.ativo { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+label { display: block; margin: 0 0 12px; color: var(--vscode-descriptionForeground); }
+input { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 5px 8px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; font: inherit; }
+button { padding: 4px 12px; color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); border: 0; border-radius: 4px; font: inherit; cursor: pointer; }
+button.principal { color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
+footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+#vazio { color: var(--vscode-descriptionForeground); }
+</style></head><body>
+<aside><div class="barra"><button id="mais" title="Add">+</button><button id="menos" title="Remove">−</button></div><ul id="lista"></ul></aside>
+<main><p id="vazio">Add a configuration with +.</p><form id="form" hidden>
+<label>Name<input id="name" required></label>
+<label>Main class<input id="mainClass" list="classes" required></label><datalist id="classes"></datalist>
+<label>Program arguments<input id="args"></label>
+<label>VM options<input id="vmArgs" placeholder="-Xmx512m"></label>
+<label>Working directory<input id="cwd" placeholder="${workspaceFolder}"></label>
+<label>Environment variables<input id="env" placeholder="KEY=value;OTHER=value"></label>
+<footer><button type="button" id="cancelar">Cancel</button><button type="submit" class="principal">OK</button></footer>
+</form></main>
+<script>
+const vscode = acquireVsCodeApi();
+const { configs, classes, atual } = JSON.parse(document.getElementById('dados').textContent);
+const campos = ['name', 'mainClass', 'args', 'vmArgs', 'cwd', 'env'];
+const $ = id => document.getElementById(id);
+let indice = Math.max(0, configs.findIndex(c => c.name === atual));
+const texto = v => Array.isArray(v) ? v.join(' ') : v ?? '';
+const envTexto = env => Object.entries(env ?? {}).map(([k, v]) => `${k}=${v}`).join(';');
+function guardar() {
+    const c = configs[indice];
+    if (!c) return;
+    for (const campo of ['name', 'mainClass', 'args', 'vmArgs', 'cwd']) {
+        if ($(campo).value) c[campo] = $(campo).value; else if (campo !== 'name' && campo !== 'mainClass') delete c[campo]; else c[campo] = '';
+    }
+    const pares = $('env').value.split(';').filter(p => p.includes('='));
+    if (pares.length) c.env = Object.fromEntries(pares.map(p => [p.slice(0, p.indexOf('=')).trim(), p.slice(p.indexOf('=') + 1)])); else delete c.env;
+}
+function desenhar() {
+    $('lista').replaceChildren(...configs.map((c, i) => {
+        const li = document.createElement('li');
+        li.textContent = c.name || 'Unnamed';
+        li.className = i === indice ? 'ativo' : '';
+        li.onclick = () => { guardar(); indice = i; desenhar(); };
+        return li;
+    }));
+    const c = configs[indice];
+    $('form').hidden = !c;
+    $('vazio').hidden = !!c;
+    if (!c) return;
+    for (const campo of ['name', 'mainClass', 'cwd']) $(campo).value = c[campo] ?? '';
+    $('args').value = texto(c.args);
+    $('vmArgs').value = texto(c.vmArgs);
+    $('env').value = envTexto(c.env);
+}
+$('classes').replaceChildren(...classes.map(c => Object.assign(document.createElement('option'), { value: c })));
+$('name').oninput = () => { guardar(); desenhar(); };
+$('mais').onclick = () => {
+    guardar();
+    const principal = classes[0] ?? '';
+    configs.push({ type: 'java', request: 'launch', name: principal.split('.').pop() || 'Application', mainClass: principal });
+    indice = configs.length - 1;
+    desenhar();
+    $('name').select();
+};
+$('menos').onclick = () => { configs.splice(indice, 1); indice = Math.max(0, indice - 1); desenhar(); };
+$('cancelar').onclick = () => vscode.postMessage({ acao: 'fechar' });
+$('form').onsubmit = evento => {
+    evento.preventDefault();
+    guardar();
+    vscode.postMessage({ acao: 'salvar', configs, atual: configs[indice]?.name });
+};
+desenhar();
+</script></body></html>

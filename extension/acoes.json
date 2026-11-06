@@ -1,0 +1,265 @@
+{
+ "ij.contextActions": {
+  "t": "editor.action.quickFix"
+ },
+ "ij.generate": {
+  "t": "editor.action.sourceAction"
+ },
+ "ij.findUsages": {
+  "t": "references-view.findReferences"
+ },
+ "ij.findInFile": {
+  "t": "editor.action.goToReferences"
+ },
+ "ij.findInFiles": {
+  "t": "workbench.action.findInFiles"
+ },
+ "ij.gotoDeclaration": {
+  "t": "editor.action.revealDefinition"
+ },
+ "ij.gotoImplementation": {
+  "t": "editor.action.goToImplementation"
+ },
+ "ij.gotoTypeDefinition": {
+  "t": "editor.action.goToTypeDefinition"
+ },
+ "ij.gotoSuper": {
+  "t": "java.action.navigateToSuperImplementation"
+ },
+ "ij.gotoTest": {
+  "t": "java.test.goToTest"
+ },
+ "ij.rename": {
+  "t": "editor.action.rename"
+ },
+ "ij.refactorThis": {
+  "t": "editor.action.refactor"
+ },
+ "ij.changeSignature": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.change.signature",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.inline": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.inline",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.move": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.move"
+  }
+ },
+ "ij.extractVariable": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.extract.variable",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.extractConstant": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.extract.constant",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.extractField": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.extract.field",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.extractParameter": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.introduce.parameter",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.extractMethod": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.extract.function",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.extractInterface": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "refactor.extract.interface",
+   "apply": "ifSingle"
+  }
+ },
+ "ij.typeHierarchy": {
+  "t": "java.action.showTypeHierarchy"
+ },
+ "ij.callHierarchy": {
+  "t": "references-view.showCallHierarchy"
+ },
+ "ij.overrideMethods": {
+  "t": "editor.action.codeAction",
+  "a": {
+   "kind": "source.overrideMethods"
+  }
+ },
+ "ij.surround": {
+  "t": "editor.action.surroundWithSnippet"
+ },
+ "ij.liveTemplate": {
+  "t": "editor.action.insertSnippet"
+ },
+ "ij.reformat": {
+  "t": "editor.action.formatDocument"
+ },
+ "ij.optimizeImports": {
+  "t": "editor.action.organizeImports"
+ },
+ "ij.codeCleanup": {
+  "t": "java.action.doCleanup"
+ },
+ "ij.inspectCode": {
+  "t": "workbench.actions.view.problems"
+ },
+ "ij.evaluate": {
+  "t": "editor.debug.action.selectionToRepl"
+ },
+ "ij.runToCursor": {
+  "t": "editor.debug.action.runToCursor"
+ },
+ "ij.toggleBreakpoint": {
+  "t": "editor.debug.action.toggleBreakpoint"
+ },
+ "ij.rebuild": {
+  "t": "java.project.rebuild"
+ },
+ "ij.buildProject": {
+  "t": "java.workspace.compile"
+ },
+ "ij.localHistory": {
+  "t": "timeline.focus"
+ },
+ "ij.compareClipboard": {
+  "t": "workbench.files.action.compareWithClipboard"
+ },
+ "ij.copyReference": {
+  "t": "java.action.copyFullyQualifiedName"
+ },
+ "ij.copyPath": {
+  "t": "copyFilePath"
+ },
+ "ij.copyRich": {
+  "t": "editor.action.clipboardCopyWithSyntaxHighlightingAction"
+ },
+ "ij.columnSelection": {
+  "t": "editor.action.toggleColumnSelection"
+ },
+ "ij.foldExpand": {
+  "t": "editor.unfold"
+ },
+ "ij.foldCollapse": {
+  "t": "editor.fold"
+ },
+ "ij.foldExpandRec": {
+  "t": "editor.unfoldRecursively"
+ },
+ "ij.foldCollapseRec": {
+  "t": "editor.foldRecursively"
+ },
+ "ij.foldExpandAll": {
+  "t": "editor.unfoldAll"
+ },
+ "ij.foldCollapseAll": {
+  "t": "editor.foldAll"
+ },
+ "ij.openFiles": {
+  "t": "revealFileInOS"
+ },
+ "ij.openTerminal": {
+  "t": "openInIntegratedTerminal"
+ },
+ "ij.openSplit": {
+  "t": "workbench.action.splitEditor"
+ },
+ "ij.openSplitTree": {
+  "t": "explorer.openToSide"
+ },
+ "ij.gitCommit": {
+  "t": "git.commit"
+ },
+ "ij.gitPush": {
+  "t": "git.push"
+ },
+ "ij.gitPull": {
+  "t": "git.pull"
+ },
+ "ij.gitDiff": {
+  "t": "git.openChange"
+ },
+ "ij.gitBlame": {
+  "t": "git.blame.toggleEditorDecoration"
+ },
+ "ij.gitRollback": {
+  "t": "git.revertChange"
+ },
+ "ij.gitAdd": {
+  "t": "git.stage"
+ },
+ "ij.gitGraph": {
+  "t": "git-graph.view"
+ },
+ "ij.newInterface": {
+  "t": "java.view.package.newJavaInterface"
+ },
+ "ij.newEnum": {
+  "t": "java.view.package.newJavaEnum"
+ },
+ "ij.newRecord": {
+  "t": "java.view.package.newJavaRecord"
+ },
+ "ij.newAnnotation": {
+  "t": "java.view.package.newJavaAnnotation"
+ },
+ "ij.newAbstract": {
+  "t": "java.view.package.newJavaAbstractClass"
+ },
+ "ij.newPackage": {
+  "t": "java.view.fileExplorer.newPackage"
+ },
+ "ij.newFile": {
+  "t": "explorer.newFile"
+ },
+ "ij.newFolder": {
+  "t": "explorer.newFolder"
+ },
+ "ij.newScratch": {
+  "t": "workbench.action.files.newUntitledFile"
+ },
+ "ij.newProject": {
+  "t": "java.project.create"
+ },
+ "ij.markSources": {
+  "t": "java.project.addToSourcePath"
+ },
+ "ij.unmarkSources": {
+  "t": "java.project.removeFromSourcePath"
+ },
+ "ij.renameFile": {
+  "t": "renameFile"
+ },
+ "ij.reload": {
+  "t": "workbench.action.files.revert"
+ },
+ "ij.replaceInFiles": {
+  "t": "workbench.action.replaceInFiles"
+ },
+ "ij.editConfigurations": {
+  "t": "workbench.action.debug.configure"
+ }
+}

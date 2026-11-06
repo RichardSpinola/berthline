@@ -1,0 +1,8 @@
+{
+  "title": "Standard",
+  "description": "The plain editor, without Suite changes.",
+  "order": 3,
+  "base": false,
+  "memory": false,
+  "templates": []
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Java",
+  "description": "Run, debug and refactor Java projects.",
+  "order": 1,
+  "base": true,
+  "memory": true,
+  "templates": [
+    "Java"
+  ]
+}

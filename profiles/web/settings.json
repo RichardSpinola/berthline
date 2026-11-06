@@ -1,0 +1,36 @@
+{
+    "[javascript]": {
+        "editor.snippetSuggestions": "top",
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[typescript]": {
+        "editor.snippetSuggestions": "top",
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[html]": {
+        "editor.snippetSuggestions": "top",
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[css]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "js/ts.implicitProjectConfig.checkJs": true,
+    "javascript.updateImportsOnFileMove.enabled": "always",
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "emmet.triggerExpansionOnTab": true,
+    "emmet.showExpandedAbbreviation": "always",
+    "liveServer.settings.donotShowInfoMsg": true,
+    "liveServer.settings.donotVerifyTags": true,
+    "css.lint.unknownProperties": "warning",
+    "debug.javascript.autoAttachFilter": "disabled",
+    "terminal.integrated.env.windows": {
+        "PATH": "${SUITE}\\node;${env:PATH}"
+    },
+    "terminal.integrated.env.linux": {
+        "PATH": "${SUITE}/node/bin:${env:PATH}"
+    }
+}

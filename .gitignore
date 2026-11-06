@@ -1,0 +1,10 @@
+dist/
+.dev/
+__pycache__/
+*.vsix
+build/cache/
+tests/out/
+.venv/
+data/
+build/work/
+*.log
