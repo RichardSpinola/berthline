@@ -172,7 +172,8 @@ async function web(pasta) {
         await ({ java, web })[perfil](pasta);
         await dormir(3000);
     }
-    fs.rmSync(temp, { recursive: true, force: true });
+    // The editor can hold the folder for a moment after closing, and this is only cleanup.
+    try { fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }); } catch (e) { console.log('cleanup skipped', e.code); }
     console.log(falhas ? `${falhas} failed` : 'all passed');
     process.exit(falhas ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
