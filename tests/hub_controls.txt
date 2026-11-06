@@ -38,7 +38,6 @@ hub-tools/QPushButton:Tools
 hub-tools/QToolButton:Settings
 hub-tools/QToolButton:⋯
 java-customize/Combo:
-java-customize/QCheckBox:Allow editor telemetry
 java-customize/QCheckBox:Animations
 java-customize/QCheckBox:Enable AI features
 java-customize/QCheckBox:Visual extras: tree icons and app watermark (needs
@@ -92,7 +91,6 @@ java-projects/QPushButton:Plugins
 java-projects/QPushButton:Projects
 java-projects/QToolButton:
 web-customize/Combo:
-web-customize/QCheckBox:Allow editor telemetry
 web-customize/QCheckBox:Animations
 web-customize/QCheckBox:Enable AI features
 web-customize/QCheckBox:Visual extras: tree icons and app watermark (needs

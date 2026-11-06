@@ -28,7 +28,7 @@ PROJETOS = CASA / 'Projects'
 CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
-PADRAO = {'telemetry': False, 'ai': False, 'visual': True, 'animations': True, 'memory': '1G'}
+PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G'}
 CORES_ICONE = ['#A9C27F', '#C77DBB', '#6AAB73', '#56A8F5', '#E8A33D', '#F75464', '#9B8AE3']
 
 
@@ -197,7 +197,7 @@ def preparar(app):
     for chave, valor in base.items():
         if chave not in atual or '${SUITE}' in json.dumps(valor):
             atual[chave] = caminhos(valor)
-    atual['telemetry.telemetryLevel'] = 'all' if opcao(app, 'telemetry') else 'off'
+    atual['telemetry.telemetryLevel'] = 'off'
     atual['chat.disableAIFeatures'] = not opcao(app, 'ai')
     atual['update.mode'] = 'none'
     info = aplicativos()[app]
@@ -1309,7 +1309,6 @@ def janela(inicial=None, lancar=None):
                 v.addWidget(link('Remove wallpaper', lambda: (ferramentas(app) / 'fundo.jpg').unlink(missing_ok=True)))
             v.addSpacing(8)
             v.addWidget(rotulo('Privacy', 'secao'))
-            self.caixa('Allow editor telemetry', 'telemetry', v)
             self.caixa('Enable AI features', 'ai', v)
             if info.get('memory'):
                 v.addSpacing(8)

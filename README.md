@@ -7,18 +7,23 @@
 
 # Berthline
 
-**Your coding tools, ready to dock on any computer.**
+**A lighter editor that works closer to an IDE.**
 
-Portable Java and Web profiles built on VSCodium.<br>
-Extract, open the Hub and start coding. No install, no admin rights.
+A suite of ready-made editor profiles built on VSCodium, with one Hub to launch them.<br>
+Java and Web today, more over time.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-26313D)](LICENSE)
 ![Platforms: Windows and Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-26313D)
 ![Status: early preview](https://img.shields.io/badge/status-early%20preview-C8102E)
+![Personal project](https://img.shields.io/badge/personal-project-26313D)
+![AI assisted](https://img.shields.io/badge/AI-assisted-26313D)
 
 [Download](#download) · [First run](#first-run) · [Profiles](#profiles) · [Why Berthline](#why-berthline) · [Limitations](#limitations)
 
 </div>
+
+> [!NOTE]
+> Berthline is a personal project: a set of editor profiles, not a full IDE. Updates may take a while and some features may be missing. If something bothers you, open an issue or fork it and fix it your way, with AI or without.
 
 <br>
 
@@ -71,9 +76,13 @@ Each profile keeps its own settings and extensions, so nothing touches an editor
 
 ## Why Berthline
 
-Berthline started with a simple problem: coding on a college computer where you can't install anything. Setting up an editor by hand takes time, and a shared computer may not keep it.
+My computer is modest, and IntelliJ IDEA, which I use for my Java studies, was too heavy for it. So I started trying to bring VS Code as close as I could to the IntelliJ IDEA experience, using it as inspiration.
 
-So everything comes in one folder. You bring the editor, the extensions, Java and Node.js, and your setup works the same on the next computer. Keeping profiles apart also means a Java setup never slows down a Web project.
+The goal isn't to turn an editor into a complete IDE. That barely makes sense. The goal is to get close enough that you can work comfortably on small and medium projects, and move to a full IDE when a project outgrows it.
+
+Then the idea grew. Java was only the start. Berthline is meant to become a complete suite of profiles for different kinds of work, ready for anyone to use and change. Web came next, and more will follow. Keeping profiles apart also means a Java setup never slows down a Web project.
+
+Berthline won't replace an IDE, and it has its own problems. It is one way to spend less of your computer's power while you code.
 
 ### The name
 
@@ -90,13 +99,12 @@ The icons follow the nautical theme. All of them share the same hull and change 
 - Profiles, settings and extensions stay inside the Berthline folder.
 - The list of trusted folders is stored in `.berthline-shared` in your user folder, and new projects go to `Projects` there. This is what stays on a shared computer.
 - On Linux, the Hub adds a hidden shortcut to your user folder so the taskbar shows the right icon.
-- Telemetry and AI features are off by default. You can change them per app under Settings.
+- Telemetry stays off. AI features are off by default, and you can turn them on per app under Settings.
 
 ## Limitations
 
 - Early preview: expect rough edges.
 - No automatic updates yet. Download a new release to update.
-- Git Graph is not included, because its license doesn't allow redistribution. You can install it from the Extensions view, and the built-in Source Control view shows a graph.
 - A managed computer can block `.exe` files. Only its administrator can change that.
 
 ## Build from source
@@ -111,10 +119,10 @@ The package lands in `dist/`. Tests live in `tests/` and run on GitHub Actions o
 
 ## AI use
 
-This project was built with AI assistance: Claude Opus 5.5 (Anthropic), through Claude Code. A person reviewed the work and decided what to keep.
+AI did most of the work here: Claude Opus 5.5 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. I chose the direction, tested it and decided what to keep.
 
 ## License
 
 MIT, see [LICENSE](LICENSE). Bundled software keeps its own license, see [NOTICE](NOTICE).
 
-Not affiliated with VSCodium, Microsoft, JetBrains or Oracle.
+Not affiliated with or endorsed by VSCodium, Microsoft, JetBrains or Oracle. IntelliJ IDEA and VS Code are trademarks of their owners, mentioned only to describe where the inspiration comes from.

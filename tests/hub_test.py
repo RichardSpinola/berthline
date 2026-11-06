@@ -184,7 +184,7 @@ def roteiro():
     hub.gravar_opcao('web', 'animations', False)
     hub.preparar('web')
     dados = hub.ler_json(hub.pasta_usuario('web') / 'settings.json')
-    passo('telemetry per app', dados['telemetry.telemetryLevel'] == 'all' and hub.opcao('java', 'telemetry') is False)
+    passo('telemetry always off', dados['telemetry.telemetryLevel'] == 'off')
     passo('import survives prepare', dados.get('editor.fontSize') == 21)
     passo('animations off', dados['workbench.reduceMotion'] == 'on' and dados['editor.smoothScrolling'] is False)
     passo('web accent', dados['workbench.colorCustomizations']['focusBorder'] == '#3B82C4')
