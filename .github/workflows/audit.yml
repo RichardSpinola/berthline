@@ -5,6 +5,9 @@ on:
       run_id:
         description: Build run that holds the packages
         required: true
+  workflow_run:
+    workflows: [build]
+    types: [completed]
 
 permissions:
   actions: read
@@ -12,6 +15,7 @@ permissions:
 
 jobs:
   windows:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -20,15 +24,14 @@ jobs:
         with:
           name: berthline-windows
           path: zip
-          run-id: ${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
           github-token: ${{ github.token }}
       - run: tar -xf zip/berthline-windows.zip -C $env:RUNNER_TEMP
       - name: Audit Java
-        continue-on-error: true
         timeout-minutes: 15
         run: '& "$env:RUNNER_TEMP/berthline-windows/node/node.exe" tests/audit.js "$env:RUNNER_TEMP/berthline-windows" java'
       - name: Audit Web
-        continue-on-error: true
+        if: always()
         timeout-minutes: 10
         run: '& "$env:RUNNER_TEMP/berthline-windows/node/node.exe" tests/audit.js "$env:RUNNER_TEMP/berthline-windows" web'
       - uses: actions/upload-artifact@v4
@@ -38,6 +41,7 @@ jobs:
           path: tests/out
 
   linux:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -50,15 +54,14 @@ jobs:
         with:
           name: berthline-linux
           path: pkg
-          run-id: ${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
           github-token: ${{ github.token }}
       - run: tar -xzf pkg/berthline-linux.tar.gz -C "$RUNNER_TEMP"
       - name: Audit Java
-        continue-on-error: true
         timeout-minutes: 15
         run: xvfb-run -a --server-args='-screen 0 1280x800x24' "$RUNNER_TEMP/berthline-linux/node/bin/node" tests/audit.js "$RUNNER_TEMP/berthline-linux" java
       - name: Audit Web
-        continue-on-error: true
+        if: always()
         timeout-minutes: 10
         run: xvfb-run -a --server-args='-screen 0 1280x800x24' "$RUNNER_TEMP/berthline-linux/node/bin/node" tests/audit.js "$RUNNER_TEMP/berthline-linux" web
       - uses: actions/upload-artifact@v4

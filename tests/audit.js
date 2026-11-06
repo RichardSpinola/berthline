@@ -70,7 +70,8 @@ async function comandos(h) {
     for (const c of proprios) if (!todos.has(c)) falha('command not registered', c);
 
     const acoes = JSON.parse(fs.readFileSync(path.join(PACOTE, `data/${APP}/extensions`, fs.readdirSync(path.join(PACOTE, `data/${APP}/extensions`)).find(n => n.startsWith('berthline.berthline-tools')), 'acoes.json')));
-    for (const [c, a] of Object.entries(acoes)) if (!todos.has(a.t)) falha('action target missing', `${c} -> ${a.t}`);
+    // Commands of idle extensions only show up after they activate, so running them is the real check.
+    const alvos = Object.fromEntries(Object.entries(acoes).map(([c, a]) => [c, a.t]));
 
     const atalhos = fs.readFileSync(path.join(PACOTE, `data/${APP}/user/User/keybindings.json`), 'utf8').replace(/^\s*\/\/.*$/gm, '');
     const lista = JSON.parse(atalhos.replace(/,(\s*[\]}])/g, '$1'));
@@ -92,7 +93,7 @@ async function comandos(h) {
         await dormir(250);
         await tecla(h, [], 'Escape', 'Escape', 27);
         const erro = await h.ev(`[...document.querySelectorAll('.notification-toast .codicon-error')].map(e=>e.closest('.notification-toast').innerText).join(' / ')`);
-        if (r.startsWith('error')) falha('command failed', `${c}: ${r}`);
+        if (r.startsWith('error')) falha('command failed', `${c}${alvos[c] ? ` -> ${alvos[c]}` : ''}: ${r}`);
         if (erro) falha('command shows error', `${c}: ${erro.replace(/\s+/g, ' ').slice(0, 140)}`);
         resultado[c] = r;
         await rpc('executar', { comando: 'notifications.clearAll' });
@@ -164,7 +165,7 @@ async function java(h, pasta) {
         const r = await h.ev(`(()=>{const b=document.querySelector(${JSON.stringify(seletor)}).getBoundingClientRect();return {x:b.x+40,y:b.y+12}})()`);
         for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await h.c('Input.dispatchMouseEvent', { type, x: r.x, y: r.y, button: 'right', buttons: 2, clickCount: 1 });
         await dormir(700);
-        relatorio.dados[`menu-${nome}`] = await h.ev(`[...document.querySelectorAll('.context-view .action-label, .monaco-menu .action-label')].map(e=>e.innerText).filter(Boolean)`);
+        relatorio.dados[`menu-${nome}`] = await h.ev(`(()=>{const raizes=[document,...[...document.querySelectorAll('*')].map(e=>e.shadowRoot).filter(Boolean)];return raizes.flatMap(r=>[...r.querySelectorAll('.context-view .action-label, .monaco-menu .action-label')]).map(e=>e.innerText).filter(Boolean)})()`);
         await h.foto(`audit-menu-${nome}`);
         await tecla(h, [], 'Escape', 'Escape', 27);
         await dormir(300);
