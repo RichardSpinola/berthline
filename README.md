@@ -14,10 +14,15 @@ Java and Web profiles built on VSCodium, with one Hub to launch them.
 [![License: MIT](https://img.shields.io/badge/license-MIT-26313D)](LICENSE)
 ![Platforms: Windows and Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-26313D)
 ![Status: early preview](https://img.shields.io/badge/status-early%20preview-C8102E)
+![Personal project](https://img.shields.io/badge/personal-project-26313D)
+![AI assisted](https://img.shields.io/badge/AI-assisted-26313D)
 
 [Download](#download) · [First run](#first-run) · [Profiles](#profiles) · [Why Berthline](#why-berthline) · [Limitations](#limitations)
 
 </div>
+
+> [!NOTE]
+> Berthline is a personal project: a set of editor profiles, not a full IDE. Updates may take a while and some features may be missing. If something bothers you, open an issue or fork it and fix it your way, with AI or without.
 
 <br>
 
@@ -70,11 +75,13 @@ Each profile keeps its own settings and extensions, so nothing touches an editor
 
 ## Why Berthline
 
-IntelliJ IDEA is great, but it can use a lot of memory and slow down a modest computer. VS Code is lighter, yet many people complain about how it handles Java.
+My computer is modest, and IntelliJ IDEA, which I use for my Java studies, was too heavy for it. So I started trying to bring VS Code as close as I could to the IntelliJ IDEA experience, using it as inspiration.
 
-Berthline tries to close that gap. Each profile sets up the editor for one kind of work, starting with Java, so it behaves more like an IDE and stays light. Keeping profiles apart also means a Java setup never slows down a Web project.
+The goal isn't to turn an editor into a complete IDE. That barely makes sense. The goal is to get close enough that you can work comfortably on small and medium projects, and move to a full IDE when a project outgrows it.
 
-It suits small and medium projects and modest computers. For large projects, a full IDE is still the better tool.
+Then the idea grew. If a profile could do this for Java, others could do it for other kinds of work. Web came next, and more can follow over time. Keeping profiles apart also means a Java setup never slows down a Web project.
+
+Berthline won't replace an IDE, and it has its own problems. It is one way to spend less of your computer's power while you code.
 
 ### The name
 
@@ -111,10 +118,10 @@ The package lands in `dist/`. Tests live in `tests/` and run on GitHub Actions o
 
 ## AI use
 
-This project was built with AI assistance: Claude Opus 5.5 (Anthropic), through Claude Code. A person reviewed the work and decided what to keep.
+AI did most of the work here: Claude Opus 5.5 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. I chose the direction, tested it and decided what to keep.
 
 ## License
 
 MIT, see [LICENSE](LICENSE). Bundled software keeps its own license, see [NOTICE](NOTICE).
 
-Not affiliated with VSCodium, Microsoft, JetBrains or Oracle.
+Not affiliated with or endorsed by VSCodium, Microsoft, JetBrains or Oracle. IntelliJ IDEA and VS Code are trademarks of their owners, mentioned only to describe where the inspiration comes from.
