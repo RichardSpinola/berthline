@@ -41,7 +41,7 @@ import hub  # noqa: E402
 from PySide6.QtCore import QEventLoop, QTimer  # noqa: E402
 from PySide6.QtGui import QDesktopServices  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
-    QAbstractButton, QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QLabel, QLineEdit, QListWidget, QMenu,
+    QAbstractButton, QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QLabel, QLineEdit, QListWidget, QMenu,
     QMessageBox, QSlider, QSpinBox, QWidget)
 
 erros, vistos, links, avisos = [], [], [], []
@@ -85,6 +85,10 @@ def controles(raiz):
     tipos = (QAbstractButton, QComboBox, QLineEdit, QListWidget, QSlider, QSpinBox)
     achados = [c for c in raiz.findChildren(QWidget) if isinstance(c, tipos) and c.isVisibleTo(raiz) and c.isEnabled()
                and not type(c).__name__.startswith('Qt')]
+    for f in raiz.findChildren(QFrame):
+        if hasattr(f, 'mais'):  # the row's menu only shows on hover
+            f.mais.setVisible(True)
+            achados.append(f.mais)
     return [c for c in achados if type(c.parent()).__name__ not in ('QComboBox', 'QAbstractSpinBox')
             and not c.objectName().startswith('qt_')]
 
@@ -119,10 +123,10 @@ def usar(c, nome):
     elif isinstance(c, QAbstractButton):
         menu = c.menu() if hasattr(c, 'menu') else None
         if menu:
-            for acao in menu.actions():
-                if not acao.isSeparator():
-                    vistos.append(f"{nome}/QAction:{acao.text()}")
-            return list(menu.actions())
+            acoes = [a for a in menu.actions() if not a.isSeparator()]
+            for acao in acoes:
+                vistos.append(f"{nome}/QAction:{acao.text()}")
+            return acoes
         c.click()
     elif isinstance(c, QComboBox):
         for i in range(c.count()):

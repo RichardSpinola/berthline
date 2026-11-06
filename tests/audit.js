@@ -30,8 +30,8 @@ const rpc = (acao, dados = {}) => new Promise((ok, nao) => {
 
 function iniciar(pasta) {
     const usuario = path.join(PACOTE, 'data', APP);
-    spawnSync(HUB, ['--prepare'], { env: { ...process.env, SUITE_ROOT: PACOTE } });
     spawnSync(HUB, ['--trust', pasta], { env: { ...process.env, SUITE_ROOT: PACOTE } });
+    spawnSync(HUB, ['--prepare'], { env: { ...process.env, SUITE_ROOT: PACOTE } });
     const exe = ['VSCodium.exe', 'Code.exe', 'codium', 'code'].map(n => path.join(PACOTE, 'editor', n)).find(fs.existsSync);
     const env = { ...process.env, SUITE_TOOLS: path.join(usuario, 'tools'), SUITE_VISUAL: '1', SUITE_ANIMATIONS: '1',
         SUITE_WATERMARK: path.join(usuario, 'watermark.svg'), SUITE_HUB: HUB };

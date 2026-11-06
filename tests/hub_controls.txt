@@ -1,9 +1,22 @@
 hub-projects/ListaProjetos:
+hub-projects/QAction:Create Desktop Shortcut
+hub-projects/QAction:Open
+hub-projects/QAction:Open Editor Directly
+hub-projects/QAction:Plugins
+hub-projects/QAction:Settings
+hub-projects/QAction:Show Data Folder
 hub-projects/QLineEdit:Search projects
 hub-projects/QPushButton:Projects
 hub-projects/QPushButton:Tools
 hub-projects/QToolButton:
 hub-projects/QToolButton:Settings
+hub-projects/QToolButton:⋯
+hub-settings/QAction:Create Desktop Shortcut
+hub-settings/QAction:Open
+hub-settings/QAction:Open Editor Directly
+hub-settings/QAction:Plugins
+hub-settings/QAction:Settings
+hub-settings/QAction:Show Data Folder
 hub-settings/QCheckBox:Transitions and boat animation
 hub-settings/QCheckBox:Window blur
 hub-settings/QListWidget:
@@ -13,9 +26,17 @@ hub-settings/QPushButton:Projects
 hub-settings/QPushButton:Remove
 hub-settings/QPushButton:Tools
 hub-settings/QToolButton:Settings
+hub-settings/QToolButton:⋯
+hub-tools/QAction:Create Desktop Shortcut
+hub-tools/QAction:Open
+hub-tools/QAction:Open Editor Directly
+hub-tools/QAction:Plugins
+hub-tools/QAction:Settings
+hub-tools/QAction:Show Data Folder
 hub-tools/QPushButton:Projects
 hub-tools/QPushButton:Tools
 hub-tools/QToolButton:Settings
+hub-tools/QToolButton:⋯
 java-customize/Combo:
 java-customize/QCheckBox:Allow editor telemetry
 java-customize/QCheckBox:Animations
