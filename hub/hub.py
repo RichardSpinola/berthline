@@ -851,8 +851,25 @@ def baixar_verificado(url, somas, destino, progresso=None):
 CLASSES = {}  # the audit reaches the small windows through this
 
 
+def limpar_ambiente():
+    """Keep what the packaged Hub needs for itself away from every program it starts.
+
+    With the Hub's own Qt on the library path, Dolphin or any system Qt app dies on start.
+    Libraries are already resolved by now, and Qt reads its paths when the application is created.
+    """
+    if not getattr(sys, 'frozen', False):
+        return
+    original = os.environ.pop('LD_LIBRARY_PATH_ORIG', None)
+    os.environ.pop('LD_LIBRARY_PATH', None)
+    if original:
+        os.environ['LD_LIBRARY_PATH'] = original
+    for nome in ['QT_PLUGIN_PATH', 'QML2_IMPORT_PATH', *[n for n in os.environ if n.startswith('_PYI_')]]:
+        os.environ.pop(nome, None)
+
+
 def janela(inicial=None, lancar=None):
-    if not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ:
+    forcar_xcb = not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ
+    if forcar_xcb:
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
     from PySide6.QtCore import Property, QEasingCurve, QProcess, QProcessEnvironment, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
     from PySide6.QtGui import (
@@ -2792,6 +2809,9 @@ def janela(inicial=None, lancar=None):
 
     CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade)
     aplicacao = QApplication(sys.argv)
+    if forcar_xcb:
+        del os.environ['QT_QPA_PLATFORM']
+    limpar_ambiente()
     aplicacao.setApplicationName(marca()['hub'])
     aplicacao.setStyle('Fusion')
     aplicacao.setQuitOnLastWindowClosed(True)
@@ -2837,6 +2857,8 @@ def janela(inicial=None, lancar=None):
 
 def main():
     args = sys.argv[1:]
+    if args[:1] in (['--open'], ['--background'], ['--trust'], ['--prepare']):
+        limpar_ambiente()
     if args[:1] == ['--open']:
         porta = int(args[args.index('--port') + 1]) if '--port' in args else None
         alvos = [a for a in args[2:] if a != '--port' and a != str(porta)]

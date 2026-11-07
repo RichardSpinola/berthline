@@ -220,7 +220,23 @@ def roteiro():
     os._exit(1 if falhas else 0)
 
 
+def ambiente_do_pacote():
+    guardado = dict(os.environ)
+    os.environ.update({'LD_LIBRARY_PATH': '/pacote/_hub', 'LD_LIBRARY_PATH_ORIG': '/meu/lib', 'QT_PLUGIN_PATH': '/pacote/plugins',
+                       'QML2_IMPORT_PATH': '/pacote/qml', '_PYI_ARCHIVE_FILE': '/pacote/Hub', 'OUTRA': 'fica'})
+    sys.frozen = True
+    try:
+        hub.limpar_ambiente()
+        passo('children get a clean environment', os.environ.get('LD_LIBRARY_PATH') == '/meu/lib' and os.environ.get('OUTRA') == 'fica'
+              and not {'LD_LIBRARY_PATH_ORIG', 'QT_PLUGIN_PATH', 'QML2_IMPORT_PATH', '_PYI_ARCHIVE_FILE'} & set(os.environ))
+    finally:
+        del sys.frozen
+        os.environ.clear()
+        os.environ.update(guardado)
+
+
 def extras(painel):
+    ambiente_do_pacote()
     # Keymap: a shortcut the person added survives both directions.
     hub.preparar('java')
     arquivo = hub.pasta_usuario('java') / 'keybindings.json'
