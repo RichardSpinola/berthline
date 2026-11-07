@@ -235,6 +235,13 @@ def extras(painel):
     passo('web keymap has no java keys', 'Build' not in nomes and 'Generate' not in nomes)
     passo('java keymap has build', 'Build' in [a for a, _ in hub.teclas_app('java')])
 
+    # Back to Hub reopens the same app's screen.
+    amb = hub.ambiente('web')
+    passo('back knows the app', amb['SUITE_APP'] == 'web')
+    passo('back runs the hub from source', json.loads(amb['SUITE_HUB_ARGS'])[0].endswith('hub.py') and amb['SUITE_HUB_ROOT'] == str(hub.RAIZ))
+    atalho = hub.criar_atalho('java')
+    passo('source shortcut keeps its root', f'SUITE_ROOT={hub.RAIZ}' in atalho.read_text())
+
     # Running state comes from the editor's lock file.
     trava = hub.DADOS / 'web/user/code.lock'
     trava.parent.mkdir(parents=True, exist_ok=True)

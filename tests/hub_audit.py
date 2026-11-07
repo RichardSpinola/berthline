@@ -208,7 +208,7 @@ def pequenas(painel):
         p.show()
         esperar(120)
         foto(p, f'{app}-wait')
-        p.etapa('extensions')
+        p.etapa('extensions', 'Extensions 3 of 14')
         foto(p, f'{app}-wait-extensions')
         p.mouseReleaseEvent(None)
         if not pulou:
