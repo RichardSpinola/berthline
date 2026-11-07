@@ -254,6 +254,7 @@ async function iconesReais(h, pasta) {
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
     await rpc('renomear', { de: path.join(pasta, 'src/two'), para: path.join(pasta, 'src/three') });
     await dormir(500);
+    await h.ate(() => fs.existsSync(path.join(pasta, 'src/three/Item.java')), 10000);
     await rpc('abrir', { arquivo: path.join(pasta, 'src/three/Item.java') });
     conferir('icon survives a package rename', await h.ate(() => umaAba('enum'), 5000));
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
@@ -372,6 +373,9 @@ async function exportar(h, pasta) {
     const pergunta = await h.ate(async () => /main/i.test(await h.ev(`document.querySelector('.quick-input-title')?.innerText ?? ''`)) || fs.existsSync(jar), 20000);
     if (pergunta && !fs.existsSync(jar)) {
         await h.foto('audit-java-export');
+        // The build task opens a terminal and can take focus from the wizard
+        console.log('wizard focus', await h.ev(`document.activeElement?.className ?? ''`));
+        await h.ev(`document.querySelector('.quick-input-box input')?.focus()`);
         await h.c('Input.insertText', { text: 'Main' });
         await dormir(500);
         await tecla(h, [], 'Enter', 'Enter', 13);

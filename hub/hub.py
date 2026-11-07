@@ -12,7 +12,9 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import urllib.request
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -28,8 +30,23 @@ PROJETOS = CASA / 'Projects'
 CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
-PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G'}
-CORES_ICONE = ['#A9C27F', '#C77DBB', '#6AAB73', '#56A8F5', '#E8A33D', '#F75464', '#9B8AE3']
+PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keymap': 'intellij', 'folder': ''}
+ICON_THEMES = {'Berthline': 'berthline-file-icons', 'JetBrains': 'jetbrains-file-icon-theme-auto'}
+THEMES = {'Dark': ('Islands Dark', 'Dark Modern'), 'Light': ('Islands Light', 'Light Modern')}
+INTELLIJ_KEYS = (
+    ('Search Everywhere', 'Shift Shift'), ('Run', 'Shift+F10'), ('Debug', 'Shift+F9'), ('Rerun', 'Ctrl+5'),
+    ('Stop', 'Ctrl+2'), ('Build', 'Ctrl+9'), ('Toggle Breakpoint', 'Ctrl+8'), ('Step Over', 'F8'),
+    ('Step Into', 'F7'), ('Resume', 'F9'), ('Context Actions', 'Alt+Enter'), ('Generate', 'Alt+Insert'),
+    ('Rename', 'Shift+F6'), ('File Structure', 'Ctrl+0'), ('Recent Files', 'Ctrl+E'), ('Terminal', 'Alt+F12'),
+)
+VSCODE_KEYS = (
+    ('Command Palette', 'Ctrl+Shift+P'), ('Quick Open', 'Ctrl+P'), ('Run Without Debugging', 'Ctrl+F5'), ('Debug', 'F5'),
+    ('Stop', 'Shift+F5'), ('Build', 'Ctrl+Shift+B'), ('Toggle Breakpoint', 'F9'), ('Step Over', 'F10'), ('Step Into', 'F11'),
+    ('Quick Fix', 'Ctrl+.'), ('Rename', 'F2'), ('Go to Symbol', 'Ctrl+Shift+O'), ('Copy Line Up', 'Shift+Alt+Up'),
+    ('Copy Line Down', 'Shift+Alt+Down'), ('Terminal', 'Ctrl+`'),
+)
+JAVA_ONLY_KEYS = ('Build', 'Generate')
+LAMPADAS = {'run': '#3FA66B', 'ready': '#5A5F66', 'prep': '#E0A030', 'att': '#C8102E'}
 
 
 def marca():
@@ -44,6 +61,10 @@ def aplicativos():
     for f in PERFIS.glob('*/app.json'):
         saida[f.parent.name] = json.loads(f.read_text(encoding='utf8'))
     return dict(sorted(saida.items(), key=lambda x: x[1].get('order', 99)))
+
+
+def versao():
+    return marca().get('version', '')
 
 
 def versao_editor():
@@ -177,6 +198,53 @@ def pasta_usuario(app):
     return DADOS / app / 'user' / 'User'
 
 
+def pasta_projetos(app):
+    return Path(opcao(app, 'folder') or PROJETOS)
+
+
+def arquivos_teclas(app):
+    """The profile's shortcut files, base first."""
+    origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
+    origens.append(PERFIS / app)
+    return [o / 'keybindings.json' for o in origens if (o / 'keybindings.json').exists()]
+
+
+def keymap_de(app):
+    """Only profiles that offer the choice leave IntelliJ."""
+    return opcao(app, 'keymap') if aplicativos()[app].get('keymap') else 'intellij'
+
+
+def teclas_app(app):
+    """Shortcuts the Learn screen lists; each one exists in that app."""
+    lista = INTELLIJ_KEYS if keymap_de(app) == 'intellij' else VSCODE_KEYS
+    return [t for t in lista if aplicativos()[app].get('memory') or t[0] not in JAVA_ONLY_KEYS]
+
+
+def aplicar_keymap(app, nome):
+    """Switches keymap keeping the shortcuts the person added. False if their file can't be read."""
+    arquivo = pasta_usuario(app) / 'keybindings.json'
+    atual = ler_json(arquivo) if arquivo.exists() else []
+    if not isinstance(atual, list):
+        return False
+    teclas = arquivos_teclas(app)
+    perfil = [e for t in teclas for e in ler_json(t)]
+    vscode = ler_json(PERFIS / app / 'keymap-vscode.json')
+    proprias = [e for e in atual if e not in perfil and e not in vscode]
+    gravar_opcao(app, 'keymap', nome)
+    if not arquivo.exists() and nome == 'intellij':
+        return True
+    if nome == 'intellij':
+        texto = juntar_teclas(teclas)
+        if proprias:
+            extra = ',\n'.join(json.dumps(e, ensure_ascii=False) for e in proprias)
+            texto = f"{texto[:texto.rindex(']')].rstrip()},\n{extra}\n]\n"
+    else:
+        texto = json.dumps(vscode + proprias, indent=4, ensure_ascii=False) + '\n'
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
+    arquivo.write_text(texto, encoding='utf8')
+    return True
+
+
 def juntar_teclas(arquivos):
     """Une listas de atalhos sem perder os comentários."""
     textos = [a.read_text(encoding='utf8') for a in arquivos]
@@ -221,9 +289,12 @@ def preparar(app):
     arquivo.write_text(json.dumps(atual, indent=4, ensure_ascii=False), encoding='utf8')
     origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
     origens.append(PERFIS / app)
-    teclas = [o / 'keybindings.json' for o in origens if (o / 'keybindings.json').exists()]
+    teclas = arquivos_teclas(app)
     if teclas and not (usuario / 'keybindings.json').exists():
-        (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
+        if keymap_de(app) == 'intellij':
+            (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
+        else:
+            aplicar_keymap(app, 'vscode')
     for origem in origens:
         trechos = origem / 'snippets'
         if trechos.is_dir():
@@ -261,6 +332,11 @@ def ambiente(app):
     if node().exists():
         amb['SUITE_NODE'] = str(node())
     amb['SUITE_HUB'] = sys.executable
+    amb['SUITE_APP'] = app
+    # Run from source, the interpreter alone is not the Hub; a packaged Hub needs nothing else.
+    amb['SUITE_HUB_ARGS'] = json.dumps([] if getattr(sys, 'frozen', False) else [str(Path(__file__).resolve())])
+    if not getattr(sys, 'frozen', False):
+        amb['SUITE_HUB_ROOT'] = str(RAIZ)
     for chave in list(amb):
         if chave == 'ELECTRON_RUN_AS_NODE' or chave.startswith('VSCODE_'):
             del amb[chave]
@@ -298,7 +374,7 @@ def abrir_app(app, alvos=(), porta=None, comando_=None):
 def registrar(app, alvo):
     tudo = opcoes()
     lista = [p for p in tudo.setdefault('recent', []) if chave_caminho(p['path']) != chave_caminho(alvo)]
-    tudo['recent'] = [{'path': str(alvo), 'app': app}] + lista[:29]
+    tudo['recent'] = [{'path': str(alvo), 'app': app, 'at': time.time()}] + lista[:29]
     OPCOES.parent.mkdir(parents=True, exist_ok=True)
     OPCOES.write_text(json.dumps(tudo, indent=2), encoding='utf8')
 
@@ -328,6 +404,45 @@ def recentes(so_app=None):
     bons = [(Path(p), a, t) for c, (p, a, t) in vistos.items() if c not in fora and Path(p).is_dir()
             and (so_app is None or a == so_app) and not (TEMPORARIO and p.startswith(TEMPORARIO))]
     return [(p, a) for p, a, _ in sorted(bons, key=lambda x: -x[2])]
+
+
+def quando(caminho):
+    """How long ago a project was opened, in words; empty when unknown."""
+    chave = chave_caminho(caminho)
+    instante = next((p.get('at') for p in opcoes().get('recent', []) if chave_caminho(p['path']) == chave), None)
+    if not instante:
+        return ''
+    passou = time.time() - instante
+    if passou < 60:
+        return 'Just now'
+    if passou < 3600:
+        return f'{int(passou // 60)} min ago'
+    if passou < 86400:
+        return f'{int(passou // 3600)} h ago'
+    if passou < 172800:
+        return 'Yesterday'
+    if passou < 604800:
+        return f'{int(passou // 86400)} days ago'
+    return time.strftime('%b %d', time.localtime(instante))
+
+
+def tipo_rotulo(pasta):
+    """Short build or language tag for a project row."""
+    try:
+        nomes = {p.name for p in Path(pasta).iterdir()}
+    except OSError:
+        return ''
+    if 'pom.xml' in nomes:
+        return 'Maven'
+    if nomes & {'build.gradle', 'build.gradle.kts'}:
+        return 'Gradle'
+    if 'tsconfig.json' in nomes:
+        return 'TypeScript'
+    if 'package.json' in nomes:
+        return 'Node'
+    if any(n.endswith('.html') for n in nomes):
+        return 'HTML'
+    return 'Java' if (Path(pasta) / 'src').is_dir() and tipo_projeto(Path(pasta)) == 'java' else ''
 
 
 def ocultar_recente(caminho):
@@ -364,16 +479,54 @@ def etapa_atual(app):
         return ''
 
 
+def processo_vivo(pid):
+    if JANELAS:
+        kernel = ctypes.windll.kernel32
+        alca = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not alca:
+            return False
+        codigo = ctypes.c_ulong()
+        vivo = kernel.GetExitCodeProcess(alca, ctypes.byref(codigo)) and codigo.value == 259  # STILL_ACTIVE
+        kernel.CloseHandle(alca)
+        return bool(vivo)
+    return Path(f'/proc/{pid}').exists()
+
+
+def rodando(app):
+    """True while the app's editor runs: it keeps its pid in code.lock."""
+    try:
+        return processo_vivo(int((DADOS / app / 'user/code.lock').read_text(encoding='utf8')))
+    except (OSError, ValueError):
+        return False
+
+
+def estado_app(app):
+    if not editor().exists():
+        return 'att', 'Needs attention', 'Editor files are missing'
+    if rodando(app):
+        return 'run', 'Running', ''
+    if not (pasta_usuario(app) / 'settings.json').exists():
+        return 'prep', 'Preparing', 'First launch'
+    return 'ready', 'Ready', ''
+
+
 def limpar_etapa(app):
     (ferramentas(app) / 'etapa').unlink(missing_ok=True)
 
 
-def vidro_disponivel():
-    if not opcoes().get('blur', True) or os.environ.get('QT_QPA_PLATFORM') == 'offscreen':
-        return False
+def blur_unsupported():
+    """Why this system can't blur behind a window; empty when it can."""
+    if os.environ.get('QT_QPA_PLATFORM') == 'offscreen':
+        return 'Blur needs a real window.'
     if JANELAS:
-        return sys.getwindowsversion().build >= 22621
-    return 'KDE' in os.environ.get('XDG_CURRENT_DESKTOP', '') and bool(os.environ.get('DISPLAY'))
+        return '' if sys.getwindowsversion().build >= 22621 else 'Blur needs Windows 11 22H2 or newer.'
+    if 'KDE' in os.environ.get('XDG_CURRENT_DESKTOP', '') and os.environ.get('DISPLAY'):
+        return ''
+    return 'Blur needs KDE Plasma.'
+
+
+def vidro_disponivel():
+    return bool(opcoes().get('blur', False)) and not blur_unsupported()
 
 
 def aplicar_vidro(janela_id):
@@ -419,16 +572,17 @@ def secoes(so_app=None):
     ja = {p for p, _ in feitos}
     fora = set(opcoes().get('hidden', []))
     disco = []
-    if PROJETOS.is_dir():
-        for p in sorted(PROJETOS.iterdir(), key=lambda x: x.name.lower()):
-            if p.is_dir() and not p.name.startswith('.') and p not in ja and str(p) not in fora:
-                app = tipo_projeto(p)
-                if so_app in (None, app):
-                    disco.append((p, app))
+    for pasta in dict.fromkeys(pasta_projetos(a) for a in ([so_app] if so_app else aplicativos())):
+        if pasta.is_dir():
+            for p in sorted(pasta.iterdir(), key=lambda x: x.name.lower()):
+                if p.is_dir() and not p.name.startswith('.') and p not in ja and str(p) not in fora:
+                    ja.add(p)
+                    app = tipo_projeto(p)
+                    if so_app in (None, app):
+                        disco.append((p, app))
     if so_app:
         return [(t, l) for t, l in (('Recent', feitos), ('On this computer', disco)) if l]
-    return [(info['title'], [x for x in feitos + disco if x[1] == app]) for app, info in aplicativos().items()
-            if any(x[1] == app for x in feitos + disco)]
+    return [('', feitos + disco)] if feitos or disco else []
 
 
 def marca_dagua(app):
@@ -563,35 +717,38 @@ def imagem_icone(nome, tipo):
     return alvo
 
 
-def criar_atalho(app):
-    """Cria o atalho do Hub ou de um app; o do app vai direto para a tela dele."""
+def criar_atalho(app, desktop=True, menu=True):
+    """Creates the Hub's or an app's shortcut; an app's goes straight to its screen."""
     b = marca()
     titulo = f"{b['name']} {aplicativos()[app]['title']}" if app else b['hub']
     congelado = getattr(sys, 'frozen', False)
-    programa = sys.executable if congelado else f'{sys.executable} {Path(__file__).resolve()}'
+    programa = sys.executable if congelado else f'env SUITE_ROOT={RAIZ} HOME={CASA} {sys.executable} {Path(__file__).resolve()}'
     args = f'--welcome {app}' if app else ''
     pasta = area_de_trabalho()
-    pasta.mkdir(parents=True, exist_ok=True)
     if JANELAS:
         icone_ = imagem_icone(app or 'hub', 'ico')
-        destino = pasta / f'{titulo}.lnk'
-        script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{destino}');$s.TargetPath='{sys.executable}';"
-                  f"$s.Arguments='{args}';$s.WorkingDirectory='{RAIZ}';$s.IconLocation='{icone_}';$s.Save()")
-        r = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        if r.returncode:
-            (pasta / f'{titulo}.bat').write_text(f'@start "" "{sys.executable}" {args}\r\n')
-        return destino
+        inicio = Path(os.environ.get('APPDATA', '')) / 'Microsoft/Windows/Start Menu/Programs'
+        destinos = ([pasta / f'{titulo}.lnk'] if desktop else []) + ([inicio / f'{titulo}.lnk'] if menu else [])
+        for destino in destinos:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{destino}');$s.TargetPath='{sys.executable}';"
+                      f"$s.Arguments='{args}';$s.WorkingDirectory='{RAIZ}';$s.IconLocation='{icone_}';$s.Save()")
+            r = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if r.returncode:
+                destino.with_suffix('.bat').write_text(f'@start "" "{sys.executable}" {args}\r\n')
+        return destinos[0] if destinos else None
     icone_ = imagem_icone(app or 'hub', 'png')
     texto = (f'[Desktop Entry]\nType=Application\nName={titulo}\nExec="{programa}" {args}\n'
              f'Icon={icone_}\nTerminal=false\nCategories=Development;\n') if congelado else (
              f'[Desktop Entry]\nType=Application\nName={titulo}\nExec={programa} {args}\nIcon={icone_}\nTerminal=false\n')
     nome = f"{b['name'].lower()}{'-' + app if app else ''}.desktop"
-    menu = CASA / '.local/share/applications'
-    menu.mkdir(parents=True, exist_ok=True)
-    for destino in (menu / nome, pasta / nome):
+    aplicacoes = CASA / '.local/share/applications'
+    destinos = ([pasta / nome] if desktop else []) + ([aplicacoes / nome] if menu else [])
+    for destino in destinos:
+        destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_text(texto, encoding='utf8')
         destino.chmod(0o755)
-    return pasta / nome
+    return destinos[0] if destinos else None
 
 
 def origens_importacao():
@@ -629,87 +786,184 @@ def criar_projeto(app, modelo_, nome, local, git=False):
     return raiz
 
 
+def numero_versao(texto):
+    return tuple(int(n) for n in re.findall(r'\d+', str(texto))[:3])
+
+
+def pacote_atual():
+    return 'berthline-windows.zip' if JANELAS else 'berthline-linux.tar.gz'
+
+
+def ler_url(url):
+    pedido = urllib.request.Request(url, headers={'User-Agent': 'Berthline-Hub', 'Accept': 'application/vnd.github+json'})
+    return urllib.request.urlopen(pedido, timeout=8)
+
+
+def checar_novidade():
+    """Asks GitHub for the newest release. Sends no data; prereleases count while 0.x lasts."""
+    with ler_url(f"https://api.github.com/repos/{marca().get('repo')}/releases?per_page=10") as r:
+        lista = json.loads(r.read().decode('utf8'))
+    versoes = [x for x in lista if not x.get('draft') and numero_versao(x.get('tag_name'))]
+    if not versoes:
+        return None
+    x = max(versoes, key=lambda v: numero_versao(v['tag_name']))
+    ativos = {a['name']: a['browser_download_url'] for a in x.get('assets', [])}
+    return {'version': x['tag_name'].lstrip('v'), 'notes': x.get('body') or '', 'page': x.get('html_url', ''),
+            'package': ativos.get(pacote_atual(), ''), 'sums': ativos.get('SHA256SUMS', '')}
+
+
+def novidade():
+    """The release to announce, or None."""
+    tudo = opcoes()
+    nova = tudo.get('update')
+    if nova and numero_versao(nova['version']) > numero_versao(versao()) and nova['version'] != tudo.get('skip_version'):
+        return nova
+    return None
+
+
+def baixar_verificado(url, somas, destino, progresso=None):
+    """Downloads a package and keeps it only if it matches the release's SHA256SUMS."""
+    with ler_url(somas) as r:
+        linhas = r.read().decode('utf8').splitlines()
+    nome = Path(destino).name
+    esperado = next((l.split()[0].lower() for l in linhas if l.split()[-1].lstrip('*') == nome), None)
+    if not esperado:
+        raise ValueError(f'{nome} is not listed in SHA256SUMS')
+    parte = Path(f'{destino}.part')
+    parte.parent.mkdir(parents=True, exist_ok=True)
+    soma = hashlib.sha256()
+    with ler_url(url) as r, parte.open('wb') as saida:
+        total = int(r.headers.get('Content-Length') or 0)
+        feito = 0
+        while bloco_ := r.read(1 << 20):
+            saida.write(bloco_)
+            soma.update(bloco_)
+            feito += len(bloco_)
+            if progresso and total:
+                progresso(feito / total)
+    if soma.hexdigest() != esperado:
+        parte.unlink(missing_ok=True)
+        raise ValueError('The download does not match its SHA-256')
+    parte.replace(destino)
+    return Path(destino)
+
+
+CLASSES = {}  # the audit reaches the small windows through this
+
+
+def limpar_ambiente():
+    """Keep what the packaged Hub needs for itself away from every program it starts.
+
+    With the Hub's own Qt on the library path, Dolphin or any system Qt app dies on start.
+    Libraries are already resolved by now, and Qt reads its paths when the application is created.
+    """
+    if not getattr(sys, 'frozen', False):
+        return
+    original = os.environ.pop('LD_LIBRARY_PATH_ORIG', None)
+    os.environ.pop('LD_LIBRARY_PATH', None)
+    if original:
+        os.environ['LD_LIBRARY_PATH'] = original
+    for nome in ['QT_PLUGIN_PATH', 'QML2_IMPORT_PATH', *[n for n in os.environ if n.startswith('_PYI_')]]:
+        os.environ.pop(nome, None)
+
+
 def janela(inicial=None, lancar=None):
-    if not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ:
+    forcar_xcb = not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ
+    if forcar_xcb:
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
-    from PySide6.QtCore import Property, QEasingCurve, QProcess, QProcessEnvironment, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
+    from PySide6.QtCore import Property, QEasingCurve, QProcess, QProcessEnvironment, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
     from PySide6.QtGui import (
         QColor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QImage, QPainter, QPainterPath, QPen,
     )
     from PySide6.QtSvg import QSvgRenderer
     from PySide6.QtWidgets import (
         QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame,
-        QGraphicsOpacityEffect, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
-        QPushButton, QScrollArea, QSlider, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout,
+        QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
+        QPushButton, QScrollArea, QSlider, QStackedWidget, QToolButton, QVBoxLayout,
         QWidget,
     )
 
-    COM_VIDRO = vidro_disponivel()
+    VIDRO = [vidro_disponivel()]  # changes while the Hub runs
     ESTILO = """
-    * { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 13px; color: #DFE1E5; }
+    * { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 13px; color: #E6E3DA; }
     QWidget#pagina, QScrollArea, QStackedWidget, QAbstractScrollArea { background: transparent; border: none; }
-    QDialog, QMenu, QMessageBox { background: #26272B; }
-    QFrame#linhaV, QFrame#linhaH { background: rgba(255, 255, 255, 22); border: none; }
+    QDialog, QMenu, QMessageBox { background: #1E2124; }
+    QFrame#linhaV, QFrame#linhaH { background: #34383E; border: none; }
+    QFrame#faixa { background: #1E2124; border: none; }
+    QFrame#lista { border: 1px solid #34383E; }
     QLabel#mudo { color: #8F939A; font-size: 12px; }
-    QLabel#titulo { font-size: 14px; }
-    QLabel#grande { font-size: 19px; }
-    QLabel#secao { color: #B6B9BF; font-size: 12px; }
-    QPushButton { background: transparent; border: 1px solid rgba(255, 255, 255, 40); border-radius: 3px; padding: 5px 12px; }
+    QLabel#titulo { font-size: 19px; font-weight: 600; }
+    QLabel#grande { font-size: 19px; font-weight: 600; }
+    QLabel#forte { font-weight: 600; }
+    QLabel#secao { color: #EDE6D3; font-size: 12px; font-weight: 600; }
+    QLabel#tag { font-size: 11px; font-weight: 600; border: 1px solid #5A5F66; padding: 0 5px; }
+    QPushButton { background: transparent; border: 1px solid #5A5F66; border-radius: 1px; padding: 4px 10px; font-weight: 600; }
     QPushButton:hover { background: rgba(255, 255, 255, 14); }
     QPushButton:pressed { background: rgba(255, 255, 255, 26); }
-    QPushButton:disabled { color: #6F737A; border-color: rgba(255, 255, 255, 18); }
-    QPushButton#azul { background: #DFE1E5; border-color: #DFE1E5; color: #16171A; }
-    QPushButton#azul:hover { background: #FFFFFF; }
-    QPushButton#aba { border: none; border-radius: 3px; text-align: left; padding: 6px 10px; color: #A9ACB2; }
-    QPushButton#aba:hover { background: rgba(255, 255, 255, 12); color: #DFE1E5; }
-    QPushButton#aba:checked { background: rgba(255, 255, 255, 20); color: #FFFFFF; }
-    QPushButton#guia { border: none; border-radius: 3px; padding: 5px 9px; color: #8F939A; }
-    QPushButton#guia:hover { background: transparent; color: #DFE1E5; }
-    QPushButton#guia:checked { color: #FFFFFF; background: rgba(255, 255, 255, 20); }
-    QPushButton#link { border: none; color: #A9C1F5; padding: 2px 0; text-align: left; background: transparent; }
-    QPushButton#link:hover { text-decoration: underline; }
-    QToolButton { border: none; border-radius: 3px; padding: 3px; }
+    QPushButton:disabled { color: #6F737A; border-color: #34383E; }
+    QPushButton#azul { background: ACENTO; border-color: ACENTO; color: #14161A; }
+    QPushButton#azul:hover { background: #EDE6D3; border-color: #EDE6D3; }
+    QPushButton#azul:disabled { background: transparent; color: #6F737A; border-color: #34383E; }
+    QPushButton#aba { border: none; border-left: 3px solid transparent; border-radius: 0; text-align: left; padding: 7px 12px 7px 11px; color: #A9ACB2; font-weight: 400; }
+    QPushButton#aba:hover { background: rgba(255, 255, 255, 12); color: #E6E3DA; }
+    QPushButton#aba:checked { background: #1F2225; border-left-color: ACENTO; color: #FFFFFF; font-weight: 600; }
+    QPushButton#guia { border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 12px 2px 10px; color: #8F939A; }
+    QPushButton#guia:hover { background: transparent; color: #E6E3DA; }
+    QPushButton#guia:checked { color: #FFFFFF; border-bottom-color: #EDE6D3; }
+    QPushButton#seg { border-radius: 0; padding: 3px 10px; font-weight: 400; }
+    QPushButton#seg:checked { background: #EDE6D3; color: #14161A; font-weight: 600; }
+    QPushButton#seg:disabled { color: #6F737A; }
+    QPushButton#link { border: none; color: #FFFFFF; padding: 2px 0; text-align: left; background: transparent; text-decoration: underline; }
+    QPushButton#link:disabled { color: #6F737A; }
+    QPushButton#volta { border: none; border-top: 1px solid #34383E; border-radius: 0; text-align: left; padding: 9px 14px; }
+    QToolButton { border: none; border-radius: 1px; padding: 3px; }
     QToolButton:hover { background: rgba(255, 255, 255, 20); }
     QToolButton::menu-indicator { image: none; }
-    QLineEdit, QComboBox { background: rgba(255, 255, 255, 12); border: 1px solid rgba(255, 255, 255, 34); border-radius: 3px; padding: 4px 7px; }
+    QToolButton#engrenagem { border-bottom: 2px solid transparent; border-radius: 0; padding: 4px 4px 3px; }
+    QToolButton#engrenagem:hover, QToolButton#engrenagem:checked { background: transparent; }
+    QToolButton#engrenagem:checked { border-bottom-color: #EDE6D3; }
+    QToolButton#filtro { padding: 1px 6px; color: #8F939A; }
+    QToolButton#filtro:checked { color: #E6E3DA; font-weight: 600; }
+    QLineEdit, QComboBox { background: transparent; border: 1px solid #4A4F56; border-radius: 1px; padding: 3px 7px; }
     QLineEdit#busca { background: transparent; border: none; }
     QLineEdit:focus, QComboBox:focus { border-color: ACENTO; }
     QComboBox::drop-down { border: none; width: 22px; }
     QComboBox::down-arrow { image: url(SETA); }
-    QComboBox QAbstractItemView { background: #26272B; selection-background-color: #3A3C42; }
+    QComboBox QAbstractItemView { background: #1E2124; selection-background-color: #34383E; }
     QListWidget { background: transparent; border: none; outline: 0; }
-    QListWidget::item { border-radius: 3px; }
-    QListWidget::item:hover { background: rgba(255, 255, 255, 12); }
-    QListWidget::item:selected { background: rgba(255, 255, 255, 20); color: #F0F0F0; }
-    QFrame#ferramenta { border-radius: 3px; }
-    QFrame#ferramenta:hover { background: rgba(255, 255, 255, 12); }
-    QMenu { border: 1px solid #3A3C42; padding: 4px; }
-    QMenu::item { padding: 5px 24px 5px 12px; border-radius: 3px; }
-    QMenu::item:selected { background: #3A3C42; }
-    QMenu::separator { height: 1px; background: #3A3C42; margin: 4px 8px; }
+    QListWidget::item { border-radius: 0; }
+    QListWidget::item:hover { background: rgba(255, 255, 255, 10); }
+    QListWidget::item:selected { background: rgba(255, 255, 255, 18); color: #F0F0F0; }
+    QFrame#ferramenta { border: none; border-bottom: 1px solid #2C3035; }
+    QFrame#ferramenta:hover { background: rgba(255, 255, 255, 7); }
+    QMenu { border: 1px solid #34383E; padding: 4px; }
+    QMenu::item { padding: 5px 24px 5px 12px; border-radius: 0; }
+    QMenu::item:selected { background: #34383E; }
+    QMenu::separator { height: 1px; background: #34383E; margin: 4px 8px; }
     QCheckBox { spacing: 7px; }
-    QTableWidget { background: #1E1F22; border: none; gridline-color: #3A3C42; }
-    QHeaderView::section { background: #26272B; border: none; padding: 5px; }
-    QSlider::groove:horizontal { height: 3px; background: rgba(255, 255, 255, 40); }
-    QSlider::handle:horizontal { width: 12px; margin: -5px 0; border-radius: 6px; background: #DFE1E5; }
+    QCheckBox::indicator { width: 12px; height: 12px; border: 1px solid #6A6F76; background: transparent; }
+    QCheckBox::indicator:checked { background: ACENTO; }
+    QCheckBox::indicator:disabled { border-color: #34383E; background: #34383E; }
+    QSlider::groove:horizontal { height: 3px; background: #4A4F56; }
+    QSlider::handle:horizontal { width: 9px; margin: -6px 0; border-radius: 0; background: #EDE6D3; }
     QScrollBar:vertical { background: transparent; width: 8px; }
-    QScrollBar::handle:vertical { background: rgba(255, 255, 255, 40); border-radius: 4px; min-height: 24px; }
+    QScrollBar::handle:vertical { background: #4A4F56; border-radius: 0; min-height: 24px; }
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
     """
-    AZUL = '#3574F0'
+    AZUL = '#EDE6D3'
 
     def estilo(cor):
         return ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('ACENTO', cor)
 
     def com_vidro(janela_):
         """Deixa a janela translúcida com desfoque do sistema, quando existe."""
-        if COM_VIDRO:
+        if VIDRO[0]:
             janela_.setAttribute(Qt.WA_TranslucentBackground)
 
     def surgir(janela_):
         janela_.setWindowOpacity(0.0)
         janela_.show()
-        if COM_VIDRO:
+        if VIDRO[0]:
             aplicar_vidro(int(janela_.winId()))
         animacao = QPropertyAnimation(janela_, b'windowOpacity', janela_)
         animacao.setDuration(180)
@@ -725,7 +979,7 @@ def janela(inicial=None, lancar=None):
         def paintEvent(self, _):
             p = QPainter(self)
             p.setCompositionMode(QPainter.CompositionMode_Source)
-            p.fillRect(self.rect(), QColor(22, 23, 26, 205) if COM_VIDRO else QColor('#1E1F22'))
+            p.fillRect(self.rect(), QColor(22, 24, 27, 205) if VIDRO[0] else QColor('#16181B'))
 
     class Troca(QStackedWidget):
         """Troca de página com passagem suave."""
@@ -771,6 +1025,57 @@ def janela(inicial=None, lancar=None):
         b.clicked.connect(acao)
         return b
 
+    def em_fundo(trabalho, depois):
+        """Runs network work off the window's thread; `depois` gets (result, error) back on it."""
+        saida = []
+
+        def rodar():
+            try:
+                saida.append((trabalho(), None))
+            except (OSError, ValueError, KeyError) as e:
+                saida.append((None, str(e)))
+        threading.Thread(target=rodar, daemon=True).start()
+        vigia = QTimer(QApplication.instance())
+
+        def olhar():
+            if saida:
+                vigia.stop()
+                vigia.deleteLater()
+                depois(*saida[0])
+        vigia.timeout.connect(olhar)
+        vigia.start(100)
+
+    def lampada(estado):
+        r = QLabel()
+        r.setFixedSize(9, 9)
+        r.setStyleSheet(f'background:{LAMPADAS[estado]};border-radius:4px;')
+        return r
+
+    def etiqueta(texto, cor=None):
+        r = rotulo(texto, 'tag')
+        if cor:
+            r.setStyleSheet(f'color:{cor};border-color:{cor};')
+        return r
+
+    def segmento(textos, atual, ao_mudar):
+        """Row of joined buttons where exactly one stays selected."""
+        caixa = QWidget()
+        h = QHBoxLayout(caixa)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        grupo = QButtonGroup(caixa)
+        caixa.botoes = {}
+        for texto in textos:
+            b = QPushButton(texto)
+            b.setObjectName('seg')
+            b.setCheckable(True)
+            b.setChecked(texto == atual)
+            b.clicked.connect(lambda _=False, t=texto: ao_mudar(t))
+            grupo.addButton(b)
+            h.addWidget(b)
+            caixa.botoes[texto] = b
+        return caixa
+
     def nome_app(app):
         return f"{marca()['name']} {aplicativos()[app]['title']}"
 
@@ -778,64 +1083,193 @@ def janela(inicial=None, lancar=None):
         def wheelEvent(self, evento):
             evento.ignore()
 
-    class Barco(QWidget):
-        """Barco balançando na água, usado em toda espera."""
+    def draw_boat(p, kind, cor, fase):
+        """Draws one boat in a 120 x 78 box, with the hull's keel on y=72."""
+        creme = QColor('#EDE6D3')
 
-        def __init__(self, app, largura=300, altura=150):
+        def traco(caminho, cor_, largura):
+            p.setPen(QPen(cor_, largura, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(caminho)
+
+        casco = QPainterPath()
+        for i, (x, y) in enumerate(((8, 52), (112, 52), (100, 72), (20, 72))):
+            casco.moveTo(x, y) if i == 0 else casco.lineTo(x, y)
+        casco.closeSubpath()
+        p.setPen(Qt.NoPen)
+        p.setBrush(creme if kind == 'hub' else cor)
+        p.drawPath(casco)
+        if kind == 'java':
+            p.fillRect(QRectF(38, 40, 46, 12), cor)
+            p.fillRect(QRectF(52, 24, 14, 16), creme)
+            p.fillRect(QRectF(52, 29, 14, 4), cor)
+            for i, x in enumerate((48, 59, 70)):
+                t = (fase * .3 + i / 3) % 1
+                vapor = QPainterPath()
+                vapor.moveTo(x, 22 - 8 * t)
+                vapor.cubicTo(x - 4, 17 - 8 * t, x + 4, 14 - 8 * t, x, 9 - 8 * t)
+                tom = QColor(cor)
+                tom.setAlphaF(math.sin(math.pi * t))
+                traco(vapor, tom, 3.4)
+        elif kind == 'web':
+            for pontos in (((42, 12), (22, 30), (42, 48)), ((78, 12), (98, 30), (78, 48))):
+                seta = QPainterPath()
+                seta.moveTo(*pontos[0])
+                seta.lineTo(*pontos[1])
+                seta.lineTo(*pontos[2])
+                traco(seta, cor, 6.5)
+            mastro = QPainterPath()
+            mastro.moveTo(68, 4)
+            mastro.lineTo(52, 52)
+            traco(mastro, creme, 4.5)
+        elif kind == 'hub':
+            p.fillRect(QRectF(54, 12, 5, 40), creme)
+            bandeira = QPainterPath()
+            for i, (x, y) in enumerate(((59, 14), (84, 14), (75, 23), (84, 32), (59, 32))):
+                bandeira.moveTo(x, y) if i == 0 else bandeira.lineTo(x, y)
+            bandeira.closeSubpath()
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor('#C8102E'))
+            p.drawPath(bandeira)
+        else:
+            cabine = QPainterPath()
+            cabine.addRect(QRectF(32, 20, 56, 32))
+            traco(cabine, cor, 4)
+            prompt = QPainterPath()
+            prompt.moveTo(41, 28)
+            prompt.lineTo(50, 36)
+            prompt.lineTo(41, 44)
+            prompt.moveTo(55, 44)
+            prompt.lineTo(72, 44)
+            traco(prompt, creme, 3.6)
+
+    class Sea(QWidget):
+        """A boat on animated water. Moving boats sail; anchored ones only rock."""
+
+        def __init__(self, kind, largura=300, altura=150, moving=True, boat=132, x=None, cor=None):
             super().__init__()
             self.setFixedSize(largura, altura)
-            self.fase = 0.0
+            self.setAttribute(Qt.WA_TransparentForMouseEvents)
+            self.kind = kind
+            self.moving = moving
+            self.boat = boat
+            self.x_boat = (largura - boat) / 2 if x is None else x
             self.viagem = None
-            self.desenho = QSvgRenderer(str(ASSETS / f'{app}.svg'), self)
-            self.cor = QColor(aplicativos().get(app, {}).get('accent', '#8C939E'))
-            relogio = QTimer(self)
-            relogio.timeout.connect(self.passo)
-            relogio.start(33)
+            self.fase = 0.0
+            self.cor = QColor(cor or aplicativos().get(kind, {}).get('accent', '#7FA6C9'))
+            self.relogio = QTimer(self)
+            self.relogio.timeout.connect(self.passo)
+            self.animar = opcoes().get('transitions', True)
+
+        def showEvent(self, _):
+            if self.animar:
+                self.relogio.start(33 if self.moving else 66)
+
+        def hideEvent(self, _):
+            self.relogio.stop()
 
         def passo(self):
-            self.fase += 0.07
+            self.fase += .1
             self.update()
 
         def paintEvent(self, _):
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
             largura = self.width()
-            agua = self.height() - 22
-            lado = self.height() * .62
+            agua = self.height() - 15
+            escala = self.boat / 120
+            x = self.x_boat
+            if self.viagem is not None:
+                x = -self.boat + self.viagem * (largura + self.boat)
+            balanco = math.sin(self.fase * .6)
             p.save()
-            x = largura / 2 if self.viagem is None else -lado + self.viagem * (largura + 2 * lado)
-            p.translate(x, agua - lado * .36 + math.sin(self.fase) * 4)
-            p.rotate(math.sin(self.fase * .8) * 3)
-            self.desenho.render(p, QRectF(-lado / 2, -lado * .62, lado, lado))
+            p.translate(x, agua + 3 - 72 * escala + balanco * 1.6)
+            p.scale(escala, escala)
+            if self.moving and self.viagem is None:
+                p.setPen(QPen(QColor('#8F939A'), 1.6))
+                for i, (y, comprimento) in enumerate(((60, 16), (66, 22), (72, 12))):
+                    t = (self.fase * .4 + i / 3) % 1
+                    tom = QColor('#8F939A')
+                    tom.setAlphaF(math.sin(math.pi * t) * .9)
+                    p.setPen(QPen(tom, 1.6))
+                    x0 = -8 - 22 * t - comprimento
+                    p.drawLine(QPointF(x0, y), QPointF(x0 + comprimento, y))
+            p.translate(60, 62)
+            p.rotate(balanco * 1.8)
+            p.translate(-60, -62)
+            draw_boat(p, self.kind, self.cor, self.fase)
             p.restore()
-            for camada, (altura, alfa, passo_) in enumerate(((agua + 2, 255, 1.0), (agua + 11, 90, -.7))):
+            passo_ = self.fase * (5 if self.moving else 1.2)
+            for camada, (y, alfa, grossura, sentido) in enumerate(((agua, 255, 2.0, 1), (agua + 7, 97, 1.3, .6))):
                 onda = QPainterPath()
-                for x in range(0, largura + 1, 4):
-                    y = altura + math.sin(x / 26 + self.fase * 2 * passo_) * 3
-                    onda.moveTo(x, y) if x == 0 else onda.lineTo(x, y)
-                cor = QColor(self.cor)
-                cor.setAlpha(alfa)
-                p.setPen(QPen(cor, 2.2 - camada))
+                for x_ in range(0, largura + 5, 4):
+                    h = y + math.sin((x_ + passo_ * sentido) / 7.64) * 3
+                    onda.moveTo(x_, h) if x_ == 0 else onda.lineTo(x_, h)
+                tom = QColor(self.cor)
+                tom.setAlpha(alfa)
+                p.setPen(QPen(tom, grossura))
                 p.setBrush(Qt.NoBrush)
                 p.drawPath(onda)
 
     class Partida(Raiz):
-        """Janela de espera com o barco, até o editor terminar de carregar."""
+        """Waiting window: the app's boat sails until the editor is ready."""
 
-        def __init__(self, app, texto):
+        def __init__(self, app, texto, etapas=False):
             super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
             self.setObjectName('raiz')
+            self.app = app
             com_vidro(self)
-            self.setStyleSheet(estilo(aplicativos()[app].get('accent', AZUL)))
+            cor = aplicativos()[app].get('accent', AZUL)
+            self.setStyleSheet(estilo(cor))
             self.setFixedSize(380, 250)
             v = QVBoxLayout(self)
-            v.setContentsMargins(40, 26, 40, 22)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(0)
+            self.detalhe = rotulo('', 'mudo')
+            self.detalhe.setAlignment(Qt.AlignCenter)
+            self.detalhe.setFixedHeight(26)
+            v.addWidget(self.detalhe)
+            v.addWidget(Sea(app, 380, 180, True, 156))
+            v.addWidget(linha('linhaH'))
+            rodape = QHBoxLayout()
+            rodape.setContentsMargins(14, 0, 14, 0)
+            rodape.setSpacing(14)
             self.texto = rotulo(texto)
-            self.texto.setAlignment(Qt.AlignCenter)
-            v.addWidget(Barco(app), 0, Qt.AlignCenter)
-            v.addWidget(self.texto)
+            self.passos = {}
+            if etapas:
+                self.texto.hide()
+                for chave, nome_ in (('', 'Editor'), ('extensions', 'Extensions'), ('java', 'Java server')):
+                    if chave != 'java' or aplicativos()[app].get('memory'):
+                        self.passos[chave] = rotulo(nome_, 'mudo')
+                        rodape.addWidget(self.passos[chave])
+                self.cor = cor
+                self.etapa('')
+            rodape.addWidget(self.texto)
+            rodape.addStretch(1)
+            if etapas:
+                rodape.addWidget(rotulo('Click to skip', 'mudo'))
+            caixa = QWidget()
+            caixa.setFixedHeight(42)
+            caixa.setLayout(rodape)
+            v.addWidget(caixa)
             tela = QGuiApplication.primaryScreen().availableGeometry()
             self.move(tela.center() - self.rect().center())
+
+        def etapa(self, agora, detalhe=''):
+            """Marks the current stage in the footer; earlier ones stay lit."""
+            self.detalhe.setText(detalhe)
+            chaves = list(self.passos)
+            atual = chaves.index(agora) if agora in chaves else len(chaves)
+            for i, chave in enumerate(chaves):
+                estilo_ = f'color:{self.cor};font-weight:600;font-size:12px;' if i == atual else ('color:#E6E3DA;font-size:12px;' if i < atual else '')
+                self.passos[chave].setStyleSheet(estilo_)
+
+        def aviso(self, texto):
+            """Replaces the stages with one sentence."""
+            for r in self.passos.values():
+                r.hide()
+            self.texto.setText(texto)
+            self.texto.show()
 
         def mouseReleaseEvent(self, _):
             if getattr(self, 'pular', None):
@@ -851,7 +1285,7 @@ def janela(inicial=None, lancar=None):
             self.saida = animacao
 
     class Abertura(Raiz):
-        """Logo navegando pelo mar ao abrir o Hub."""
+        """The logo's boat sails across while the Hub opens. One click skips it."""
 
         def __init__(self, depois):
             super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -859,19 +1293,24 @@ def janela(inicial=None, lancar=None):
             com_vidro(self)
             self.setFixedSize(460, 230)
             self.depois = depois
+            self.terminou = False
             v = QVBoxLayout(self)
-            v.setContentsMargins(0, 26, 0, 22)
-            self.barco = Barco('hub', 460, 140)
-            self.barco.cor = QColor('#7FA6C9')
+            v.setContentsMargins(0, 22, 0, 16)
+            v.setSpacing(6)
+            self.barco = Sea('hub', 460, 150, True, 124)
             self.barco.viagem = 0.0
-            nome = rotulo(marca()['name'], 'grande')
-            nome.setAlignment(Qt.AlignCenter)
+            nome = QHBoxLayout()
+            nome.setSpacing(8)
+            nome.addStretch(1)
+            nome.addWidget(rotulo(marca()['name'], 'grande'))
+            nome.addWidget(rotulo(versao(), 'mudo'), 0, Qt.AlignBottom)
+            nome.addStretch(1)
             v.addWidget(self.barco)
-            v.addWidget(nome)
+            v.addLayout(nome)
             tela = QGuiApplication.primaryScreen().availableGeometry()
             self.move(tela.center() - self.rect().center())
             self.curso = QPropertyAnimation(self, b'percurso', self)
-            self.curso.setDuration(1700)
+            self.curso.setDuration(1600)
             self.curso.setStartValue(0.0)
             self.curso.setEndValue(1.0)
             self.curso.setEasingCurve(QEasingCurve.InOutSine)
@@ -882,6 +1321,7 @@ def janela(inicial=None, lancar=None):
 
         def mudar(self, valor):
             self.barco.viagem = valor
+            self.barco.update()
 
         percurso = Property(float, ler, mudar)
 
@@ -889,23 +1329,28 @@ def janela(inicial=None, lancar=None):
             surgir(self)
             self.curso.start()
 
+        def mouseReleaseEvent(self, _):
+            self.curso.stop()
+            self.fim()
+
         def fim(self):
+            if self.terminou:
+                return
+            self.terminou = True
             animacao = QPropertyAnimation(self, b'windowOpacity', self)
-            animacao.setDuration(220)
+            animacao.setDuration(120)
             animacao.setStartValue(1.0)
             animacao.setEndValue(0.0)
             animacao.finished.connect(lambda: (self.depois(), self.close()))
             animacao.start()
             self.saida = animacao
 
-    ETAPAS = {'': 'Starting the editor…', 'extensions': 'Loading extensions…', 'java': 'Starting the Java server…', 'ready': 'Ready'}
-
     def abrir(app, *alvos, comando_=None):
         if alvos and not pode_abrir(alvos[0]):
             return
         inicio = time.time()
         limite = 110 if aplicativos()[app].get('memory') else 30
-        partida = Partida(app, ETAPAS[''])
+        partida = Partida(app, '', True)
         for w in QApplication.topLevelWidgets():
             if w is not partida and not isinstance(w, QMenu):
                 w.hide()
@@ -925,14 +1370,28 @@ def janela(inicial=None, lancar=None):
             for janela_ in janelas_editor(getattr(processo, 'pid', None)) - escondidas:
                 opacidade_editor(janela_, False)
                 escondidas.add(janela_)
-            agora = etapa_atual(app)
-            partida.texto.setText(ETAPAS.get(agora, ETAPAS['']))
-            if agora == 'ready' or time.time() - inicio > limite:
+            agora, _, detalhe = etapa_atual(app).partition('|')
+            passou = int(time.time() - inicio)
+            if not agora:
+                detalhe = 'Window open' if escondidas else 'Starting the editor'
+            elif agora == 'java':
+                detalhe = f'{detalhe or "Java server"} · {passou} s'
+            partida.etapa(agora, detalhe)
+            if agora == 'ready':
                 terminar()
+            elif time.time() - inicio > limite:
+                relogio.stop()
+                partida.aviso('Still loading in the background')
+                QTimer.singleShot(1500, terminar)
         relogio = QTimer(partida)
         relogio.timeout.connect(conferir)
         relogio.start(120)
         partida.pular = terminar
+
+    def mostrar(app, alvo=None):
+        """Brings up an editor that is already running, with no waiting window."""
+        abrir_app(app, [alvo] if alvo else [])
+        QApplication.quit()
 
     def entrar(app, depois):
         """Mostra o barco por um instante ao trocar de app."""
@@ -979,7 +1438,7 @@ def janela(inicial=None, lancar=None):
             self.modelos.setCurrentRow(1 if self.modelos.count() > 1 else 0)
             self.nome = QLineEdit('untitled')
             self.nome.selectAll()
-            self.local = QLineEdit(str(PROJETOS))
+            self.local = QLineEdit(str(pasta_projetos(app)))
             pasta = QPushButton('Browse…')
             pasta.clicked.connect(self.escolher)
             fila = QHBoxLayout()
@@ -1065,7 +1524,7 @@ def janela(inicial=None, lancar=None):
             form = QFormLayout()
             form.addRow('URL:', self.url)
             form.addRow('Directory:', self.destino)
-            self.barco = Barco(app, 300, 110)
+            self.barco = Sea(app, 300, 110, True, 96)
             self.barco.hide()
             rodape = QHBoxLayout()
             rodape.addWidget(self.estado, 1)
@@ -1106,26 +1565,71 @@ def janela(inicial=None, lancar=None):
             self.proc.kill()
             self.reject()
 
+    class Caixa(QWidget):
+        """Small shipping container in the profile's color, marked with its language."""
+
+        def __init__(self, app):
+            super().__init__()
+            self.app = app
+            self.cor = QColor(aplicativos()[app].get('accent', AZUL))
+            self.setFixedSize(46, 30)
+
+        def paintEvent(self, _):
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.fillRect(self.rect(), self.cor)
+            for x in (38, 41):  # the door's locking bars
+                p.fillRect(QRectF(x, 0, 1.5, 30), QColor(0, 0, 0, 70))
+            canto = QColor(0, 0, 0, 105)
+            for x, y in ((0, 0), (41, 0), (0, 26), (41, 26)):
+                p.fillRect(QRectF(x, y, 5, 4), canto)
+            p.setPen(QPen(QColor('#14161A'), 2, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+            p.setBrush(Qt.NoBrush)
+            marca_ = QPainterPath()
+            if self.app == 'java':
+                for x in (10, 18, 26):
+                    marca_.moveTo(x, 23)
+                    marca_.cubicTo(x - 3, 19, x + 3, 15, x, 7)
+            elif self.app == 'web':
+                marca_.moveTo(13, 9)
+                marca_.lineTo(7, 15)
+                marca_.lineTo(13, 21)
+                marca_.moveTo(25, 9)
+                marca_.lineTo(31, 15)
+                marca_.lineTo(25, 21)
+                marca_.moveTo(22, 7)
+                marca_.lineTo(16, 23)
+            else:
+                marca_.moveTo(9, 9)
+                marca_.lineTo(15, 15)
+                marca_.lineTo(9, 21)
+                marca_.moveTo(18, 22)
+                marca_.lineTo(29, 22)
+            p.drawPath(marca_)
+
     class LinhaProjeto(QWidget):
-        def __init__(self, caminho, direita=''):
+        """Project row: a small container carries the profile's color and language."""
+
+        def __init__(self, caminho, app, geral):
             super().__init__()
             self.setAttribute(Qt.WA_TransparentForMouseEvents)
             h = QHBoxLayout(self)
-            h.setContentsMargins(12, 5, 12, 5)
+            h.setContentsMargins(4, 5, 12, 5)
             h.setSpacing(12)
-            cor = CORES_ICONE[int(hashlib.md5(caminho.name.encode()).hexdigest(), 16) % len(CORES_ICONE)]
-            letra = QLabel(re.sub(r'[^A-Za-z0-9]', '', caminho.name)[:2].upper() or 'PR')
-            letra.setFixedSize(20, 20)
-            letra.setAlignment(Qt.AlignCenter)
-            letra.setStyleSheet(f'background:{cor};color:#1E1F22;border-radius:4px;font-size:10px;font-weight:600;')
             t = QVBoxLayout()
             t.setSpacing(1)
-            t.addWidget(QLabel(caminho.name))
+            t.addWidget(rotulo(caminho.name, 'forte'))
             t.addWidget(rotulo(curto(caminho), 'mudo'))
-            h.addWidget(letra, 0, Qt.AlignTop)
+            h.addWidget(Caixa(app), 0, Qt.AlignVCenter)
             h.addLayout(t, 1)
-            if direita:
-                h.addWidget(rotulo(direita, 'mudo'))
+            lado = QVBoxLayout()
+            lado.setSpacing(2)
+            lado.addStretch(1)
+            for texto in (tipo_rotulo(caminho), quando(caminho)):
+                if texto:
+                    lado.addWidget(rotulo(texto, 'mudo'), 0, Qt.AlignRight)
+            lado.addStretch(1)
+            h.addLayout(lado)
 
     class ListaProjetos(QListWidget):
         """Projetos recentes; `app` nulo mostra os de todos os apps."""
@@ -1133,6 +1637,8 @@ def janela(inicial=None, lancar=None):
         def __init__(self, app=None):
             super().__init__()
             self.app = app
+            self.texto = ''
+            self.so = None
             self.setSpacing(1)
             self.setVerticalScrollMode(QListWidget.ScrollPerPixel)
             self.itemClicked.connect(self.ativar)
@@ -1144,28 +1650,35 @@ def janela(inicial=None, lancar=None):
             self.clear()
             self.total = 0
             for titulo, projetos in secoes(self.app):
-                cabeca = QListWidgetItem(self)
-                cabeca.setFlags(Qt.NoItemFlags)
-                cabeca.setSizeHint(QSize(0, 30))
-                r = rotulo(titulo, 'secao')
-                r.setContentsMargins(12, 8, 0, 0)
-                self.setItemWidget(cabeca, r)
+                if titulo:
+                    cabeca = QListWidgetItem(self)
+                    cabeca.setFlags(Qt.NoItemFlags)
+                    cabeca.setSizeHint(QSize(0, 30))
+                    r = rotulo(titulo, 'secao')
+                    r.setContentsMargins(4, 8, 0, 0)
+                    self.setItemWidget(cabeca, r)
                 for caminho, app in projetos:
                     item = QListWidgetItem(self)
                     item.setData(Qt.UserRole, (app, str(caminho)))
-                    item.setSizeHint(QSize(0, 48))
-                    self.setItemWidget(item, LinhaProjeto(caminho))
+                    item.setSizeHint(QSize(0, 50))
+                    self.setItemWidget(item, LinhaProjeto(caminho, app, self.app is None))
                     self.total += 1
 
         def ativar(self, item):
             if item.data(Qt.UserRole):
                 abrir(*item.data(Qt.UserRole))
 
-        def filtrar(self, texto):
+        def filtrar(self, texto=None):
+            self.texto = self.texto if texto is None else texto
             for i in range(self.count()):
                 item = self.item(i)
                 dados = item.data(Qt.UserRole)
-                item.setHidden(bool(texto) and (not dados or texto.lower() not in dados[1].lower()))
+                fora = bool(self.texto) and (not dados or self.texto.lower() not in dados[1].lower())
+                item.setHidden(fora or bool(self.so and (not dados or dados[0] != self.so)))
+
+        def so_app(self, app):
+            self.so = app
+            self.filtrar()
 
         def menu(self, pos):
             item = self.itemAt(pos)
@@ -1207,8 +1720,16 @@ def janela(inicial=None, lancar=None):
             for texto, acao in (('New Project', self.novo), ('Open', self.pasta), ('Clone Repository', self.clonar)):
                 b = QPushButton(texto)
                 b.clicked.connect(acao)
+                if texto == 'New Project':
+                    b.setObjectName('azul')
                 fila.addWidget(b)
             return fila
+
+        def dica(self):
+            r = rotulo('Drop a folder here to open it', 'mudo')
+            r.setAlignment(Qt.AlignCenter)
+            r.setStyleSheet('border:1px dashed #4A4F56;padding:8px;')
+            return r
 
         def pagina_lista(self):
             p = QWidget()
@@ -1216,38 +1737,39 @@ def janela(inicial=None, lancar=None):
             v.setContentsMargins(0, 0, 0, 0)
             v.setSpacing(0)
             topo = QHBoxLayout()
-            topo.setContentsMargins(20, 12, 13, 12)
+            topo.setContentsMargins(14, 8, 14, 8)
             busca = busca_linha()
             busca.textChanged.connect(self.lista.filtrar)
             topo.addWidget(busca, 1)
             topo.addLayout(self.botoes())
             v.addLayout(topo)
             v.addWidget(linha('linhaH'))
-            caixa = QHBoxLayout()
-            caixa.setContentsMargins(12, 8, 12, 8)
-            caixa.addWidget(self.lista)
+            caixa = QVBoxLayout()
+            caixa.setContentsMargins(16, 6, 16, 14)
+            caixa.setSpacing(10)
+            caixa.addWidget(self.lista, 1)
+            caixa.addWidget(self.dica())
             v.addLayout(caixa, 1)
             return p
 
         def pagina_vazia(self):
             p = QWidget()
             v = QVBoxLayout(p)
+            v.setContentsMargins(16, 6, 16, 14)
             v.addStretch(1)
-            v.addWidget(icone(self.app, 88), 0, Qt.AlignCenter)
-            v.addSpacing(14)
             info = aplicativos()[self.app]
-            for w in (rotulo(f'Welcome to {nome_app(self.app)}', 'grande'),
-                      rotulo(info['description'], 'mudo'),
+            for w in (rotulo('No projects yet', 'grande'), rotulo(info['description'], 'mudo'),
                       rotulo('Create a project, or open one from disk or version control.', 'mudo')):
                 w.setAlignment(Qt.AlignCenter)
                 v.addWidget(w)
-            v.addSpacing(18)
+            v.addSpacing(14)
             fila = QHBoxLayout()
             fila.addStretch(1)
             fila.addLayout(self.botoes())
             fila.addStretch(1)
             v.addLayout(fila)
             v.addStretch(2)
+            v.addWidget(self.dica())
             return p
 
         def novo(self):
@@ -1256,7 +1778,8 @@ def janela(inicial=None, lancar=None):
                 abrir(self.app, d.projeto)
 
         def pasta(self):
-            pasta = QFileDialog.getExistingDirectory(self, 'Open', str(PROJETOS if PROJETOS.is_dir() else CASA))
+            inicio = pasta_projetos(self.app)
+            pasta = QFileDialog.getExistingDirectory(self, 'Open', str(inicio if inicio.is_dir() else CASA))
             if pasta:
                 abrir(self.app, pasta)
 
@@ -1265,19 +1788,69 @@ def janela(inicial=None, lancar=None):
             if d.exec():
                 abrir(self.app, d.pasta)
 
-    class Personalizar(QScrollArea):
+    class Degrau(QPushButton):
+        """One line of the load mark: the chosen line is thicker, in the app's color."""
+
+        def __init__(self, texto, cor):
+            super().__init__(texto)
+            self.cor = QColor(cor)
+            self.setCheckable(True)
+            self.setFixedSize(130, 19)
+            self.setCursor(Qt.PointingHandCursor)
+
+        def paintEvent(self, _):
+            p = QPainter(self)
+            marcado = self.isChecked()
+            comprimento, grossura = (70, 5) if marcado else (42, 3)
+            p.fillRect(QRectF(0, (self.height() - grossura) / 2, comprimento, grossura), self.cor if marcado else QColor('#5A5F66'))
+            p.setPen(QColor('#FFFFFF' if marcado else '#8F939A'))
+            p.drawText(QRectF(comprimento + 7, 0, 60, self.height()), Qt.AlignVCenter, self.text())
+
+    class MarcaPlimsoll(QWidget):
+        """The ring and bar painted on a ship's hull, beside the memory lines."""
+
+        def __init__(self):
+            super().__init__()
+            self.setFixedSize(56, 56)
+
+        def paintEvent(self, _):
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(QPen(QColor('#EDE6D3'), 2))
+            p.drawEllipse(QRectF(8, 8, 40, 40))
+            p.drawLine(0, 28, 56, 28)
+
+    class Personalizar(QWidget):
         def __init__(self, app):
             super().__init__()
+            self.setObjectName('pagina')
             self.app = app
-            self.setWidgetResizable(True)
             info = aplicativos()[app]
+            externo = QVBoxLayout(self)
+            externo.setContentsMargins(0, 0, 0, 0)
+            externo.setSpacing(0)
+            aviso = QFrame()
+            aviso.setObjectName('faixa')
+            a = QHBoxLayout(aviso)
+            a.setContentsMargins(20, 7, 20, 7)
+            a.addWidget(rotulo(f"Changes apply the next time {info['title']} opens.", 'mudo'))
+            externo.addWidget(aviso)
+            externo.addWidget(linha('linhaH'))
+            rolagem = QScrollArea()
+            rolagem.setWidgetResizable(True)
             miolo = QWidget()
             miolo.setObjectName('pagina')
-            v = QVBoxLayout(miolo)
-            v.setContentsMargins(24, 22, 24, 22)
-            v.setSpacing(9)
-            v.addWidget(rotulo('Appearance', 'secao'))
+            colunas = QHBoxLayout(miolo)
+            colunas.setContentsMargins(20, 14, 20, 14)
+            colunas.setSpacing(26)
+            esq, dir_ = QVBoxLayout(), QVBoxLayout()
+            esq.setSpacing(6)
+            dir_.setSpacing(6)
+            colunas.addLayout(esq, 1)
+            colunas.addLayout(dir_, 1)
+            esq.addWidget(rotulo('Appearance', 'secao'))
             self.tema = Combo()
+            self.tema.setFixedWidth(170)
             self.tema.addItems(temas(app))
             atual = ajuste(app, 'workbench.colorTheme')
             if atual:
@@ -1285,59 +1858,119 @@ def janela(inicial=None, lancar=None):
                     self.tema.addItem(atual)
                 self.tema.setCurrentText(atual)
             self.tema.currentTextChanged.connect(lambda t: gravar_ajuste(app, 'workbench.colorTheme', t))
+            esq.addLayout(self.campo('Theme', self.tema))
             self.fonte = Combo()
+            self.fonte.setFixedWidth(64)
             self.fonte.addItems(['9', '10', '11', '12', '13', '14', '15', '16', '18', '20', '24', '28'])
             self.fonte.setCurrentText(str(ajuste(app, 'editor.fontSize') or 13))
             self.fonte.currentTextChanged.connect(lambda n: gravar_ajuste(app, 'editor.fontSize', int(n)))
-            form = QFormLayout()
-            form.setHorizontalSpacing(14)
-            form.addRow('Theme:', self.tema)
-            form.addRow('Editor font:', self.fonte)
-            v.addLayout(form)
-            self.caixa('Animations', 'animations', v)
+            esq.addLayout(self.campo('Editor font', self.fonte))
+            self.caixa('Animations', 'animations', esq)
             if info.get('base'):
-                self.caixa('Visual extras: tree icons and app watermark (needs a local debugging port)', 'visual', v)
+                c = self.caixa('Tree icons and watermark', 'visual', esq)
+                c.setToolTip('Uses a local debugging port.')
+                if info.get('keymap'):
+                    esq.addSpacing(8)
+                    esq.addWidget(rotulo('Keymap', 'secao'))
+                    nomes = {'intellij': 'IntelliJ', 'vscode': 'VS Code'}
+                    self.teclas = segmento(nomes.values(), nomes[keymap_de(app)], self.mudar_keymap)
+                    esq.addLayout(self.campo('Shortcuts', self.teclas))
+                    esq.addWidget(rotulo('Changes at once, even with the editor open.', 'mudo'))
+                esq.addSpacing(8)
+                esq.addWidget(rotulo('File icons', 'secao'))
+                tema_ = ajuste(app, 'workbench.iconTheme')
+                pacote = next((n for n, t in ICON_THEMES.items() if t == tema_), 'JetBrains')
+                self.icones = segmento(ICON_THEMES, pacote, lambda n: gravar_ajuste(app, 'workbench.iconTheme', ICON_THEMES[n]))
+                esq.addLayout(self.campo('Pack', self.icones))
+                esq.addSpacing(8)
+                esq.addWidget(rotulo('Wallpaper', 'secao'))
+                self.imagem = rotulo('', 'mudo')
+                esq.addLayout(self.campo('Image', self.imagem))
+                fila = QHBoxLayout()
+                fila.setSpacing(8)
+                escolher = QPushButton('Choose')
+                escolher.clicked.connect(self.escolher_fundo)
+                self.tirar = QPushButton('Remove')
+                self.tirar.clicked.connect(self.tirar_fundo)
+                fila.addWidget(escolher)
+                fila.addWidget(self.tirar)
+                fila.addStretch(1)
+                esq.addLayout(fila)
                 self.forca = QSlider(Qt.Horizontal)
+                self.forca.setFixedWidth(150)
                 self.forca.setRange(3, 40)
                 self.forca.setValue(round(lembrar_fundo(app) * 100))
                 self.forca.valueChanged.connect(lambda n: gravar_fundo_forca(app, n / 100))
-                f2 = QFormLayout()
-                f2.setHorizontalSpacing(14)
-                f2.addRow('Wallpaper strength:', self.forca)
-                v.addLayout(f2)
-                v.addWidget(link('Choose wallpaper…', self.escolher_fundo))
-                v.addWidget(link('Remove wallpaper', lambda: (ferramentas(app) / 'fundo.jpg').unlink(missing_ok=True)))
-            v.addSpacing(8)
-            v.addWidget(rotulo('Privacy', 'secao'))
-            self.caixa('Enable AI features', 'ai', v)
+                esq.addLayout(self.campo('Strength', self.forca))
+                self.ver_fundo()
             if info.get('memory'):
-                v.addSpacing(8)
-                v.addWidget(rotulo('Performance', 'secao'))
-                self.memoria = Combo()
-                self.memoria.addItems(MEMORIAS)
-                self.memoria.setCurrentText(opcao(app, 'memory'))
-                self.memoria.currentTextChanged.connect(lambda t: gravar_opcao(app, 'memory', t))
-                f3 = QFormLayout()
-                f3.setHorizontalSpacing(14)
-                f3.addRow('Java memory limit:', self.memoria)
-                v.addLayout(f3)
-            v.addSpacing(8)
-            v.addWidget(rotulo('Import', 'secao'))
-            v.addWidget(rotulo('Copies settings, shortcuts and snippets. The original stays untouched.', 'mudo'))
+                dir_.addWidget(rotulo('Memory limit', 'secao'))
+                fila = QHBoxLayout()
+                fila.setSpacing(12)
+                fila.addWidget(MarcaPlimsoll())
+                degraus = QVBoxLayout()
+                degraus.setSpacing(1)
+                grupo = QButtonGroup(self)
+                for m in reversed(MEMORIAS):
+                    b = Degrau(m, info.get('accent', AZUL))
+                    b.setChecked(m == opcao(app, 'memory'))
+                    b.clicked.connect(lambda _=False, x=m: gravar_opcao(app, 'memory', x))
+                    grupo.addButton(b)
+                    degraus.addWidget(b)
+                fila.addLayout(degraus)
+                fila.addStretch(1)
+                dir_.addLayout(fila)
+                dir_.addWidget(rotulo('The Java server stops at this line.', 'mudo'))
+                dir_.addSpacing(8)
+            dir_.addWidget(rotulo('AI', 'secao'))
+            self.caixa('Enable AI features', 'ai', dir_)
+            dir_.addSpacing(8)
+            dir_.addWidget(rotulo('Import', 'secao'))
+            d = rotulo('Copies settings, shortcuts and snippets. The original stays untouched.', 'mudo')
+            d.setWordWrap(True)
+            dir_.addWidget(d)
             fila = QHBoxLayout()
+            fila.setSpacing(8)
+            achou = False
             for nome_, origem in origens_importacao():
                 b = QPushButton(f'From {nome_}')
                 b.setEnabled(origem.is_dir())
+                achou = achou or origem.is_dir()
                 b.clicked.connect(lambda _=False, o=origem, n=nome_: self.importar(o, n))
                 fila.addWidget(b)
             fila.addStretch(1)
-            v.addLayout(fila)
-            v.addSpacing(8)
-            v.addWidget(link('All settings…', lambda: abrir(app, comando_='workbench.action.openSettings')))
-            v.addWidget(link('Keyboard shortcuts…', lambda: abrir(app, comando_='workbench.action.openGlobalKeybindings')))
-            v.addStretch(1)
-            v.addWidget(rotulo('Changes apply the next time the app opens.', 'mudo'))
-            self.setWidget(miolo)
+            dir_.addLayout(fila)
+            if not achou:
+                dir_.addWidget(rotulo('No installation found.', 'mudo'))
+            dir_.addSpacing(8)
+            dir_.addWidget(rotulo('More', 'secao'))
+            dir_.addWidget(link('All settings…', lambda: abrir(app, comando_='workbench.action.openSettings')))
+            dir_.addWidget(link('Keyboard shortcuts…', lambda: abrir(app, comando_='workbench.action.openGlobalKeybindings')))
+            esq.addStretch(1)
+            dir_.addStretch(1)
+            rolagem.setWidget(miolo)
+            externo.addWidget(rolagem, 1)
+
+        def campo(self, texto, controle):
+            fila = QHBoxLayout()
+            fila.addWidget(QLabel(texto))
+            fila.addStretch(1)
+            fila.addWidget(controle)
+            return fila
+
+        def mudar_keymap(self, texto):
+            if not aplicar_keymap(self.app, 'intellij' if texto == 'IntelliJ' else 'vscode'):
+                QMessageBox.warning(self, 'Keymap', 'Could not read your keybindings.json. Fix it and try again.')
+                self.teclas.botoes['IntelliJ' if keymap_de(self.app) == 'intellij' else 'VS Code'].setChecked(True)
+
+        def ver_fundo(self):
+            tem = (ferramentas(self.app) / 'fundo.jpg').exists()
+            self.imagem.setText('Set' if tem else 'None')
+            self.tirar.setEnabled(tem)
+
+        def tirar_fundo(self):
+            (ferramentas(self.app) / 'fundo.jpg').unlink(missing_ok=True)
+            self.ver_fundo()
 
         def caixa(self, texto, chave, layout):
             c = QCheckBox(texto)
@@ -1350,6 +1983,7 @@ def janela(inicial=None, lancar=None):
             arquivo, _ = QFileDialog.getOpenFileName(self, 'Background image', str(CASA), 'Images (*.jpg *.jpeg *.png *.webp *.bmp)')
             if arquivo and not gravar_fundo(arquivo, ferramentas(self.app)):
                 QMessageBox.warning(self, 'Background image', 'Could not read this image.')
+            self.ver_fundo()
 
         def importar(self, origem, nome_):
             importar(self.app, origem)
@@ -1378,73 +2012,106 @@ def janela(inicial=None, lancar=None):
             self.lista = QListWidget()
             self.lista.setSelectionMode(QListWidget.NoSelection)
             obrigatorias = aplicativos()[app].get('required', [])
-            for ident, nome, versao_, autor in plugins(app):
-                item = QListWidgetItem(self.lista)
-                item.setData(Qt.UserRole, nome.lower())
-                item.setSizeHint(QSize(0, 46))
-                w = QWidget()
-                h = QHBoxLayout(w)
-                h.setContentsMargins(20, 3, 16, 3)
-                c = QVBoxLayout()
-                c.setSpacing(1)
-                c.addWidget(QLabel(nome))
-                c.addWidget(rotulo(f'{autor}  ·  {versao_}', 'mudo'))
-                h.addLayout(c, 1)
-                ligado = QCheckBox('Enabled')
-                ligado.setChecked(ident not in desligadas(app))
-                if ident in obrigatorias:
-                    ligado.setEnabled(False)
-                    ligado.setToolTip(f'{nome_app(app)} needs this plugin.')
-                ligado.toggled.connect(lambda n, i=ident: alternar_extensao(app, i, n))
-                h.addWidget(ligado)
-                self.lista.setItemWidget(item, w)
+            todos = plugins(app)
+            opcionais = [x for x in todos if x[0] not in obrigatorias]
+            fixos = [x for x in todos if x[0] in obrigatorias]
+            for titulo, grupo_ in ((f'Optional · {len(opcionais)}', opcionais), (f'Required · {len(fixos)}', fixos)):
+                if not grupo_:
+                    continue
+                cabeca = QListWidgetItem(self.lista)
+                cabeca.setFlags(Qt.NoItemFlags)
+                cabeca.setSizeHint(QSize(0, 30))
+                r = rotulo(titulo, 'secao')
+                r.setContentsMargins(20, 8, 0, 0)
+                self.lista.setItemWidget(cabeca, r)
+                for ident, nome, versao_, autor in grupo_:
+                    item = QListWidgetItem(self.lista)
+                    item.setData(Qt.UserRole, nome.lower())
+                    item.setSizeHint(QSize(0, 32))
+                    w = QWidget()
+                    h = QHBoxLayout(w)
+                    h.setContentsMargins(20, 0, 16, 0)
+                    h.setSpacing(10)
+                    h.addWidget(rotulo(nome, 'forte'))
+                    h.addWidget(rotulo(f'{autor} · {versao_}', 'mudo'), 1)
+                    if ident in obrigatorias:
+                        trava = QLabel()
+                        trava.setPixmap(QIcon(str(ASSETS / 'lock.svg')).pixmap(11, 11))
+                        trava.setToolTip(f'{nome_app(app)} needs this plugin.')
+                        h.addWidget(trava)
+                        h.addWidget(rotulo('Required', 'mudo'))
+                    else:
+                        ligado = QCheckBox()
+                        ligado.setToolTip(f'Enable {nome}')
+                        ligado.setChecked(ident not in desligadas(app))
+                        ligado.toggled.connect(lambda n, i=ident: alternar_extensao(app, i, n))
+                        h.addWidget(ligado)
+                    self.lista.setItemWidget(item, w)
             v.addWidget(self.lista, 1)
             busca.textChanged.connect(self.filtrar)
 
         def filtrar(self, texto):
             for i in range(self.lista.count()):
                 item = self.lista.item(i)
-                item.setHidden(texto.lower() not in item.data(Qt.UserRole))
+                dado = item.data(Qt.UserRole)
+                item.setHidden(bool(texto) and (dado is None or texto.lower() not in dado))
 
     class Aprender(QWidget):
-        ATALHOS = (
-            ('Search Everywhere', 'Shift Shift'), ('Run', 'Shift+F10'), ('Debug', 'Shift+F9'), ('Rerun', 'Ctrl+5'),
-            ('Stop', 'Ctrl+2'), ('Build', 'Ctrl+9'), ('Toggle Breakpoint', 'Ctrl+8'), ('Step Over', 'F8'),
-            ('Step Into', 'F7'), ('Resume', 'F9'), ('Context Actions', 'Alt+Enter'), ('Generate', 'Alt+Insert'),
-            ('Rename', 'Shift+F6'), ('File Structure', 'Ctrl+0'), ('Recent Files', 'Ctrl+E'), ('Terminal', 'Alt+F12'),
-        )
-
         def __init__(self, app):
             super().__init__()
             self.setObjectName('pagina')
+            self.app = app
             info = aplicativos()[app]
-            v = QVBoxLayout(self)
-            v.setContentsMargins(24, 22, 24, 22)
-            v.setSpacing(8)
-            v.addWidget(rotulo(f"Learn {info['title']}", 'secao'))
+            h = QHBoxLayout(self)
+            h.setContentsMargins(20, 14, 20, 14)
+            h.setSpacing(26)
+            esq = QVBoxLayout()
+            esq.setSpacing(4)
+            esq.addWidget(rotulo(f"Learn {info['title']}", 'secao'))
             for texto, url in info.get('learn', []):
-                v.addWidget(link(texto, lambda _=False, u=url: QDesktopServices.openUrl(QUrl(u))))
-            if info.get('base'):
-                v.addSpacing(10)
-                v.addWidget(rotulo('Help', 'secao'))
-                v.addWidget(link('Keymap Reference', self.atalhos))
-            v.addStretch(1)
+                esq.addWidget(link(texto, lambda _=False, u=url: QDesktopServices.openUrl(QUrl(u))))
+                esq.addWidget(rotulo(url.split('/')[2], 'mudo'))
+            esq.addStretch(1)
+            h.addLayout(esq, 2)
+            self.direita = QVBoxLayout()
+            self.direita.setSpacing(0)
+            h.addLayout(self.direita, 3)
+            self.mostrar_teclas()
 
-        def atalhos(self):
-            d = QDialog(self)
-            d.setWindowTitle('Keymap Reference')
-            d.resize(420, 560)
-            t = QTableWidget(len(self.ATALHOS), 2)
-            t.setHorizontalHeaderLabels(['Action', 'Shortcut'])
-            t.verticalHeader().hide()
-            t.horizontalHeader().setStretchLastSection(True)
-            t.setColumnWidth(0, 220)
-            t.setEditTriggers(QTableWidget.NoEditTriggers)
-            for i, (acao, tecla) in enumerate(self.ATALHOS):
-                t.setItem(i, 0, QTableWidgetItem(acao))
-                t.setItem(i, 1, QTableWidgetItem(tecla))
-            QVBoxLayout(d).addWidget(t)
-            d.exec()
+        def showEvent(self, _):
+            self.mostrar_teclas()
+
+        def mostrar_teclas(self):
+            """Rebuilt on show, because the keymap can change in Customize."""
+            while self.direita.count():
+                filho = self.direita.takeAt(0)
+                if filho.widget():
+                    filho.widget().deleteLater()
+                elif filho.layout():
+                    pass
+            if not aplicativos()[self.app].get('base'):
+                self.direita.addWidget(rotulo('Keymap', 'secao'))
+                r = rotulo('Standard keeps the editor defaults, so there is no keymap to learn here.', 'mudo')
+                r.setWordWrap(True)
+                self.direita.addWidget(r)
+                self.direita.addStretch(1)
+                return
+            nome = 'IntelliJ' if keymap_de(self.app) == 'intellij' else 'VS Code'
+            self.direita.addWidget(rotulo(f'Keymap: {nome}', 'secao'))
+            self.direita.addSpacing(6)
+            for acao, tecla in teclas_app(self.app):
+                w = QWidget()
+                fila = QHBoxLayout(w)
+                fila.setContentsMargins(0, 4, 0, 4)
+                fila.addWidget(QLabel(acao))
+                fila.addStretch(1)
+                fila.addWidget(etiqueta(tecla))
+                self.direita.addWidget(w)
+                self.direita.addWidget(linha('linhaH'))
+            if aplicativos()[self.app].get('keymap'):
+                self.direita.addSpacing(8)
+                self.direita.addWidget(link('Change keymap', lambda: self.window().ir('Customize')))
+            self.direita.addStretch(1)
 
     class Boasvindas(Raiz):
         """Tela de início de cada app, com o que é específico dele."""
@@ -1454,7 +2121,7 @@ def janela(inicial=None, lancar=None):
             self.setObjectName('raiz')
             self.painel = painel
             self.app = app
-            self.setWindowTitle(f'Welcome to {nome_app(app)}')
+            self.setWindowTitle(f"{marca()['hub']} · {aplicativos()[app]['title']} · Projects")
             self.setWindowIcon(QIcon(str(ASSETS / f'{app}.svg')))
             com_vidro(self)
             self.setStyleSheet(estilo(aplicativos()[app].get('accent', AZUL)))
@@ -1464,41 +2131,66 @@ def janela(inicial=None, lancar=None):
             self.abas = {}
             grupo = QButtonGroup(self)
             esquerda = QWidget()
-            esquerda.setFixedWidth(225)
+            esquerda.setFixedWidth(200)
             e = QVBoxLayout(esquerda)
-            e.setContentsMargins(12, 18, 12, 14)
-            e.setSpacing(4)
-            topo = QHBoxLayout()
-            topo.setContentsMargins(4, 0, 0, 12)
-            topo.setSpacing(10)
-            nome = QVBoxLayout()
-            nome.setSpacing(0)
-            nome.addWidget(QLabel(nome_app(app)))
-            nome.addWidget(rotulo(versao_editor(), 'mudo'))
-            topo.addWidget(icone(app, 30))
-            topo.addLayout(nome, 1)
-            e.addLayout(topo)
+            e.setContentsMargins(0, 0, 0, 0)
+            e.setSpacing(0)
+            tipo, titulo_estado, _ = estado_app(app)
+            topo = QWidget()
+            topo.setFixedSize(200, 128)
+            self.mar = Sea(app, 200, 128, tipo == 'run', 92, 4)
+            self.mar.setParent(topo)
+            nome = rotulo(aplicativos()[app]['title'], 'grande')
+            nome.setParent(topo)
+            nome.setGeometry(106, 30, 92, 28)
+            nome.setStyleSheet('font-size:16px;')
+            e.addWidget(topo)
+            e.addWidget(linha('linhaH'))
+            e.addSpacing(10)
             for titulo, pagina in (('Projects', Projetos(app)), ('Customize', Personalizar(app)),
                                    ('Plugins', Plugins(app)), ('Learn', Aprender(app))):
                 b = QPushButton(titulo)
                 b.setObjectName('aba')
                 b.setCheckable(True)
-                b.clicked.connect(lambda _=False, w=pagina: self.paginas.ir(w))
+                b.clicked.connect(lambda _=False, w=pagina, t=titulo: (self.paginas.ir(w), self.setWindowTitle(f"{marca()['hub']} · {aplicativos()[app]['title']} · {t}")))
                 grupo.addButton(b)
                 e.addWidget(b)
                 self.abas[titulo] = b
                 self.paginas.addWidget(pagina)
             self.abas['Projects'].setChecked(True)
             e.addStretch(1)
-            voltar = QPushButton('Back to Hub')
+            estado = QHBoxLayout()
+            estado.setContentsMargins(14, 0, 14, 4)
+            estado.setSpacing(7)
+            self.lampada = lampada(tipo)
+            self.estado = rotulo(titulo_estado, 'forte')
+            estado.addWidget(self.lampada)
+            estado.addWidget(self.estado, 1)
+            e.addLayout(estado)
+            r = rotulo(f"{marca()['name']} {versao()}\nEditor {versao_editor()}", 'mudo')
+            r.setContentsMargins(14, 0, 14, 8)
+            r.setStyleSheet('font-size:11px;')
+            e.addWidget(r)
+            voltar = QPushButton('‹ Cargo')
+            voltar.setObjectName('volta')
             voltar.clicked.connect(self.voltar)
-            e.addWidget(voltar, 0, Qt.AlignLeft)
+            e.addWidget(voltar)
             h = QHBoxLayout(self)
             h.setContentsMargins(0, 0, 0, 0)
             h.setSpacing(0)
             h.addWidget(esquerda)
             h.addWidget(linha('linhaV'))
             h.addWidget(self.paginas, 1)
+            self.vigia = QTimer(self)
+            self.vigia.timeout.connect(self.atualizar)
+            self.vigia.start(2000)
+
+        def atualizar(self):
+            """Keeps the rail true: coming back from the editor, it may still be closing."""
+            tipo, titulo, _ = estado_app(self.app)
+            self.lampada.setStyleSheet(f'background:{LAMPADAS[tipo]};border-radius:4px;')
+            self.estado.setText(titulo)
+            self.mar.moving = tipo == 'run'
 
         def ir(self, titulo):
             self.abas[titulo].click()
@@ -1522,28 +2214,44 @@ def janela(inicial=None, lancar=None):
                 abrir(self.app, *alvos)
 
     class Ferramenta(QFrame):
-        """Linha de um app no painel: clique abre, os três pontos mostram as ações."""
+        """One app in the Cargo: its boat on the water, its state and main action."""
 
         def __init__(self, app, painel):
             super().__init__()
             self.setObjectName('ferramenta')
             self.setCursor(Qt.PointingHandCursor)
+            self.setFixedSize(400, 146)
             self.app = app
             self.painel = painel
             info = aplicativos()[app]
-            h = QHBoxLayout(self)
-            h.setContentsMargins(10, 8, 6, 8)
-            h.setSpacing(12)
-            t = QVBoxLayout()
-            t.setSpacing(1)
+            self.mar = Sea(app, 400, 146, False, 132, 4)
+            self.mar.setParent(self)
+            coluna = QWidget(self)
+            coluna.setGeometry(170, 18, 222, 100)
+            t = QVBoxLayout(coluna)
+            t.setContentsMargins(0, 0, 0, 0)
+            t.setSpacing(5)
             t.addWidget(rotulo(info['title'], 'titulo'))
-            t.addWidget(rotulo(versao_editor(), 'mudo'))
-            h.addWidget(icone(app, 38))
-            h.addLayout(t, 1)
+            self.linha_estado = QHBoxLayout()
+            self.linha_estado.setSpacing(6)
+            self.lampada = QLabel()
+            self.estado = rotulo('', 'forte')
+            self.detalhe = rotulo('', 'mudo')
+            self.linha_estado.addWidget(self.lampada)
+            self.linha_estado.addWidget(self.estado)
+            self.linha_estado.addWidget(self.detalhe, 1)
+            t.addLayout(self.linha_estado)
+            acoes = QHBoxLayout()
+            self.acao = QPushButton()
+            self.acao.setCursor(Qt.ArrowCursor)
+            self.acao.clicked.connect(self.agir)
+            acoes.addWidget(self.acao)
+            acoes.addStretch(1)
             self.mais = QToolButton()
             self.mais.setText('⋯')
             self.mais.setCursor(Qt.ArrowCursor)
             self.mais.setFixedSize(26, 26)
+            self.mais.setStyleSheet('padding:0;')
             self.mais.setPopupMode(QToolButton.InstantPopup)
             m = QMenu(self.mais)
             m.addAction('Open', lambda: painel.boasvindas(app))
@@ -1554,18 +2262,244 @@ def janela(inicial=None, lancar=None):
             m.addAction('Create Desktop Shortcut', lambda: painel.atalho(app))
             m.addAction('Show Data Folder', lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(DADOS / app))))
             self.mais.setMenu(m)
-            h.addWidget(self.mais)
-            self.mais.setVisible(False)
+            acoes.addWidget(self.mais)
+            t.addLayout(acoes)
+            t.addStretch(1)
+            self.atualizar()
 
-        def enterEvent(self, _):
-            self.mais.setVisible(True)
+        def atualizar(self):
+            """Reads the app's state and project again; called while the Hub is open."""
+            self.tipo, titulo, detalhe = estado_app(self.app)
+            self.projeto = next(iter(recentes(self.app)), (None, None))[0]
+            if not detalhe and self.projeto:
+                detalhe = self.projeto.name
+            self.lampada.setFixedSize(9, 9)
+            self.lampada.setStyleSheet(f'background:{LAMPADAS[self.tipo]};border-radius:4px;')
+            self.estado.setText(titulo)
+            medida = self.detalhe.fontMetrics()
+            self.detalhe.setText(medida.elidedText(detalhe, Qt.ElideMiddle, 90))
+            rodando_ = self.tipo == 'run'
+            if self.mar.moving != rodando_:
+                self.mar.moving = rodando_
+                if self.mar.relogio.isActive():
+                    self.mar.relogio.start(33 if rodando_ else 66)
+            if rodando_:
+                texto = 'Show'
+            elif self.projeto:
+                texto = f'Open {self.projeto.name}'
+            else:
+                texto = 'Open'
+            self.acao.setText(self.acao.fontMetrics().elidedText(texto, Qt.ElideMiddle, 150))
+            self.acao.setToolTip(str(self.projeto) if self.projeto else '')
+            self.acao.setEnabled(self.tipo != 'att')
 
-        def leaveEvent(self, _):
-            self.mais.setVisible(self.mais.menu().isVisible())
+        def agir(self):
+            if self.tipo == 'run':
+                mostrar(self.app, self.projeto)
+            elif self.projeto:
+                abrir(self.app, str(self.projeto))
+            else:
+                self.painel.boasvindas(self.app)
 
         def mouseReleaseEvent(self, e):
             if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
                 self.painel.boasvindas(self.app)
+
+    class Preparo(Raiz):
+        """First-use window. Everything here can be changed later, and it can run again."""
+
+        def __init__(self, painel):
+            super().__init__()
+            self.setObjectName('raiz')
+            self.painel = painel
+            self.setWindowTitle(f"Set up {marca()['name']}")
+            com_vidro(self)
+            self.resize(820, 650)
+            self.linhas = {}
+            v = QVBoxLayout(self)
+            v.setContentsMargins(28, 18, 28, 18)
+            v.setSpacing(6)
+            topo = QHBoxLayout()
+            topo.setSpacing(10)
+            topo.addWidget(icone('hub', 28))
+            topo.addWidget(rotulo(marca()['name'], 'forte'))
+            topo.addStretch(1)
+            topo.addWidget(rotulo(versao(), 'mudo'))
+            v.addLayout(topo)
+            v.addWidget(linha('linhaH'))
+            v.addSpacing(8)
+            v.addWidget(rotulo(f"Set up {marca()['name']}", 'grande'))
+            v.addWidget(rotulo('Everything here can be changed later in the Hub.', 'mudo'))
+            v.addSpacing(10)
+            v.addWidget(rotulo('Apps', 'secao'))
+            grade = QGridLayout()
+            grade.setHorizontalSpacing(10)
+            grade.setVerticalSpacing(7)
+            for coluna, texto in ((1, 'App'), (2, 'Shortcuts'), (4, 'Keymap'), (5, 'Project folder')):
+                grade.addWidget(rotulo(texto, 'mudo'), 0, coluna)
+            for i, (app, info) in enumerate(aplicativos().items(), 1):
+                grade.addWidget(icone(app, 28), i, 0)
+                grade.addWidget(rotulo(info['title'], 'forte'), i, 1)
+                mesa, menu = QCheckBox('Desktop'), QCheckBox('Menu')
+                mesa.setChecked(True)
+                menu.setChecked(True)
+                grade.addWidget(mesa, i, 2)
+                grade.addWidget(menu, i, 3)
+                teclas = None
+                if info.get('keymap'):
+                    teclas = segmento(('IntelliJ', 'VS Code'), 'IntelliJ' if keymap_de(app) == 'intellij' else 'VS Code', lambda _: None)
+                    grade.addWidget(teclas, i, 4)
+                pasta = QLineEdit(curto(pasta_projetos(app)))
+                pasta.setToolTip(f"{info['title']} project folder")
+                grade.addWidget(pasta, i, 5)
+                procurar = QPushButton('Browse')
+                procurar.clicked.connect(lambda _=False, c=pasta: self.procurar(c))
+                grade.addWidget(procurar, i, 6)
+                self.linhas[app] = (mesa, menu, teclas, pasta)
+            grade.setColumnStretch(5, 1)
+            v.addLayout(grade)
+            v.addSpacing(10)
+            v.addWidget(rotulo('Hub shortcut', 'secao'))
+            fila = QHBoxLayout()
+            fila.setSpacing(16)
+            self.hub_mesa, self.hub_menu = QCheckBox('Desktop'), QCheckBox('App menu')
+            for c in (self.hub_mesa, self.hub_menu):
+                c.setChecked(True)
+                fila.addWidget(c)
+            fila.addStretch(1)
+            v.addLayout(fila)
+            v.addSpacing(10)
+            v.addWidget(rotulo('Theme for all apps', 'secao'))
+            self.tema = 'Dark'
+            fila = QHBoxLayout()
+            fila.addWidget(segmento(THEMES, self.tema, self.escolher_tema))
+            fila.addStretch(1)
+            v.addLayout(fila)
+            v.addStretch(1)
+            fim = QHBoxLayout()
+            fim.addStretch(1)
+            pular = QPushButton('Skip')
+            pular.clicked.connect(self.encerrar)
+            terminar = QPushButton('Finish')
+            terminar.setObjectName('azul')
+            terminar.clicked.connect(self.concluir)
+            fim.addWidget(pular)
+            fim.addWidget(terminar)
+            v.addLayout(fim)
+
+        def escolher_tema(self, nome):
+            self.tema = nome
+
+        def procurar(self, campo):
+            d = QFileDialog.getExistingDirectory(self, 'Project folder', str(CASA))
+            if d:
+                campo.setText(curto(d))
+
+        def concluir(self):
+            try:
+                for app, (mesa, menu, teclas, pasta) in self.linhas.items():
+                    if mesa.isChecked() or menu.isChecked():
+                        criar_atalho(app, mesa.isChecked(), menu.isChecked())
+                    alvo = Path(pasta.text().strip()).expanduser()
+                    if str(alvo) != str(PROJETOS):
+                        gravar_opcao(app, 'folder', str(alvo))
+                    alvo.mkdir(parents=True, exist_ok=True)
+                    if teclas:
+                        aplicar_keymap(app, 'intellij' if teclas.botoes['IntelliJ'].isChecked() else 'vscode')
+                    gravar_ajuste(app, 'workbench.colorTheme', THEMES[self.tema][0 if aplicativos()[app].get('base') else 1])
+                if self.hub_mesa.isChecked() or self.hub_menu.isChecked():
+                    criar_atalho(None, self.hub_mesa.isChecked(), self.hub_menu.isChecked())
+            except OSError as e:
+                QMessageBox.warning(self, 'Setup', f'Could not finish the setup: {e}')
+                return
+            self.encerrar()
+
+        def encerrar(self):
+            gravar_geral('setup', True)
+            self.close()
+            surgir(self.painel)
+
+    class Novidade(QDialog):
+        """Update notice. Nothing downloads until the person clicks Download."""
+
+        def __init__(self, painel, nova):
+            super().__init__(painel)
+            self.painel = painel
+            self.nova = nova
+            self.feito = None
+            self.setWindowTitle(f"{marca()['name']} {nova['version']}")
+            self.resize(460, 340)
+            v = QVBoxLayout(self)
+            v.setContentsMargins(18, 16, 18, 16)
+            v.setSpacing(8)
+            topo = QHBoxLayout()
+            topo.setSpacing(9)
+            bandeira = QLabel()
+            bandeira.setPixmap(QIcon(str(ASSETS / 'flag.svg')).pixmap(18, 14))
+            topo.addWidget(bandeira)
+            topo.addWidget(rotulo(self.windowTitle(), 'grande'))
+            topo.addStretch(1)
+            topo.addWidget(rotulo(f'You have {versao()}', 'mudo'))
+            v.addLayout(topo)
+            v.addWidget(linha('linhaH'))
+            notas = '\n'.join(nova.get('notes', '').strip().splitlines()[:8]) or 'See the release page for what changed.'
+            r = rotulo(notas)
+            r.setTextFormat(Qt.PlainText)
+            r.setWordWrap(True)
+            v.addWidget(r)
+            v.addWidget(linha('linhaH'))
+            for chave, valor in (('Package', pacote_atual()), ('Source', 'GitHub release, checked by SHA-256'),
+                                 ('Saved to', curto(CASA / 'Downloads'))):
+                fila = QHBoxLayout()
+                fila.addWidget(rotulo(chave, 'mudo'))
+                fila.addStretch(1)
+                fila.addWidget(QLabel(valor))
+                v.addLayout(fila)
+            v.addStretch(1)
+            self.estado = rotulo('', 'mudo')
+            self.estado.setWordWrap(True)
+            v.addWidget(self.estado)
+            fim = QHBoxLayout()
+            fim.addWidget(link('Skip this version', self.pular))
+            fim.addStretch(1)
+            depois = QPushButton('Later')
+            depois.clicked.connect(self.reject)
+            self.baixar = QPushButton('Download')
+            self.baixar.setObjectName('azul')
+            self.baixar.clicked.connect(self.agir)
+            pode = bool(nova.get('package') and nova.get('sums'))
+            self.baixar.setEnabled(pode)
+            if not pode:
+                self.estado.setText('This release has no package for this system.')
+            fim.addWidget(depois)
+            fim.addWidget(self.baixar)
+            v.addLayout(fim)
+
+        def pular(self):
+            gravar_geral('skip_version', self.nova['version'])
+            self.painel.ver_novidade()
+            self.reject()
+
+        def agir(self):
+            if self.feito:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.feito.parent)))
+                return
+            self.baixar.setEnabled(False)
+            self.estado.setText('Downloading…')
+            alvo = CASA / 'Downloads' / pacote_atual()
+            em_fundo(lambda: baixar_verificado(self.nova['package'], self.nova['sums'], alvo, self.andou), self.terminou)
+
+        def andou(self, parte):
+            self.parte = parte
+
+        def terminou(self, arquivo, erro):
+            self.baixar.setEnabled(True)
+            if erro:
+                self.estado.setText(f'Download failed: {erro[:90]}')
+                return
+            self.feito = arquivo
+            self.estado.setText(f'Saved and verified: {curto(arquivo)}')
+            self.baixar.setText('Show in File Manager')
 
     class Painel(Raiz):
         """Janela principal: lista os apps e guarda só o que vale para todos."""
@@ -1575,10 +2509,13 @@ def janela(inicial=None, lancar=None):
             self.setObjectName('raiz')
             com_vidro(self)
             b = marca()
-            self.setWindowTitle(b['hub'])
-            self.setFixedWidth(400)
-            self.resize(400, 620)
+            self.setWindowTitle(f"{b['hub']} · Cargo")
+            # A fixed size keeps window managers, KDE included, from maximizing the panel.
+            self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint
+                                | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+            self.setFixedSize(400, 620)
             self.tela = None
+            self.linhas = []
             self.miolo = Troca()
             self.ferramentas = self.pagina_ferramentas()
             self.lista = ListaProjetos()
@@ -1590,12 +2527,12 @@ def janela(inicial=None, lancar=None):
             v.setContentsMargins(0, 0, 0, 0)
             v.setSpacing(0)
             topo = QHBoxLayout()
-            topo.setContentsMargins(14, 10, 10, 0)
-            topo.setSpacing(16)
-            topo.addWidget(icone('hub', 24), 0, Qt.AlignVCenter)
+            topo.setContentsMargins(12, 0, 12, 0)
+            topo.setSpacing(14)
+            topo.addWidget(icone('hub', 22), 0, Qt.AlignVCenter)
             self.guias = {}
             grupo = QButtonGroup(self)
-            for titulo, pagina in (('Tools', self.ferramentas), ('Projects', self.projetos)):
+            for titulo, pagina in (('Cargo', self.ferramentas), ('Projects', self.projetos)):
                 g = QPushButton(titulo)
                 g.setObjectName('guia')
                 g.setCheckable(True)
@@ -1603,29 +2540,106 @@ def janela(inicial=None, lancar=None):
                 grupo.addButton(g)
                 topo.addWidget(g)
                 self.guias[titulo] = g
-            self.guias['Tools'].setChecked(True)
+            self.guias['Cargo'].setChecked(True)
             topo.addStretch(1)
             ajuste_ = QToolButton()
             ajuste_.setIcon(QIcon(str(ASSETS / 'engrenagem.svg')))
-            ajuste_.setIconSize(QSize(18, 18))
+            ajuste_.setIconSize(QSize(20, 20))
             ajuste_.setToolTip('Settings')
+            ajuste_.setObjectName('engrenagem')
+            ajuste_.setCheckable(True)
             ajuste_.clicked.connect(lambda: self.miolo.ir(self.gerais))
+            grupo.addButton(ajuste_)
+            self.guias['Settings'] = ajuste_
             topo.addWidget(ajuste_)
-            v.addLayout(topo)
+            caixa = QWidget()
+            caixa.setFixedHeight(44)
+            caixa.setLayout(topo)
+            v.addWidget(caixa)
             v.addWidget(linha('linhaH'))
             v.addWidget(self.miolo, 1)
+            self.faixa = QFrame()
+            self.faixa.setObjectName('faixa')
+            self.faixa.setFixedHeight(36)
+            f = QHBoxLayout(self.faixa)
+            f.setContentsMargins(12, 0, 12, 0)
+            f.setSpacing(9)
+            bandeira = QLabel()
+            bandeira.setPixmap(QIcon(str(ASSETS / 'flag.svg')).pixmap(18, 14))
+            f.addWidget(bandeira)
+            self.faixa_texto = rotulo('', 'forte')
+            f.addWidget(self.faixa_texto, 1)
+            f.addWidget(link('View', self.ver_detalhes))
+            v.addWidget(linha('linhaH'))
+            v.addWidget(self.faixa)
+            rodape = QHBoxLayout()
+            rodape.setContentsMargins(12, 0, 12, 0)
+            rodape.addWidget(rotulo(f"{marca()['name']} {versao()}", 'forte'))
+            rodape.addStretch(1)
+            rodape.addWidget(rotulo(f'Editor {versao_editor()}', 'mudo'))
+            pe = QWidget()
+            pe.setFixedHeight(26)
+            pe.setLayout(rodape)
+            v.addWidget(pe)
+            self.miolo.currentChanged.connect(self.marcar)
+            self.vigia = QTimer(self)
+            self.vigia.timeout.connect(self.atualizar)
+            self.ver_novidade()
+            if opcoes().get('check_updates', True) and time.time() - opcoes().get('checked', 0) > 21600:
+                em_fundo(checar_novidade, self.recebeu)
+
+        def ver_novidade(self):
+            nova = novidade()
+            self.faixa.setVisible(bool(nova))
+            if nova:
+                self.faixa_texto.setText(f"{marca()['name']} {nova['version']} is available")
+
+        def recebeu(self, nova, erro):
+            if not erro:
+                gravar_geral('checked', time.time())
+                gravar_geral('update', nova)
+                self.ver_novidade()
+            if hasattr(self, 'checagem'):
+                if erro:
+                    self.checagem.setText('Could not reach GitHub.')
+                else:
+                    self.checagem.setText(self.faixa_texto.text() if novidade() else 'Up to date.')
+
+        def checar_agora(self):
+            self.checagem.setText('Checking…')
+            em_fundo(checar_novidade, self.recebeu)
+
+        def ver_detalhes(self):
+            nova = novidade()
+            if nova:
+                Novidade(self, nova).exec()
+
+        def marcar(self, _):
+            pagina = self.miolo.currentWidget()
+            nome = {self.ferramentas: 'Cargo', self.projetos: 'Projects', self.gerais: 'Settings'}[pagina]
+            self.guias[nome].setChecked(True)
+            self.setWindowTitle(f"{marca()['hub']} · {nome}")
+
+        def atualizar(self):
+            for f in self.linhas:
+                f.atualizar()
+
+        def showEvent(self, _):
+            self.atualizar()
+            self.vigia.start(3000)
+
+        def hideEvent(self, _):
+            self.vigia.stop()
 
         def pagina_ferramentas(self):
             p = QWidget()
             p.setObjectName('pagina')
             v = QVBoxLayout(p)
-            v.setContentsMargins(10, 14, 10, 12)
-            v.setSpacing(2)
-            r = rotulo('Installed', 'mudo')
-            r.setContentsMargins(10, 0, 0, 6)
-            v.addWidget(r)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(0)
             for app in aplicativos():
-                v.addWidget(Ferramenta(app, self))
+                self.linhas.append(Ferramenta(app, self))
+                v.addWidget(self.linhas[-1])
             v.addStretch(1)
             return p
 
@@ -1633,10 +2647,36 @@ def janela(inicial=None, lancar=None):
             p = QWidget()
             p.setObjectName('pagina')
             v = QVBoxLayout(p)
-            v.setContentsMargins(10, 8, 10, 8)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(0)
             busca = busca_linha()
             busca.textChanged.connect(self.lista.filtrar)
-            v.addWidget(busca)
+            fila = QHBoxLayout()
+            fila.setContentsMargins(10, 6, 12, 6)
+            fila.setSpacing(6)
+            fila.addWidget(busca, 1)
+            grupo = QButtonGroup(p)
+            todos = QToolButton()
+            todos.setText('All')
+            todos.setToolTip('All apps')
+            todos.setObjectName('filtro')
+            todos.setCheckable(True)
+            todos.setChecked(True)
+            todos.clicked.connect(lambda: self.lista.so_app(None))
+            grupo.addButton(todos)
+            fila.addWidget(todos)
+            for app, info in aplicativos().items():
+                b = QToolButton()
+                b.setToolTip(info['title'])
+                b.setCheckable(True)
+                b.setFixedSize(16, 16)
+                b.setStyleSheet('QToolButton{background:%s;border:2px solid #16181B;border-radius:0;padding:0;}'
+                                'QToolButton:checked{border-color:#EDE6D3;}' % info.get('accent', AZUL))
+                b.clicked.connect(lambda _=False, a=app: self.lista.so_app(a))
+                grupo.addButton(b)
+                fila.addWidget(b)
+            v.addLayout(fila)
+            v.addWidget(linha('linhaH'))
             v.addWidget(self.lista, 1)
             return p
 
@@ -1644,44 +2684,101 @@ def janela(inicial=None, lancar=None):
             p = QWidget()
             p.setObjectName('pagina')
             v = QVBoxLayout(p)
-            v.setContentsMargins(18, 14, 18, 14)
-            v.setSpacing(9)
+            v.setContentsMargins(16, 12, 16, 12)
+            v.setSpacing(6)
             v.addWidget(rotulo('Settings', 'grande'))
             v.addSpacing(4)
             v.addWidget(rotulo('Trusted folders', 'secao'))
-            d = rotulo('Projects in these folders open with every feature on, without a prompt. Applies to all apps.', 'mudo')
+            d = rotulo('Projects here open with every feature on. Applies to all apps.', 'mudo')
             d.setWordWrap(True)
             v.addWidget(d)
             self.confiaveis = QListWidget()
-            self.confiaveis.setFixedHeight(110)
+            self.confiaveis.setObjectName('lista')
             v.addWidget(self.confiaveis)
             fila = QHBoxLayout()
-            for texto, acao in (('Add…', self.adicionar), ('Remove', self.retirar)):
-                b = QPushButton(texto)
-                b.clicked.connect(acao)
-                fila.addWidget(b)
+            fila.setSpacing(8)
+            b = QPushButton('Add')
+            b.clicked.connect(self.adicionar)
+            fila.addWidget(b)
+            self.tirar = QPushButton('Remove')
+            self.tirar.clicked.connect(self.retirar)
+            self.tirar.setEnabled(False)
+            fila.addWidget(self.tirar)
             fila.addStretch(1)
             v.addLayout(fila)
+            self.confiaveis.itemSelectionChanged.connect(lambda: self.tirar.setEnabled(bool(self.confiaveis.selectedItems())))
             v.addSpacing(8)
-            v.addWidget(rotulo('Appearance', 'secao'))
-            for texto, chave in (('Window blur', 'blur'), ('Transitions and boat animation', 'transitions')):
-                c = QCheckBox(texto)
-                c.setChecked(opcoes().get(chave, True))
-                c.toggled.connect(lambda n, k=chave: gravar_geral(k, n))
-                v.addWidget(c)
+            v.addWidget(rotulo('Window', 'secao'))
+            fundo = QHBoxLayout()
+            fundo.addWidget(QLabel('Background'))
+            fundo.addStretch(1)
+            motivo = blur_unsupported()
+            atual = 'Blur' if opcoes().get('blur', False) and not motivo else 'Solid'
+            seg = segmento(('Solid', 'Blur'), atual, self.mudar_fundo)
+            if motivo:
+                seg.botoes['Blur'].setEnabled(False)
+                seg.botoes['Blur'].setToolTip(motivo)
+            fundo.addWidget(seg)
+            v.addLayout(fundo)
+            if motivo:
+                v.addWidget(rotulo(motivo, 'mudo'))
+            c = QCheckBox('Transitions and boat animation')
+            c.setChecked(opcoes().get('transitions', True))
+            c.toggled.connect(lambda n: gravar_geral('transitions', n))
+            v.addWidget(c)
             v.addSpacing(8)
             v.addWidget(rotulo('Shortcuts', 'secao'))
-            atalho_ = QPushButton(f"Add {marca()['hub']} to Desktop")
+            atalho_ = QPushButton('Add Hub to Desktop')
             atalho_.clicked.connect(lambda: self.atalho(None))
             v.addWidget(atalho_, 0, Qt.AlignLeft)
+            v.addSpacing(8)
+            v.addWidget(rotulo('Setup', 'secao'))
+            preparo = QPushButton('Run setup again')
+            preparo.clicked.connect(self.preparar_de_novo)
+            v.addWidget(preparo, 0, Qt.AlignLeft)
+            v.addSpacing(8)
+            v.addWidget(rotulo('Updates', 'secao'))
+            c = QCheckBox('Check GitHub for new versions when the Hub opens')
+            c.setChecked(opcoes().get('check_updates', True))
+            c.toggled.connect(lambda n: gravar_geral('check_updates', n))
+            v.addWidget(c)
+            fila = QHBoxLayout()
+            fila.setSpacing(8)
+            b = QPushButton('Check now')
+            b.clicked.connect(self.checar_agora)
+            self.checagem = rotulo('', 'mudo')
+            fila.addWidget(b)
+            fila.addWidget(self.checagem, 1)
+            v.addLayout(fila)
             v.addStretch(1)
-            v.addWidget(rotulo(f"{marca()['name']}  ·  Editor {versao_editor()}", 'mudo'))
             self.listar()
             return p
 
+        def mudar_fundo(self, texto):
+            """Blur needs a new native window, so the panel reopens itself right away."""
+            quer = texto == 'Blur'
+            if quer == VIDRO[0]:
+                return
+            gravar_geral('blur', quer)
+            VIDRO[0] = vidro_disponivel()
+            novo = Painel()
+            novo.miolo.setCurrentWidget(novo.gerais)
+            novo.resize(self.size())
+            novo.move(self.pos())
+            QApplication.instance().painel = novo
+            surgir(novo)
+            self.close()
+
+        def preparar_de_novo(self):
+            self.preparo = Preparo(self)
+            self.hide()
+            surgir(self.preparo)
+
         def listar(self):
             self.confiaveis.clear()
-            self.confiaveis.addItems([str(p) for p in pastas_confiaveis()])
+            self.confiaveis.addItems([curto(p) for p in pastas_confiaveis()])
+            self.caminhos = [str(p) for p in pastas_confiaveis()]
+            self.confiaveis.setFixedHeight(max(1, min(self.confiaveis.count(), 4)) * 26 + 2)
 
         def adicionar(self):
             pasta = QFileDialog.getExistingDirectory(self, 'Trust Folder', str(CASA))
@@ -1690,9 +2787,9 @@ def janela(inicial=None, lancar=None):
                 self.listar()
 
         def retirar(self):
-            item = self.confiaveis.currentItem()
-            if item:
-                retirar_confianca(item.text())
+            linha_ = self.confiaveis.currentRow()
+            if linha_ >= 0:
+                retirar_confianca(self.caminhos[linha_])
                 self.listar()
 
         def boasvindas(self, app, aba=None):
@@ -1705,12 +2802,16 @@ def janela(inicial=None, lancar=None):
 
         def atalho(self, app):
             try:
-                criar_atalho(app)
-                QMessageBox.information(self, 'Desktop shortcut', f'Added {nome_app(app) if app else marca()["hub"]} to the desktop.')
+                destino = criar_atalho(app)
+                QMessageBox.information(self, 'Desktop shortcut', f'Added {nome_app(app) if app else marca()["hub"]} to {curto(destino.parent)}.')
             except OSError as e:
                 QMessageBox.warning(self, 'Desktop shortcut', f'Could not create the shortcut: {e}')
 
+    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade)
     aplicacao = QApplication(sys.argv)
+    if forcar_xcb:
+        del os.environ['QT_QPA_PLATFORM']
+    limpar_ambiente()
     aplicacao.setApplicationName(marca()['hub'])
     aplicacao.setStyle('Fusion')
     aplicacao.setQuitOnLastWindowClosed(True)
@@ -1721,7 +2822,7 @@ def janela(inicial=None, lancar=None):
     if '--shots' in sys.argv:
         destino = Path(sys.argv[sys.argv.index('--shots') + 1])
         p = Painel()
-        for nome, pagina in (('tools', p.ferramentas), ('projects', p.projetos), ('settings', p.gerais)):
+        for nome, pagina in (('cargo', p.ferramentas), ('projects', p.projetos), ('settings', p.gerais)):
             p.miolo.setCurrentWidget(pagina)
             p.show()
             aplicacao.processEvents()
@@ -1734,7 +2835,7 @@ def janela(inicial=None, lancar=None):
                 aplicacao.processEvents()
                 t.grab().save(str(destino / f'{app}-{aba.lower()}.png'))
             t.close()
-            s = Partida(app, f'Starting {nome_app(app)}…')
+            s = Partida(app, '', True)
             s.show()
             aplicacao.processEvents()
             s.grab().save(str(destino / f'{app}-partida.png'))
@@ -1744,6 +2845,8 @@ def janela(inicial=None, lancar=None):
         QTimer.singleShot(0, lambda: abrir(*lancar))
         return aplicacao.exec()
     j = Boasvindas(inicial) if inicial else Painel()
+    if not inicial and not opcoes().get('setup') and not opcoes().get('recent'):
+        j.preparo = j = Preparo(j)
     if inicial or not opcoes().get('transitions', True):
         surgir(j)
     else:
@@ -1754,6 +2857,8 @@ def janela(inicial=None, lancar=None):
 
 def main():
     args = sys.argv[1:]
+    if args[:1] in (['--open'], ['--background'], ['--trust'], ['--prepare']):
+        limpar_ambiente()
     if args[:1] == ['--open']:
         porta = int(args[args.index('--port') + 1]) if '--port' in args else None
         alvos = [a for a in args[2:] if a != '--port' and a != str(porta)]

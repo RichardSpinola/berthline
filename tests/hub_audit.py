@@ -33,7 +33,7 @@ os.environ['HOME'] = str(TEMP / 'home')
 (TEMP / 'home/Projects/loja/pom.xml').write_text('<project/>')
 (TEMP / 'home/Projects/site').mkdir()
 (TEMP / 'home/Projects/site/index.html').write_text('<html></html>')
-(RAIZ / 'data/hub.json').write_text(json.dumps({'transitions': False, 'recent': [
+(RAIZ / 'data/hub.json').write_text(json.dumps({'transitions': False, 'setup': True, 'checked': 9e12, 'recent': [
     {'path': str(TEMP / 'home/Projects/loja'), 'app': 'java'}]}))
 sys.path.insert(0, str(AQUI.parent / 'hub'))
 import hub  # noqa: E402
@@ -52,6 +52,8 @@ hub.abrir_app = lambda app, alvos=(), porta=None, comando_=None: None
 hub.janelas_editor = lambda pid: set()
 hub.etapa_atual = lambda app: 'ready'
 hub.TEMPORARIO = None
+hub.checar_novidade = lambda: None
+hub.baixar_verificado = lambda *a, **k: None
 QApplication.quit = staticmethod(lambda: None)
 QDesktopServices.openUrl = staticmethod(lambda u: links.append(u.toString()) or True)
 QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: '')
@@ -196,6 +198,53 @@ def aberto(nome, rotulo):
     dialogos.clear()
 
 
+def pequenas(painel):
+    """The waiting and opening windows, with their click to skip."""
+    for app in ('java', 'web', 'standard'):
+        fechar_tudo(painel)
+        p = hub.CLASSES['Partida'](app, '', True)
+        pulou = []
+        p.pular = lambda: pulou.append(1)
+        p.show()
+        esperar(120)
+        foto(p, f'{app}-wait')
+        p.etapa('extensions', 'Extensions 3 of 14')
+        foto(p, f'{app}-wait-extensions')
+        p.mouseReleaseEvent(None)
+        if not pulou:
+            erros.append(f'{app}: click did not skip the wait')
+        p.aviso('Still loading in the background')
+        foto(p, f'{app}-wait-timeout')
+        p.close()
+    feito = []
+    a = hub.CLASSES['Abertura'](lambda: feito.append(1))
+    a.barco.viagem = .55
+    a.show()
+    esperar(120)
+    foto(a, 'opening')
+    a.mouseReleaseEvent(None)
+    esperar(300)
+    if not feito:
+        erros.append('click did not skip the opening')
+    fechar_tudo(painel)
+    preparo = hub.CLASSES['Preparo'](painel)
+    preparo.show()
+    varrer_janela(preparo, 'setup')
+    preparo.hide()
+    hub.gravar_geral('update', {'version': '9.9.9', 'notes': 'Example notes.', 'package': 'x', 'sums': 'y'})
+    painel.ver_novidade()
+    painel.miolo.ir(painel.ferramentas)
+    painel.show()
+    foto(painel, 'hub-cargo-update')
+    if not painel.faixa.isVisible():
+        erros.append('update notice not shown')
+    aviso = hub.CLASSES['Novidade'](painel, hub.novidade())
+    aviso.show()
+    varrer_janela(aviso, 'update')
+    aviso.close()
+    hub.gravar_geral('update', None)
+
+
 def roteiro():
     painel = next(w for w in QApplication.topLevelWidgets() if type(w).__name__ == 'Painel' and w.isVisible())
 
@@ -217,15 +266,16 @@ def roteiro():
             return painel.tela
         return ir
 
-    telas = [('hub-tools', pagina(painel.ferramentas)), ('hub-projects', pagina(painel.projetos)),
+    telas = [('hub-cargo', pagina(painel.ferramentas)), ('hub-projects', pagina(painel.projetos)),
              ('hub-settings', pagina(painel.gerais))]
-    for app in ('java', 'web'):
+    for app in ('java', 'web', 'standard'):
         for titulo in ('Projects', 'Customize', 'Plugins', 'Learn'):
             telas.append((f'{app}-{titulo.lower()}', boas(app, titulo)))
     for nome, ir in telas:
         print('--', nome, flush=True)
         varrer(nome, ir, painel)
 
+    pequenas(painel)
     atual = sorted(set(vistos))
     conhecidos = LISTA.read_text(encoding='utf8').splitlines() if LISTA.exists() else []
     novos, sumidos = sorted(set(atual) - set(conhecidos)), sorted(set(conhecidos) - set(atual))

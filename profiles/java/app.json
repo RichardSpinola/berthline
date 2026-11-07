@@ -4,6 +4,7 @@
   "order": 1,
   "base": true,
   "memory": true,
+  "keymap": true,
   "templates": [
     "Java"
   ],

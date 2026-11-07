@@ -1,5 +1,7 @@
 {
   "name": "Berthline",
+  "version": "0.2.0",
+  "repo": "RichardSpinola/berthline",
   "hub": "Berthline Hub",
   "tagline": "Lightweight coding profiles",
   "folder": ".berthline"

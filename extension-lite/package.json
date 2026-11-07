@@ -1,14 +1,15 @@
 {
   "name": "berthline-hub",
   "displayName": "Berthline Hub",
-  "description": "Back to Hub button and startup progress",
+  "description": "Back to Hub button, startup progress and file icons",
   "version": "0.1.0",
   "publisher": "berthline",
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": ["*"],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{ "command": "berthline.openHub", "title": "Back to Hub" }]
+    "commands": [{ "command": "berthline.openHub", "title": "Back to Hub" }],
+    "iconThemes": [{ "id": "berthline-file-icons", "label": "Berthline", "path": "./icons/theme.json" }]
   }
 }
