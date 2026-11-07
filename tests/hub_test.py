@@ -1,4 +1,5 @@
 """Drives the Hub window offscreen: trust menu, trusted folders, new project and import."""
+import hashlib
 import json
 import os
 import shutil
@@ -19,6 +20,7 @@ shutil.copy(PACOTE / 'brand.json', RAIZ)
 for app in ('java', 'web'):
     (RAIZ / 'data' / app).mkdir(parents=True)
     (RAIZ / 'data' / app / 'extensions').symlink_to(PACOTE / 'data' / app / 'extensions')
+(RAIZ / 'data/hub.json').write_text('{"setup": true, "checked": 9e12}')
 os.environ['SUITE_ROOT'] = str(RAIZ)
 os.environ['HOME'] = str(TEMP / 'home')
 (TEMP / 'home/.config/VSCodium/User/snippets').mkdir(parents=True)
@@ -35,6 +37,7 @@ hub.abrir_app = lambda app, alvos=(), porta=None, comando_=None: abertos.append(
 hub.janelas_editor = lambda pid: set()
 hub.etapa_atual = lambda app: 'ready'
 hub.TEMPORARIO = None
+hub.checar_novidade = lambda: None
 QApplication.quit = staticmethod(lambda: None)
 
 
@@ -203,9 +206,95 @@ def roteiro():
     passo('todo tree path', Path(dados.get('todo-tree.ripgrep.ripgrep', '/x')).exists())
     atalho = hub.criar_atalho('java')
     passo('desktop shortcut', '--welcome java' in atalho.read_text() and os.access(atalho, os.X_OK), str(atalho))
+    extras(painel)
     print('failed:' if falhas else 'all passed', falhas, flush=True)
     shutil.rmtree(TEMP)
     os._exit(1 if falhas else 0)
+
+
+def extras(painel):
+    # Keymap: a shortcut the person added survives both directions.
+    hub.preparar('java')
+    arquivo = hub.pasta_usuario('java') / 'keybindings.json'
+    propria = {'key': 'ctrl+alt+9', 'command': 'minha.acao'}
+    dados = hub.ler_json(arquivo)
+    arquivo.write_text(json.dumps(dados + [propria]), encoding='utf8')
+    passo('keymap switches', hub.aplicar_keymap('java', 'vscode') and hub.ler_json(arquivo) == [propria])
+    passo('keymap turns off extension', f'--disable-extension={hub.KEYMAP_EXTENSION}' in hub.comando('java'))
+    passo('keymap keeps other app', f'--disable-extension={hub.KEYMAP_EXTENSION}' not in hub.comando('web'))
+    hub.aplicar_keymap('java', 'intellij')
+    volta = hub.ler_json(arquivo)
+    passo('keymap returns with own key', propria in volta and len(volta) == len(dados) + 1)
+    passo('intellij extension back', f'--disable-extension={hub.KEYMAP_EXTENSION}' not in hub.comando('java'))
+    ruim = hub.pasta_usuario('web') / 'keybindings.json'
+    ruim.parent.mkdir(parents=True, exist_ok=True)
+    ruim.write_text('[{"key": ')
+    passo('broken keybindings left alone', not hub.aplicar_keymap('web', 'vscode') and ruim.read_text() == '[{"key": ')
+    ruim.unlink()
+    nomes = [a for a, _ in hub.teclas_app('web')]
+    passo('web keymap has no java keys', 'Build' not in nomes and 'Generate' not in nomes)
+    passo('java keymap has build', 'Build' in [a for a, _ in hub.teclas_app('java')])
+
+    # Running state comes from the editor's lock file.
+    trava = hub.DADOS / 'web/user/code.lock'
+    trava.parent.mkdir(parents=True, exist_ok=True)
+    trava.write_text(str(os.getpid()))
+    passo('running detected', hub.estado_app('web')[0] == 'run')
+    trava.write_text('999999999')
+    passo('stale lock ignored', hub.estado_app('web')[0] != 'run')
+    trava.unlink()
+
+    # Shortcuts go where they were asked to.
+    menu = hub.CASA / '.local/share/applications/berthline-web.desktop'
+    mesa = hub.area_de_trabalho() / 'berthline-web.desktop'
+    menu.unlink(missing_ok=True)
+    mesa.unlink(missing_ok=True)
+    hub.criar_atalho('web', desktop=False, menu=True)
+    passo('menu shortcut only', menu.exists() and not mesa.exists())
+
+    # Setup window.
+    pasta = TEMP / 'projetos-web'
+    preparo = hub.CLASSES['Preparo'](painel)
+    preparo.linhas['web'][3].setText(str(pasta))
+    preparo.linhas['web'][2].botoes['VS Code'].setChecked(True)
+    preparo.escolher_tema('Light')
+    preparo.concluir()
+    passo('setup folder', hub.pasta_projetos('web') == pasta and pasta.is_dir())
+    passo('setup keymap', hub.opcao('web', 'keymap') == 'vscode')
+    passo('setup theme', hub.ajuste('web', 'workbench.colorTheme') == 'Islands Light' and hub.ajuste('standard', 'workbench.colorTheme') == 'Light Modern')
+    passo('setup done', hub.opcoes().get('setup') is True)
+    passo('setup returns to panel', painel.isVisible())
+
+    # Updates: comparison, skip and a checked download.
+    hub.gravar_geral('update', {'version': hub.versao(), 'notes': ''})
+    passo('same version is quiet', hub.novidade() is None)
+    hub.gravar_geral('update', {'version': '9.0.0', 'notes': ''})
+    passo('newer version shows', hub.novidade() and hub.novidade()['version'] == '9.0.0')
+    hub.gravar_geral('skip_version', '9.0.0')
+    passo('skipped version is quiet', hub.novidade() is None)
+    pacote = TEMP / 'servidor/berthline-linux.tar.gz'
+    pacote.parent.mkdir()
+    pacote.write_bytes(b'pacote')
+    somas = TEMP / 'servidor/SHA256SUMS'
+    somas.write_text(f'{hashlib.sha256(b"pacote").hexdigest()}  berthline-linux.tar.gz\n')
+    alvo = TEMP / 'baixado/berthline-linux.tar.gz'
+    hub.baixar_verificado(pacote.as_uri(), somas.as_uri(), alvo)
+    passo('checked download kept', alvo.read_bytes() == b'pacote')
+    alvo.unlink()
+    somas.write_text(f'{"0" * 64}  berthline-linux.tar.gz\n')
+    try:
+        hub.baixar_verificado(pacote.as_uri(), somas.as_uri(), alvo)
+        passo('bad download refused', False)
+    except ValueError:
+        passo('bad download refused', not alvo.exists() and not list(alvo.parent.glob('*.part')))
+
+    # Icon pack is chosen per app.
+    tema = Path(__file__).parent.parent / 'extension-lite/icons'
+    definicoes = json.loads((tema / 'theme.json').read_text())['iconDefinitions'].values()
+    passo('icon files are svg', all('xmlns="http://www.w3.org/2000/svg"' in (tema / d['iconPath']).read_text() for d in definicoes))
+    hub.gravar_ajuste('web', 'workbench.iconTheme', hub.ICON_THEMES['Berthline'])
+    passo('icon pack per app', hub.ajuste('web', 'workbench.iconTheme') == 'berthline-file-icons'
+          and hub.ajuste('java', 'workbench.iconTheme') == hub.ICON_THEMES['JetBrains'])
 
 
 QApplication.exec = lambda *a: (QTimer.singleShot(100, roteiro), QEventLoop().exec())[1]

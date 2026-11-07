@@ -1,5 +1,6 @@
 """Hub of the suite: opens each profile and keeps its settings."""
 import ctypes
+import hashlib
 import json
 import math
 import ntpath
@@ -11,7 +12,9 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import urllib.request
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -27,7 +30,22 @@ PROJETOS = CASA / 'Projects'
 CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
-PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G'}
+PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keymap': 'intellij', 'folder': ''}
+KEYMAP_EXTENSION = 'k--kato.intellij-idea-keybindings'
+ICON_THEMES = {'Berthline': 'berthline-file-icons', 'JetBrains': 'jetbrains-file-icon-theme-auto'}
+THEMES = {'Dark': ('Islands Dark', 'Dark Modern'), 'Light': ('Islands Light', 'Light Modern')}
+INTELLIJ_KEYS = (
+    ('Search Everywhere', 'Shift Shift'), ('Run', 'Shift+F10'), ('Debug', 'Shift+F9'), ('Rerun', 'Ctrl+5'),
+    ('Stop', 'Ctrl+2'), ('Build', 'Ctrl+9'), ('Toggle Breakpoint', 'Ctrl+8'), ('Step Over', 'F8'),
+    ('Step Into', 'F7'), ('Resume', 'F9'), ('Context Actions', 'Alt+Enter'), ('Generate', 'Alt+Insert'),
+    ('Rename', 'Shift+F6'), ('File Structure', 'Ctrl+0'), ('Recent Files', 'Ctrl+E'), ('Terminal', 'Alt+F12'),
+)
+VSCODE_KEYS = (
+    ('Command Palette', 'Ctrl+Shift+P'), ('Quick Open', 'Ctrl+P'), ('Run Without Debugging', 'Ctrl+F5'), ('Debug', 'F5'),
+    ('Stop', 'Shift+F5'), ('Build', 'Ctrl+Shift+B'), ('Toggle Breakpoint', 'F9'), ('Step Over', 'F10'), ('Step Into', 'F11'),
+    ('Quick Fix', 'Ctrl+.'), ('Rename', 'F2'), ('Go to Symbol', 'Ctrl+Shift+O'), ('Terminal', 'Ctrl+`'),
+)
+JAVA_ONLY_KEYS = ('Build', 'Generate')
 LAMPADAS = {'run': '#3FA66B', 'ready': '#5A5F66', 'prep': '#E0A030', 'att': '#C8102E'}
 
 
@@ -180,6 +198,46 @@ def pasta_usuario(app):
     return DADOS / app / 'user' / 'User'
 
 
+def pasta_projetos(app):
+    return Path(opcao(app, 'folder') or PROJETOS)
+
+
+def arquivos_teclas(app):
+    """The profile's shortcut files, base first."""
+    origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
+    origens.append(PERFIS / app)
+    return [o / 'keybindings.json' for o in origens if (o / 'keybindings.json').exists()]
+
+
+def teclas_app(app):
+    """Shortcuts the Learn screen lists; each one exists in that app."""
+    lista = INTELLIJ_KEYS if opcao(app, 'keymap') == 'intellij' else VSCODE_KEYS
+    return [t for t in lista if aplicativos()[app].get('memory') or t[0] not in JAVA_ONLY_KEYS]
+
+
+def aplicar_keymap(app, nome):
+    """Switches keymap keeping the shortcuts the person added. False if their file can't be read."""
+    arquivo = pasta_usuario(app) / 'keybindings.json'
+    atual = ler_json(arquivo) if arquivo.exists() else []
+    if not isinstance(atual, list):
+        return False
+    teclas = arquivos_teclas(app)
+    perfil = [e for t in teclas for e in ler_json(t)]
+    proprias = [e for e in atual if e not in perfil]
+    gravar_opcao(app, 'keymap', nome)
+    if not arquivo.exists():
+        return True
+    if nome == 'intellij':
+        texto = juntar_teclas(teclas)
+        if proprias:
+            extra = ',\n'.join(json.dumps(e, ensure_ascii=False) for e in proprias)
+            texto = f"{texto[:texto.rindex(']')].rstrip()},\n{extra}\n]\n"
+    else:
+        texto = json.dumps(proprias, indent=4, ensure_ascii=False) + '\n'
+    arquivo.write_text(texto, encoding='utf8')
+    return True
+
+
 def juntar_teclas(arquivos):
     """Une listas de atalhos sem perder os comentários."""
     textos = [a.read_text(encoding='utf8') for a in arquivos]
@@ -224,8 +282,8 @@ def preparar(app):
     arquivo.write_text(json.dumps(atual, indent=4, ensure_ascii=False), encoding='utf8')
     origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
     origens.append(PERFIS / app)
-    teclas = [o / 'keybindings.json' for o in origens if (o / 'keybindings.json').exists()]
-    if teclas and not (usuario / 'keybindings.json').exists():
+    teclas = arquivos_teclas(app)
+    if teclas and opcao(app, 'keymap') == 'intellij' and not (usuario / 'keybindings.json').exists():
         (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
     for origem in origens:
         trechos = origem / 'snippets'
@@ -250,7 +308,10 @@ def node():
 def comando(app, alvos=(), porta=None):
     visual = opcao(app, 'visual') and aplicativos()[app].get('base')
     args = [str(editor()), f"--user-data-dir={DADOS / app / 'user'}", f"--extensions-dir={DADOS / app / 'extensions'}"]
-    args += [f'--disable-extension={e}' for e in desligadas(app)]
+    fora = set(desligadas(app))
+    if opcao(app, 'keymap') == 'vscode':
+        fora.add(KEYMAP_EXTENSION)
+    args += [f'--disable-extension={e}' for e in sorted(fora)]
     if not JANELAS:
         args.append('--ozone-platform=x11')
     if porta or visual:
@@ -499,12 +560,14 @@ def secoes(so_app=None):
     ja = {p for p, _ in feitos}
     fora = set(opcoes().get('hidden', []))
     disco = []
-    if PROJETOS.is_dir():
-        for p in sorted(PROJETOS.iterdir(), key=lambda x: x.name.lower()):
-            if p.is_dir() and not p.name.startswith('.') and p not in ja and str(p) not in fora:
-                app = tipo_projeto(p)
-                if so_app in (None, app):
-                    disco.append((p, app))
+    for pasta in dict.fromkeys(pasta_projetos(a) for a in ([so_app] if so_app else aplicativos())):
+        if pasta.is_dir():
+            for p in sorted(pasta.iterdir(), key=lambda x: x.name.lower()):
+                if p.is_dir() and not p.name.startswith('.') and p not in ja and str(p) not in fora:
+                    ja.add(p)
+                    app = tipo_projeto(p)
+                    if so_app in (None, app):
+                        disco.append((p, app))
     if so_app:
         return [(t, l) for t, l in (('Recent', feitos), ('On this computer', disco)) if l]
     return [('', feitos + disco)] if feitos or disco else []
@@ -642,35 +705,38 @@ def imagem_icone(nome, tipo):
     return alvo
 
 
-def criar_atalho(app):
-    """Cria o atalho do Hub ou de um app; o do app vai direto para a tela dele."""
+def criar_atalho(app, desktop=True, menu=True):
+    """Creates the Hub's or an app's shortcut; an app's goes straight to its screen."""
     b = marca()
     titulo = f"{b['name']} {aplicativos()[app]['title']}" if app else b['hub']
     congelado = getattr(sys, 'frozen', False)
     programa = sys.executable if congelado else f'{sys.executable} {Path(__file__).resolve()}'
     args = f'--welcome {app}' if app else ''
     pasta = area_de_trabalho()
-    pasta.mkdir(parents=True, exist_ok=True)
     if JANELAS:
         icone_ = imagem_icone(app or 'hub', 'ico')
-        destino = pasta / f'{titulo}.lnk'
-        script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{destino}');$s.TargetPath='{sys.executable}';"
-                  f"$s.Arguments='{args}';$s.WorkingDirectory='{RAIZ}';$s.IconLocation='{icone_}';$s.Save()")
-        r = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        if r.returncode:
-            (pasta / f'{titulo}.bat').write_text(f'@start "" "{sys.executable}" {args}\r\n')
-        return destino
+        inicio = Path(os.environ.get('APPDATA', '')) / 'Microsoft/Windows/Start Menu/Programs'
+        destinos = ([pasta / f'{titulo}.lnk'] if desktop else []) + ([inicio / f'{titulo}.lnk'] if menu else [])
+        for destino in destinos:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{destino}');$s.TargetPath='{sys.executable}';"
+                      f"$s.Arguments='{args}';$s.WorkingDirectory='{RAIZ}';$s.IconLocation='{icone_}';$s.Save()")
+            r = subprocess.run(['powershell', '-NoProfile', '-Command', script], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if r.returncode:
+                destino.with_suffix('.bat').write_text(f'@start "" "{sys.executable}" {args}\r\n')
+        return destinos[0] if destinos else None
     icone_ = imagem_icone(app or 'hub', 'png')
     texto = (f'[Desktop Entry]\nType=Application\nName={titulo}\nExec="{programa}" {args}\n'
              f'Icon={icone_}\nTerminal=false\nCategories=Development;\n') if congelado else (
              f'[Desktop Entry]\nType=Application\nName={titulo}\nExec={programa} {args}\nIcon={icone_}\nTerminal=false\n')
     nome = f"{b['name'].lower()}{'-' + app if app else ''}.desktop"
-    menu = CASA / '.local/share/applications'
-    menu.mkdir(parents=True, exist_ok=True)
-    for destino in (menu / nome, pasta / nome):
+    aplicacoes = CASA / '.local/share/applications'
+    destinos = ([pasta / nome] if desktop else []) + ([aplicacoes / nome] if menu else [])
+    for destino in destinos:
+        destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_text(texto, encoding='utf8')
         destino.chmod(0o755)
-    return pasta / nome
+    return destinos[0] if destinos else None
 
 
 def origens_importacao():
@@ -708,6 +774,68 @@ def criar_projeto(app, modelo_, nome, local, git=False):
     return raiz
 
 
+def numero_versao(texto):
+    return tuple(int(n) for n in re.findall(r'\d+', str(texto))[:3])
+
+
+def pacote_atual():
+    return 'berthline-windows.zip' if JANELAS else 'berthline-linux.tar.gz'
+
+
+def ler_url(url):
+    pedido = urllib.request.Request(url, headers={'User-Agent': 'Berthline-Hub', 'Accept': 'application/vnd.github+json'})
+    return urllib.request.urlopen(pedido, timeout=8)
+
+
+def checar_novidade():
+    """Asks GitHub for the newest release. Sends no data; prereleases count while 0.x lasts."""
+    with ler_url(f"https://api.github.com/repos/{marca().get('repo')}/releases?per_page=10") as r:
+        lista = json.loads(r.read().decode('utf8'))
+    versoes = [x for x in lista if not x.get('draft') and numero_versao(x.get('tag_name'))]
+    if not versoes:
+        return None
+    x = max(versoes, key=lambda v: numero_versao(v['tag_name']))
+    ativos = {a['name']: a['browser_download_url'] for a in x.get('assets', [])}
+    return {'version': x['tag_name'].lstrip('v'), 'notes': x.get('body') or '', 'page': x.get('html_url', ''),
+            'package': ativos.get(pacote_atual(), ''), 'sums': ativos.get('SHA256SUMS', '')}
+
+
+def novidade():
+    """The release to announce, or None."""
+    tudo = opcoes()
+    nova = tudo.get('update')
+    if nova and numero_versao(nova['version']) > numero_versao(versao()) and nova['version'] != tudo.get('skip_version'):
+        return nova
+    return None
+
+
+def baixar_verificado(url, somas, destino, progresso=None):
+    """Downloads a package and keeps it only if it matches the release's SHA256SUMS."""
+    with ler_url(somas) as r:
+        linhas = r.read().decode('utf8').splitlines()
+    nome = Path(destino).name
+    esperado = next((l.split()[0].lower() for l in linhas if l.split()[-1].lstrip('*') == nome), None)
+    if not esperado:
+        raise ValueError(f'{nome} is not listed in SHA256SUMS')
+    parte = Path(f'{destino}.part')
+    parte.parent.mkdir(parents=True, exist_ok=True)
+    soma = hashlib.sha256()
+    with ler_url(url) as r, parte.open('wb') as saida:
+        total = int(r.headers.get('Content-Length') or 0)
+        feito = 0
+        while bloco_ := r.read(1 << 20):
+            saida.write(bloco_)
+            soma.update(bloco_)
+            feito += len(bloco_)
+            if progresso and total:
+                progresso(feito / total)
+    if soma.hexdigest() != esperado:
+        parte.unlink(missing_ok=True)
+        raise ValueError('The download does not match its SHA-256')
+    parte.replace(destino)
+    return Path(destino)
+
+
 CLASSES = {}  # the audit reaches the small windows through this
 
 
@@ -721,8 +849,8 @@ def janela(inicial=None, lancar=None):
     from PySide6.QtSvg import QSvgRenderer
     from PySide6.QtWidgets import (
         QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame,
-        QGraphicsOpacityEffect, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
-        QPushButton, QScrollArea, QSlider, QStackedWidget, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout,
+        QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
+        QPushButton, QScrollArea, QSlider, QStackedWidget, QToolButton, QVBoxLayout,
         QWidget,
     )
 
@@ -786,8 +914,6 @@ def janela(inicial=None, lancar=None):
     QCheckBox::indicator { width: 12px; height: 12px; border: 1px solid #6A6F76; background: transparent; }
     QCheckBox::indicator:checked { background: ACENTO; }
     QCheckBox::indicator:disabled { border-color: #34383E; background: #34383E; }
-    QTableWidget { background: transparent; border: none; gridline-color: #26292D; }
-    QHeaderView::section { background: #1E2124; border: none; padding: 5px; }
     QSlider::groove:horizontal { height: 3px; background: #4A4F56; }
     QSlider::handle:horizontal { width: 9px; margin: -6px 0; border-radius: 0; background: #EDE6D3; }
     QScrollBar:vertical { background: transparent; width: 8px; }
@@ -868,6 +994,26 @@ def janela(inicial=None, lancar=None):
         b.setCursor(Qt.PointingHandCursor)
         b.clicked.connect(acao)
         return b
+
+    def em_fundo(trabalho, depois):
+        """Runs network work off the window's thread; `depois` gets (result, error) back on it."""
+        saida = []
+
+        def rodar():
+            try:
+                saida.append((trabalho(), None))
+            except (OSError, ValueError, KeyError) as e:
+                saida.append((None, str(e)))
+        threading.Thread(target=rodar, daemon=True).start()
+        vigia = QTimer(QApplication.instance())
+
+        def olhar():
+            if saida:
+                vigia.stop()
+                vigia.deleteLater()
+                depois(*saida[0])
+        vigia.timeout.connect(olhar)
+        vigia.start(100)
 
     def lampada(estado):
         r = QLabel()
@@ -1253,7 +1399,7 @@ def janela(inicial=None, lancar=None):
             self.modelos.setCurrentRow(1 if self.modelos.count() > 1 else 0)
             self.nome = QLineEdit('untitled')
             self.nome.selectAll()
-            self.local = QLineEdit(str(PROJETOS))
+            self.local = QLineEdit(str(pasta_projetos(app)))
             pasta = QPushButton('Browse…')
             pasta.clicked.connect(self.escolher)
             fila = QHBoxLayout()
@@ -1404,8 +1550,8 @@ def janela(inicial=None, lancar=None):
             lado.setSpacing(2 if geral else 12)
             texto = aplicativos()[app]['title'] if geral else tipo_rotulo(caminho)
             if texto:
-                lado.addWidget(etiqueta(texto, cor if geral else None), 0, Qt.AlignRight)
-            lado.addWidget(rotulo(quando(caminho), 'mudo'), 0, Qt.AlignRight)
+                lado.addWidget(etiqueta(texto, cor if geral else None), 0, Qt.AlignRight | Qt.AlignVCenter)
+            lado.addWidget(rotulo(quando(caminho), 'mudo'), 0, Qt.AlignRight | Qt.AlignVCenter)
             h.addLayout(lado)
 
     class ListaProjetos(QListWidget):
@@ -1497,8 +1643,16 @@ def janela(inicial=None, lancar=None):
             for texto, acao in (('New Project', self.novo), ('Open', self.pasta), ('Clone Repository', self.clonar)):
                 b = QPushButton(texto)
                 b.clicked.connect(acao)
+                if texto == 'New Project':
+                    b.setObjectName('azul')
                 fila.addWidget(b)
             return fila
+
+        def dica(self):
+            r = rotulo('Drop a folder here to open it', 'mudo')
+            r.setAlignment(Qt.AlignCenter)
+            r.setStyleSheet('border:1px dashed #4A4F56;padding:8px;')
+            return r
 
         def pagina_lista(self):
             p = QWidget()
@@ -1506,38 +1660,39 @@ def janela(inicial=None, lancar=None):
             v.setContentsMargins(0, 0, 0, 0)
             v.setSpacing(0)
             topo = QHBoxLayout()
-            topo.setContentsMargins(20, 12, 13, 12)
+            topo.setContentsMargins(14, 8, 14, 8)
             busca = busca_linha()
             busca.textChanged.connect(self.lista.filtrar)
             topo.addWidget(busca, 1)
             topo.addLayout(self.botoes())
             v.addLayout(topo)
             v.addWidget(linha('linhaH'))
-            caixa = QHBoxLayout()
-            caixa.setContentsMargins(12, 8, 12, 8)
-            caixa.addWidget(self.lista)
+            caixa = QVBoxLayout()
+            caixa.setContentsMargins(16, 6, 16, 14)
+            caixa.setSpacing(10)
+            caixa.addWidget(self.lista, 1)
+            caixa.addWidget(self.dica())
             v.addLayout(caixa, 1)
             return p
 
         def pagina_vazia(self):
             p = QWidget()
             v = QVBoxLayout(p)
+            v.setContentsMargins(16, 6, 16, 14)
             v.addStretch(1)
-            v.addWidget(icone(self.app, 88), 0, Qt.AlignCenter)
-            v.addSpacing(14)
             info = aplicativos()[self.app]
-            for w in (rotulo(f'Welcome to {nome_app(self.app)}', 'grande'),
-                      rotulo(info['description'], 'mudo'),
+            for w in (rotulo('No projects yet', 'grande'), rotulo(info['description'], 'mudo'),
                       rotulo('Create a project, or open one from disk or version control.', 'mudo')):
                 w.setAlignment(Qt.AlignCenter)
                 v.addWidget(w)
-            v.addSpacing(18)
+            v.addSpacing(14)
             fila = QHBoxLayout()
             fila.addStretch(1)
             fila.addLayout(self.botoes())
             fila.addStretch(1)
             v.addLayout(fila)
             v.addStretch(2)
+            v.addWidget(self.dica())
             return p
 
         def novo(self):
@@ -1546,7 +1701,8 @@ def janela(inicial=None, lancar=None):
                 abrir(self.app, d.projeto)
 
         def pasta(self):
-            pasta = QFileDialog.getExistingDirectory(self, 'Open', str(PROJETOS if PROJETOS.is_dir() else CASA))
+            inicio = pasta_projetos(self.app)
+            pasta = QFileDialog.getExistingDirectory(self, 'Open', str(inicio if inicio.is_dir() else CASA))
             if pasta:
                 abrir(self.app, pasta)
 
@@ -1555,19 +1711,69 @@ def janela(inicial=None, lancar=None):
             if d.exec():
                 abrir(self.app, d.pasta)
 
-    class Personalizar(QScrollArea):
+    class Degrau(QPushButton):
+        """One line of the load mark: the chosen line is thicker, in the app's color."""
+
+        def __init__(self, texto, cor):
+            super().__init__(texto)
+            self.cor = QColor(cor)
+            self.setCheckable(True)
+            self.setFixedSize(130, 19)
+            self.setCursor(Qt.PointingHandCursor)
+
+        def paintEvent(self, _):
+            p = QPainter(self)
+            marcado = self.isChecked()
+            comprimento, grossura = (70, 5) if marcado else (42, 3)
+            p.fillRect(QRectF(0, (self.height() - grossura) / 2, comprimento, grossura), self.cor if marcado else QColor('#5A5F66'))
+            p.setPen(QColor('#FFFFFF' if marcado else '#8F939A'))
+            p.drawText(QRectF(comprimento + 7, 0, 60, self.height()), Qt.AlignVCenter, self.text())
+
+    class MarcaPlimsoll(QWidget):
+        """The ring and bar painted on a ship's hull, beside the memory lines."""
+
+        def __init__(self):
+            super().__init__()
+            self.setFixedSize(56, 56)
+
+        def paintEvent(self, _):
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(QPen(QColor('#EDE6D3'), 2))
+            p.drawEllipse(QRectF(8, 8, 40, 40))
+            p.drawLine(0, 28, 56, 28)
+
+    class Personalizar(QWidget):
         def __init__(self, app):
             super().__init__()
+            self.setObjectName('pagina')
             self.app = app
-            self.setWidgetResizable(True)
             info = aplicativos()[app]
+            externo = QVBoxLayout(self)
+            externo.setContentsMargins(0, 0, 0, 0)
+            externo.setSpacing(0)
+            aviso = QFrame()
+            aviso.setObjectName('faixa')
+            a = QHBoxLayout(aviso)
+            a.setContentsMargins(20, 7, 20, 7)
+            a.addWidget(rotulo(f"Changes apply the next time {info['title']} opens.", 'mudo'))
+            externo.addWidget(aviso)
+            externo.addWidget(linha('linhaH'))
+            rolagem = QScrollArea()
+            rolagem.setWidgetResizable(True)
             miolo = QWidget()
             miolo.setObjectName('pagina')
-            v = QVBoxLayout(miolo)
-            v.setContentsMargins(24, 22, 24, 22)
-            v.setSpacing(9)
-            v.addWidget(rotulo('Appearance', 'secao'))
+            colunas = QHBoxLayout(miolo)
+            colunas.setContentsMargins(20, 14, 20, 14)
+            colunas.setSpacing(26)
+            esq, dir_ = QVBoxLayout(), QVBoxLayout()
+            esq.setSpacing(6)
+            dir_.setSpacing(6)
+            colunas.addLayout(esq, 1)
+            colunas.addLayout(dir_, 1)
+            esq.addWidget(rotulo('Appearance', 'secao'))
             self.tema = Combo()
+            self.tema.setFixedWidth(170)
             self.tema.addItems(temas(app))
             atual = ajuste(app, 'workbench.colorTheme')
             if atual:
@@ -1575,59 +1781,118 @@ def janela(inicial=None, lancar=None):
                     self.tema.addItem(atual)
                 self.tema.setCurrentText(atual)
             self.tema.currentTextChanged.connect(lambda t: gravar_ajuste(app, 'workbench.colorTheme', t))
+            esq.addLayout(self.campo('Theme', self.tema))
             self.fonte = Combo()
+            self.fonte.setFixedWidth(64)
             self.fonte.addItems(['9', '10', '11', '12', '13', '14', '15', '16', '18', '20', '24', '28'])
             self.fonte.setCurrentText(str(ajuste(app, 'editor.fontSize') or 13))
             self.fonte.currentTextChanged.connect(lambda n: gravar_ajuste(app, 'editor.fontSize', int(n)))
-            form = QFormLayout()
-            form.setHorizontalSpacing(14)
-            form.addRow('Theme:', self.tema)
-            form.addRow('Editor font:', self.fonte)
-            v.addLayout(form)
-            self.caixa('Animations', 'animations', v)
+            esq.addLayout(self.campo('Editor font', self.fonte))
+            self.caixa('Animations', 'animations', esq)
             if info.get('base'):
-                self.caixa('Visual extras: tree icons and app watermark (needs a local debugging port)', 'visual', v)
+                c = self.caixa('Tree icons and watermark', 'visual', esq)
+                c.setToolTip('Uses a local debugging port.')
+                esq.addSpacing(8)
+                esq.addWidget(rotulo('Keymap', 'secao'))
+                nomes = {'intellij': 'IntelliJ', 'vscode': 'VS Code'}
+                self.teclas = segmento(nomes.values(), nomes[opcao(app, 'keymap')], self.mudar_keymap)
+                esq.addLayout(self.campo('Shortcuts', self.teclas))
+                esq.addWidget(rotulo('Shortcuts you added stay as they are.', 'mudo'))
+                esq.addSpacing(8)
+                esq.addWidget(rotulo('File icons', 'secao'))
+                tema_ = ajuste(app, 'workbench.iconTheme')
+                pacote = next((n for n, t in ICON_THEMES.items() if t == tema_), 'JetBrains')
+                self.icones = segmento(ICON_THEMES, pacote, lambda n: gravar_ajuste(app, 'workbench.iconTheme', ICON_THEMES[n]))
+                esq.addLayout(self.campo('Pack', self.icones))
+                esq.addSpacing(8)
+                esq.addWidget(rotulo('Wallpaper', 'secao'))
+                self.imagem = rotulo('', 'mudo')
+                esq.addLayout(self.campo('Image', self.imagem))
+                fila = QHBoxLayout()
+                fila.setSpacing(8)
+                escolher = QPushButton('Choose')
+                escolher.clicked.connect(self.escolher_fundo)
+                self.tirar = QPushButton('Remove')
+                self.tirar.clicked.connect(self.tirar_fundo)
+                fila.addWidget(escolher)
+                fila.addWidget(self.tirar)
+                fila.addStretch(1)
+                esq.addLayout(fila)
                 self.forca = QSlider(Qt.Horizontal)
+                self.forca.setFixedWidth(150)
                 self.forca.setRange(3, 40)
                 self.forca.setValue(round(lembrar_fundo(app) * 100))
                 self.forca.valueChanged.connect(lambda n: gravar_fundo_forca(app, n / 100))
-                f2 = QFormLayout()
-                f2.setHorizontalSpacing(14)
-                f2.addRow('Wallpaper strength:', self.forca)
-                v.addLayout(f2)
-                v.addWidget(link('Choose wallpaper…', self.escolher_fundo))
-                v.addWidget(link('Remove wallpaper', lambda: (ferramentas(app) / 'fundo.jpg').unlink(missing_ok=True)))
-            v.addSpacing(8)
-            v.addWidget(rotulo('Privacy', 'secao'))
-            self.caixa('Enable AI features', 'ai', v)
+                esq.addLayout(self.campo('Strength', self.forca))
+                self.ver_fundo()
             if info.get('memory'):
-                v.addSpacing(8)
-                v.addWidget(rotulo('Performance', 'secao'))
-                self.memoria = Combo()
-                self.memoria.addItems(MEMORIAS)
-                self.memoria.setCurrentText(opcao(app, 'memory'))
-                self.memoria.currentTextChanged.connect(lambda t: gravar_opcao(app, 'memory', t))
-                f3 = QFormLayout()
-                f3.setHorizontalSpacing(14)
-                f3.addRow('Java memory limit:', self.memoria)
-                v.addLayout(f3)
-            v.addSpacing(8)
-            v.addWidget(rotulo('Import', 'secao'))
-            v.addWidget(rotulo('Copies settings, shortcuts and snippets. The original stays untouched.', 'mudo'))
+                dir_.addWidget(rotulo('Memory limit', 'secao'))
+                fila = QHBoxLayout()
+                fila.setSpacing(12)
+                fila.addWidget(MarcaPlimsoll())
+                degraus = QVBoxLayout()
+                degraus.setSpacing(1)
+                grupo = QButtonGroup(self)
+                for m in reversed(MEMORIAS):
+                    b = Degrau(m, info.get('accent', AZUL))
+                    b.setChecked(m == opcao(app, 'memory'))
+                    b.clicked.connect(lambda _=False, x=m: gravar_opcao(app, 'memory', x))
+                    grupo.addButton(b)
+                    degraus.addWidget(b)
+                fila.addLayout(degraus)
+                fila.addStretch(1)
+                dir_.addLayout(fila)
+                dir_.addWidget(rotulo('The Java server stops at this line.', 'mudo'))
+                dir_.addSpacing(8)
+            dir_.addWidget(rotulo('AI', 'secao'))
+            self.caixa('Enable AI features', 'ai', dir_)
+            dir_.addSpacing(8)
+            dir_.addWidget(rotulo('Import', 'secao'))
+            d = rotulo('Copies settings, shortcuts and snippets. The original stays untouched.', 'mudo')
+            d.setWordWrap(True)
+            dir_.addWidget(d)
             fila = QHBoxLayout()
+            fila.setSpacing(8)
+            achou = False
             for nome_, origem in origens_importacao():
                 b = QPushButton(f'From {nome_}')
                 b.setEnabled(origem.is_dir())
+                achou = achou or origem.is_dir()
                 b.clicked.connect(lambda _=False, o=origem, n=nome_: self.importar(o, n))
                 fila.addWidget(b)
             fila.addStretch(1)
-            v.addLayout(fila)
-            v.addSpacing(8)
-            v.addWidget(link('All settings…', lambda: abrir(app, comando_='workbench.action.openSettings')))
-            v.addWidget(link('Keyboard shortcuts…', lambda: abrir(app, comando_='workbench.action.openGlobalKeybindings')))
-            v.addStretch(1)
-            v.addWidget(rotulo('Changes apply the next time the app opens.', 'mudo'))
-            self.setWidget(miolo)
+            dir_.addLayout(fila)
+            if not achou:
+                dir_.addWidget(rotulo('No installation found.', 'mudo'))
+            dir_.addSpacing(8)
+            dir_.addWidget(rotulo('More', 'secao'))
+            dir_.addWidget(link('All settings…', lambda: abrir(app, comando_='workbench.action.openSettings')))
+            dir_.addWidget(link('Keyboard shortcuts…', lambda: abrir(app, comando_='workbench.action.openGlobalKeybindings')))
+            esq.addStretch(1)
+            dir_.addStretch(1)
+            rolagem.setWidget(miolo)
+            externo.addWidget(rolagem, 1)
+
+        def campo(self, texto, controle):
+            fila = QHBoxLayout()
+            fila.addWidget(QLabel(texto))
+            fila.addStretch(1)
+            fila.addWidget(controle)
+            return fila
+
+        def mudar_keymap(self, texto):
+            if not aplicar_keymap(self.app, 'intellij' if texto == 'IntelliJ' else 'vscode'):
+                QMessageBox.warning(self, 'Keymap', 'Could not read your keybindings.json. Fix it and try again.')
+                self.teclas.botoes['IntelliJ' if opcao(self.app, 'keymap') == 'intellij' else 'VS Code'].setChecked(True)
+
+        def ver_fundo(self):
+            tem = (ferramentas(self.app) / 'fundo.jpg').exists()
+            self.imagem.setText('Set' if tem else 'None')
+            self.tirar.setEnabled(tem)
+
+        def tirar_fundo(self):
+            (ferramentas(self.app) / 'fundo.jpg').unlink(missing_ok=True)
+            self.ver_fundo()
 
         def caixa(self, texto, chave, layout):
             c = QCheckBox(texto)
@@ -1640,6 +1905,7 @@ def janela(inicial=None, lancar=None):
             arquivo, _ = QFileDialog.getOpenFileName(self, 'Background image', str(CASA), 'Images (*.jpg *.jpeg *.png *.webp *.bmp)')
             if arquivo and not gravar_fundo(arquivo, ferramentas(self.app)):
                 QMessageBox.warning(self, 'Background image', 'Could not read this image.')
+            self.ver_fundo()
 
         def importar(self, origem, nome_):
             importar(self.app, origem)
@@ -1668,73 +1934,105 @@ def janela(inicial=None, lancar=None):
             self.lista = QListWidget()
             self.lista.setSelectionMode(QListWidget.NoSelection)
             obrigatorias = aplicativos()[app].get('required', [])
-            for ident, nome, versao_, autor in plugins(app):
-                item = QListWidgetItem(self.lista)
-                item.setData(Qt.UserRole, nome.lower())
-                item.setSizeHint(QSize(0, 46))
-                w = QWidget()
-                h = QHBoxLayout(w)
-                h.setContentsMargins(20, 3, 16, 3)
-                c = QVBoxLayout()
-                c.setSpacing(1)
-                c.addWidget(QLabel(nome))
-                c.addWidget(rotulo(f'{autor}  ·  {versao_}', 'mudo'))
-                h.addLayout(c, 1)
-                ligado = QCheckBox('Enabled')
-                ligado.setChecked(ident not in desligadas(app))
-                if ident in obrigatorias:
-                    ligado.setEnabled(False)
-                    ligado.setToolTip(f'{nome_app(app)} needs this plugin.')
-                ligado.toggled.connect(lambda n, i=ident: alternar_extensao(app, i, n))
-                h.addWidget(ligado)
-                self.lista.setItemWidget(item, w)
+            todos = plugins(app)
+            opcionais = [x for x in todos if x[0] not in obrigatorias]
+            fixos = [x for x in todos if x[0] in obrigatorias]
+            for titulo, grupo_ in ((f'Optional · {len(opcionais)}', opcionais), (f'Required · {len(fixos)}', fixos)):
+                if not grupo_:
+                    continue
+                cabeca = QListWidgetItem(self.lista)
+                cabeca.setFlags(Qt.NoItemFlags)
+                cabeca.setSizeHint(QSize(0, 30))
+                r = rotulo(titulo, 'secao')
+                r.setContentsMargins(20, 8, 0, 0)
+                self.lista.setItemWidget(cabeca, r)
+                for ident, nome, versao_, autor in grupo_:
+                    item = QListWidgetItem(self.lista)
+                    item.setData(Qt.UserRole, nome.lower())
+                    item.setSizeHint(QSize(0, 32))
+                    w = QWidget()
+                    h = QHBoxLayout(w)
+                    h.setContentsMargins(20, 0, 16, 0)
+                    h.setSpacing(10)
+                    h.addWidget(rotulo(nome, 'forte'))
+                    h.addWidget(rotulo(f'{autor} · {versao_}', 'mudo'), 1)
+                    if ident in obrigatorias:
+                        trava = QLabel()
+                        trava.setPixmap(QIcon(str(ASSETS / 'lock.svg')).pixmap(11, 11))
+                        trava.setToolTip(f'{nome_app(app)} needs this plugin.')
+                        h.addWidget(trava)
+                        h.addWidget(rotulo('Required', 'mudo'))
+                    else:
+                        ligado = QCheckBox()
+                        ligado.setToolTip(f'Enable {nome}')
+                        ligado.setChecked(ident not in desligadas(app))
+                        ligado.toggled.connect(lambda n, i=ident: alternar_extensao(app, i, n))
+                        h.addWidget(ligado)
+                    self.lista.setItemWidget(item, w)
             v.addWidget(self.lista, 1)
             busca.textChanged.connect(self.filtrar)
 
         def filtrar(self, texto):
             for i in range(self.lista.count()):
                 item = self.lista.item(i)
-                item.setHidden(texto.lower() not in item.data(Qt.UserRole))
+                dado = item.data(Qt.UserRole)
+                item.setHidden(bool(texto) and (dado is None or texto.lower() not in dado))
 
     class Aprender(QWidget):
-        ATALHOS = (
-            ('Search Everywhere', 'Shift Shift'), ('Run', 'Shift+F10'), ('Debug', 'Shift+F9'), ('Rerun', 'Ctrl+5'),
-            ('Stop', 'Ctrl+2'), ('Build', 'Ctrl+9'), ('Toggle Breakpoint', 'Ctrl+8'), ('Step Over', 'F8'),
-            ('Step Into', 'F7'), ('Resume', 'F9'), ('Context Actions', 'Alt+Enter'), ('Generate', 'Alt+Insert'),
-            ('Rename', 'Shift+F6'), ('File Structure', 'Ctrl+0'), ('Recent Files', 'Ctrl+E'), ('Terminal', 'Alt+F12'),
-        )
-
         def __init__(self, app):
             super().__init__()
             self.setObjectName('pagina')
+            self.app = app
             info = aplicativos()[app]
-            v = QVBoxLayout(self)
-            v.setContentsMargins(24, 22, 24, 22)
-            v.setSpacing(8)
-            v.addWidget(rotulo(f"Learn {info['title']}", 'secao'))
+            h = QHBoxLayout(self)
+            h.setContentsMargins(20, 14, 20, 14)
+            h.setSpacing(26)
+            esq = QVBoxLayout()
+            esq.setSpacing(4)
+            esq.addWidget(rotulo(f"Learn {info['title']}", 'secao'))
             for texto, url in info.get('learn', []):
-                v.addWidget(link(texto, lambda _=False, u=url: QDesktopServices.openUrl(QUrl(u))))
-            if info.get('base'):
-                v.addSpacing(10)
-                v.addWidget(rotulo('Help', 'secao'))
-                v.addWidget(link('Keymap Reference', self.atalhos))
-            v.addStretch(1)
+                esq.addWidget(link(texto, lambda _=False, u=url: QDesktopServices.openUrl(QUrl(u))))
+                esq.addWidget(rotulo(url.split('/')[2], 'mudo'))
+            esq.addStretch(1)
+            h.addLayout(esq, 2)
+            self.direita = QVBoxLayout()
+            self.direita.setSpacing(0)
+            h.addLayout(self.direita, 3)
+            self.mostrar_teclas()
 
-        def atalhos(self):
-            d = QDialog(self)
-            d.setWindowTitle('Keymap Reference')
-            d.resize(420, 560)
-            t = QTableWidget(len(self.ATALHOS), 2)
-            t.setHorizontalHeaderLabels(['Action', 'Shortcut'])
-            t.verticalHeader().hide()
-            t.horizontalHeader().setStretchLastSection(True)
-            t.setColumnWidth(0, 220)
-            t.setEditTriggers(QTableWidget.NoEditTriggers)
-            for i, (acao, tecla) in enumerate(self.ATALHOS):
-                t.setItem(i, 0, QTableWidgetItem(acao))
-                t.setItem(i, 1, QTableWidgetItem(tecla))
-            QVBoxLayout(d).addWidget(t)
-            d.exec()
+        def showEvent(self, _):
+            self.mostrar_teclas()
+
+        def mostrar_teclas(self):
+            """Rebuilt on show, because the keymap can change in Customize."""
+            while self.direita.count():
+                filho = self.direita.takeAt(0)
+                if filho.widget():
+                    filho.widget().deleteLater()
+                elif filho.layout():
+                    pass
+            if not aplicativos()[self.app].get('base'):
+                self.direita.addWidget(rotulo('Keymap', 'secao'))
+                r = rotulo('Standard keeps the editor defaults, so there is no keymap to learn here.', 'mudo')
+                r.setWordWrap(True)
+                self.direita.addWidget(r)
+                self.direita.addStretch(1)
+                return
+            nome = 'IntelliJ' if opcao(self.app, 'keymap') == 'intellij' else 'VS Code'
+            self.direita.addWidget(rotulo(f'Keymap: {nome}', 'secao'))
+            self.direita.addSpacing(6)
+            for acao, tecla in teclas_app(self.app):
+                w = QWidget()
+                fila = QHBoxLayout(w)
+                fila.setContentsMargins(0, 4, 0, 4)
+                fila.addWidget(QLabel(acao))
+                fila.addStretch(1)
+                fila.addWidget(etiqueta(tecla))
+                self.direita.addWidget(w)
+                self.direita.addWidget(linha('linhaH'))
+            self.direita.addSpacing(8)
+            self.direita.addWidget(link('Change keymap', lambda: self.window().ir('Customize')))
+            self.direita.addStretch(1)
 
     class Boasvindas(Raiz):
         """Tela de início de cada app, com o que é específico dele."""
@@ -1754,20 +2052,21 @@ def janela(inicial=None, lancar=None):
             self.abas = {}
             grupo = QButtonGroup(self)
             esquerda = QWidget()
-            esquerda.setFixedWidth(225)
+            esquerda.setFixedWidth(200)
             e = QVBoxLayout(esquerda)
-            e.setContentsMargins(12, 18, 12, 14)
-            e.setSpacing(4)
-            topo = QHBoxLayout()
-            topo.setContentsMargins(4, 0, 0, 12)
-            topo.setSpacing(10)
-            nome = QVBoxLayout()
-            nome.setSpacing(0)
-            nome.addWidget(QLabel(nome_app(app)))
-            nome.addWidget(rotulo(versao_editor(), 'mudo'))
-            topo.addWidget(icone(app, 30))
-            topo.addLayout(nome, 1)
-            e.addLayout(topo)
+            e.setContentsMargins(0, 0, 0, 0)
+            e.setSpacing(0)
+            tipo, titulo_estado, _ = estado_app(app)
+            topo = QWidget()
+            topo.setFixedSize(200, 128)
+            Sea(app, 200, 128, tipo == 'run', 92, 4).setParent(topo)
+            nome = rotulo(aplicativos()[app]['title'], 'grande')
+            nome.setParent(topo)
+            nome.setGeometry(106, 30, 92, 28)
+            nome.setStyleSheet('font-size:16px;')
+            e.addWidget(topo)
+            e.addWidget(linha('linhaH'))
+            e.addSpacing(10)
             for titulo, pagina in (('Projects', Projetos(app)), ('Customize', Personalizar(app)),
                                    ('Plugins', Plugins(app)), ('Learn', Aprender(app))):
                 b = QPushButton(titulo)
@@ -1780,9 +2079,20 @@ def janela(inicial=None, lancar=None):
                 self.paginas.addWidget(pagina)
             self.abas['Projects'].setChecked(True)
             e.addStretch(1)
-            voltar = QPushButton('Back to Hub')
+            estado = QHBoxLayout()
+            estado.setContentsMargins(14, 0, 14, 4)
+            estado.setSpacing(7)
+            estado.addWidget(lampada(tipo))
+            estado.addWidget(rotulo(titulo_estado, 'forte'), 1)
+            e.addLayout(estado)
+            r = rotulo(f"{marca()['name']} {versao()}\nEditor {versao_editor()}", 'mudo')
+            r.setContentsMargins(14, 0, 14, 8)
+            r.setStyleSheet('font-size:11px;')
+            e.addWidget(r)
+            voltar = QPushButton('‹ Cargo')
+            voltar.setObjectName('volta')
             voltar.clicked.connect(self.voltar)
-            e.addWidget(voltar, 0, Qt.AlignLeft)
+            e.addWidget(voltar)
             h = QHBoxLayout(self)
             h.setContentsMargins(0, 0, 0, 0)
             h.setSpacing(0)
@@ -1903,6 +2213,204 @@ def janela(inicial=None, lancar=None):
             if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
                 self.painel.boasvindas(self.app)
 
+    class Preparo(Raiz):
+        """First-use window. Everything here can be changed later, and it can run again."""
+
+        def __init__(self, painel):
+            super().__init__()
+            self.setObjectName('raiz')
+            self.painel = painel
+            self.setWindowTitle(f"Set up {marca()['name']}")
+            com_vidro(self)
+            self.resize(820, 650)
+            self.linhas = {}
+            v = QVBoxLayout(self)
+            v.setContentsMargins(28, 18, 28, 18)
+            v.setSpacing(6)
+            topo = QHBoxLayout()
+            topo.setSpacing(10)
+            topo.addWidget(icone('hub', 28))
+            topo.addWidget(rotulo(marca()['name'], 'forte'))
+            topo.addStretch(1)
+            topo.addWidget(rotulo(versao(), 'mudo'))
+            v.addLayout(topo)
+            v.addWidget(linha('linhaH'))
+            v.addSpacing(8)
+            v.addWidget(rotulo(f"Set up {marca()['name']}", 'grande'))
+            v.addWidget(rotulo('Everything here can be changed later in the Hub.', 'mudo'))
+            v.addSpacing(10)
+            v.addWidget(rotulo('Apps', 'secao'))
+            grade = QGridLayout()
+            grade.setHorizontalSpacing(10)
+            grade.setVerticalSpacing(7)
+            for coluna, texto in ((1, 'App'), (2, 'Shortcuts'), (4, 'Keymap'), (5, 'Project folder')):
+                grade.addWidget(rotulo(texto, 'mudo'), 0, coluna)
+            for i, (app, info) in enumerate(aplicativos().items(), 1):
+                grade.addWidget(icone(app, 28), i, 0)
+                grade.addWidget(rotulo(info['title'], 'forte'), i, 1)
+                mesa, menu = QCheckBox('Desktop'), QCheckBox('Menu')
+                mesa.setChecked(True)
+                menu.setChecked(True)
+                grade.addWidget(mesa, i, 2)
+                grade.addWidget(menu, i, 3)
+                if info.get('base'):
+                    teclas = segmento(('IntelliJ', 'VS Code'), 'IntelliJ' if opcao(app, 'keymap') == 'intellij' else 'VS Code', lambda _: None)
+                    grade.addWidget(teclas, i, 4)
+                else:
+                    teclas = None
+                    grade.addWidget(rotulo('Editor default', 'mudo'), i, 4)
+                pasta = QLineEdit(curto(pasta_projetos(app)))
+                pasta.setToolTip(f"{info['title']} project folder")
+                grade.addWidget(pasta, i, 5)
+                procurar = QPushButton('Browse')
+                procurar.clicked.connect(lambda _=False, c=pasta: self.procurar(c))
+                grade.addWidget(procurar, i, 6)
+                self.linhas[app] = (mesa, menu, teclas, pasta)
+            grade.setColumnStretch(5, 1)
+            v.addLayout(grade)
+            v.addSpacing(10)
+            v.addWidget(rotulo('Hub shortcut', 'secao'))
+            fila = QHBoxLayout()
+            fila.setSpacing(16)
+            self.hub_mesa, self.hub_menu = QCheckBox('Desktop'), QCheckBox('App menu')
+            for c in (self.hub_mesa, self.hub_menu):
+                c.setChecked(True)
+                fila.addWidget(c)
+            fila.addStretch(1)
+            v.addLayout(fila)
+            v.addSpacing(10)
+            v.addWidget(rotulo('Theme for all apps', 'secao'))
+            self.tema = 'Dark'
+            fila = QHBoxLayout()
+            fila.addWidget(segmento(THEMES, self.tema, self.escolher_tema))
+            fila.addStretch(1)
+            v.addLayout(fila)
+            v.addStretch(1)
+            fim = QHBoxLayout()
+            fim.addStretch(1)
+            pular = QPushButton('Skip')
+            pular.clicked.connect(self.encerrar)
+            terminar = QPushButton('Finish')
+            terminar.setObjectName('azul')
+            terminar.clicked.connect(self.concluir)
+            fim.addWidget(pular)
+            fim.addWidget(terminar)
+            v.addLayout(fim)
+
+        def escolher_tema(self, nome):
+            self.tema = nome
+
+        def procurar(self, campo):
+            d = QFileDialog.getExistingDirectory(self, 'Project folder', str(CASA))
+            if d:
+                campo.setText(curto(d))
+
+        def concluir(self):
+            try:
+                for app, (mesa, menu, teclas, pasta) in self.linhas.items():
+                    if mesa.isChecked() or menu.isChecked():
+                        criar_atalho(app, mesa.isChecked(), menu.isChecked())
+                    alvo = Path(pasta.text().strip()).expanduser()
+                    if str(alvo) != str(PROJETOS):
+                        gravar_opcao(app, 'folder', str(alvo))
+                    alvo.mkdir(parents=True, exist_ok=True)
+                    if teclas:
+                        aplicar_keymap(app, 'intellij' if teclas.botoes['IntelliJ'].isChecked() else 'vscode')
+                    gravar_ajuste(app, 'workbench.colorTheme', THEMES[self.tema][0 if aplicativos()[app].get('base') else 1])
+                if self.hub_mesa.isChecked() or self.hub_menu.isChecked():
+                    criar_atalho(None, self.hub_mesa.isChecked(), self.hub_menu.isChecked())
+            except OSError as e:
+                QMessageBox.warning(self, 'Setup', f'Could not finish the setup: {e}')
+                return
+            self.encerrar()
+
+        def encerrar(self):
+            gravar_geral('setup', True)
+            self.close()
+            surgir(self.painel)
+
+    class Novidade(QDialog):
+        """Update notice. Nothing downloads until the person clicks Download."""
+
+        def __init__(self, painel, nova):
+            super().__init__(painel)
+            self.painel = painel
+            self.nova = nova
+            self.feito = None
+            self.setWindowTitle(f"{marca()['name']} {nova['version']}")
+            self.resize(460, 340)
+            v = QVBoxLayout(self)
+            v.setContentsMargins(18, 16, 18, 16)
+            v.setSpacing(8)
+            topo = QHBoxLayout()
+            topo.setSpacing(9)
+            bandeira = QLabel()
+            bandeira.setPixmap(QIcon(str(ASSETS / 'flag.svg')).pixmap(18, 14))
+            topo.addWidget(bandeira)
+            topo.addWidget(rotulo(self.windowTitle(), 'grande'))
+            topo.addStretch(1)
+            topo.addWidget(rotulo(f'You have {versao()}', 'mudo'))
+            v.addLayout(topo)
+            v.addWidget(linha('linhaH'))
+            notas = '\n'.join(nova.get('notes', '').strip().splitlines()[:8]) or 'See the release page for what changed.'
+            r = rotulo(notas)
+            r.setTextFormat(Qt.PlainText)
+            r.setWordWrap(True)
+            v.addWidget(r)
+            v.addWidget(linha('linhaH'))
+            for chave, valor in (('Package', pacote_atual()), ('Source', 'GitHub release, checked by SHA-256'),
+                                 ('Saved to', curto(CASA / 'Downloads'))):
+                fila = QHBoxLayout()
+                fila.addWidget(rotulo(chave, 'mudo'))
+                fila.addStretch(1)
+                fila.addWidget(QLabel(valor))
+                v.addLayout(fila)
+            v.addStretch(1)
+            self.estado = rotulo('', 'mudo')
+            self.estado.setWordWrap(True)
+            v.addWidget(self.estado)
+            fim = QHBoxLayout()
+            fim.addWidget(link('Skip this version', self.pular))
+            fim.addStretch(1)
+            depois = QPushButton('Later')
+            depois.clicked.connect(self.reject)
+            self.baixar = QPushButton('Download')
+            self.baixar.setObjectName('azul')
+            self.baixar.clicked.connect(self.agir)
+            pode = bool(nova.get('package') and nova.get('sums'))
+            self.baixar.setEnabled(pode)
+            if not pode:
+                self.estado.setText('This release has no package for this system.')
+            fim.addWidget(depois)
+            fim.addWidget(self.baixar)
+            v.addLayout(fim)
+
+        def pular(self):
+            gravar_geral('skip_version', self.nova['version'])
+            self.painel.ver_novidade()
+            self.reject()
+
+        def agir(self):
+            if self.feito:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.feito.parent)))
+                return
+            self.baixar.setEnabled(False)
+            self.estado.setText('Downloading…')
+            alvo = CASA / 'Downloads' / pacote_atual()
+            em_fundo(lambda: baixar_verificado(self.nova['package'], self.nova['sums'], alvo, self.andou), self.terminou)
+
+        def andou(self, parte):
+            self.parte = parte
+
+        def terminou(self, arquivo, erro):
+            self.baixar.setEnabled(True)
+            if erro:
+                self.estado.setText(f'Download failed: {erro[:90]}')
+                return
+            self.feito = arquivo
+            self.estado.setText(f'Saved and verified: {curto(arquivo)}')
+            self.baixar.setText('Show in File Manager')
+
     class Painel(Raiz):
         """Janela principal: lista os apps e guarda só o que vale para todos."""
 
@@ -1958,7 +2466,20 @@ def janela(inicial=None, lancar=None):
             v.addWidget(caixa)
             v.addWidget(linha('linhaH'))
             v.addWidget(self.miolo, 1)
+            self.faixa = QFrame()
+            self.faixa.setObjectName('faixa')
+            self.faixa.setFixedHeight(36)
+            f = QHBoxLayout(self.faixa)
+            f.setContentsMargins(12, 0, 12, 0)
+            f.setSpacing(9)
+            bandeira = QLabel()
+            bandeira.setPixmap(QIcon(str(ASSETS / 'flag.svg')).pixmap(18, 14))
+            f.addWidget(bandeira)
+            self.faixa_texto = rotulo('', 'forte')
+            f.addWidget(self.faixa_texto, 1)
+            f.addWidget(link('View', self.ver_detalhes))
             v.addWidget(linha('linhaH'))
+            v.addWidget(self.faixa)
             rodape = QHBoxLayout()
             rodape.setContentsMargins(12, 0, 12, 0)
             rodape.addWidget(rotulo(f"{marca()['name']} {versao()}", 'forte'))
@@ -1971,6 +2492,35 @@ def janela(inicial=None, lancar=None):
             self.miolo.currentChanged.connect(self.marcar)
             self.vigia = QTimer(self)
             self.vigia.timeout.connect(self.atualizar)
+            self.ver_novidade()
+            if opcoes().get('check_updates', True) and time.time() - opcoes().get('checked', 0) > 21600:
+                em_fundo(checar_novidade, self.recebeu)
+
+        def ver_novidade(self):
+            nova = novidade()
+            self.faixa.setVisible(bool(nova))
+            if nova:
+                self.faixa_texto.setText(f"{marca()['name']} {nova['version']} is available")
+
+        def recebeu(self, nova, erro):
+            if not erro:
+                gravar_geral('checked', time.time())
+                gravar_geral('update', nova)
+                self.ver_novidade()
+            if hasattr(self, 'checagem'):
+                if erro:
+                    self.checagem.setText('Could not reach GitHub.')
+                else:
+                    self.checagem.setText(self.faixa_texto.text() if novidade() else 'Up to date.')
+
+        def checar_agora(self):
+            self.checagem.setText('Checking…')
+            em_fundo(checar_novidade, self.recebeu)
+
+        def ver_detalhes(self):
+            nova = novidade()
+            if nova:
+                Novidade(self, nova).exec()
 
         def marcar(self, _):
             pagina = self.miolo.currentWidget()
@@ -2087,9 +2637,33 @@ def janela(inicial=None, lancar=None):
             atalho_ = QPushButton('Add Hub to Desktop')
             atalho_.clicked.connect(lambda: self.atalho(None))
             v.addWidget(atalho_, 0, Qt.AlignLeft)
+            v.addSpacing(8)
+            v.addWidget(rotulo('Setup', 'secao'))
+            preparo = QPushButton('Run setup again')
+            preparo.clicked.connect(self.preparar_de_novo)
+            v.addWidget(preparo, 0, Qt.AlignLeft)
+            v.addSpacing(8)
+            v.addWidget(rotulo('Updates', 'secao'))
+            c = QCheckBox('Check GitHub for new versions when the Hub opens')
+            c.setChecked(opcoes().get('check_updates', True))
+            c.toggled.connect(lambda n: gravar_geral('check_updates', n))
+            v.addWidget(c)
+            fila = QHBoxLayout()
+            fila.setSpacing(8)
+            b = QPushButton('Check now')
+            b.clicked.connect(self.checar_agora)
+            self.checagem = rotulo('', 'mudo')
+            fila.addWidget(b)
+            fila.addWidget(self.checagem, 1)
+            v.addLayout(fila)
             v.addStretch(1)
             self.listar()
             return p
+
+        def preparar_de_novo(self):
+            self.preparo = Preparo(self)
+            self.hide()
+            surgir(self.preparo)
 
         def listar(self):
             self.confiaveis.clear()
@@ -2124,7 +2698,7 @@ def janela(inicial=None, lancar=None):
             except OSError as e:
                 QMessageBox.warning(self, 'Desktop shortcut', f'Could not create the shortcut: {e}')
 
-    CLASSES.update(Partida=Partida, Abertura=Abertura)
+    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade)
     aplicacao = QApplication(sys.argv)
     aplicacao.setApplicationName(marca()['hub'])
     aplicacao.setStyle('Fusion')
@@ -2159,6 +2733,8 @@ def janela(inicial=None, lancar=None):
         QTimer.singleShot(0, lambda: abrir(*lancar))
         return aplicacao.exec()
     j = Boasvindas(inicial) if inicial else Painel()
+    if not inicial and not opcoes().get('setup') and not opcoes().get('recent'):
+        j.preparo = j = Preparo(j)
     if inicial or not opcoes().get('transitions', True):
         surgir(j)
     else:

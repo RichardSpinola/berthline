@@ -33,46 +33,68 @@ hub-settings/QAction:Open Editor Directly
 hub-settings/QAction:Plugins
 hub-settings/QAction:Settings
 hub-settings/QAction:Show Data Folder
+hub-settings/QCheckBox:Check GitHub for new versions when the Hub opens
 hub-settings/QCheckBox:Transitions and boat animation
 hub-settings/QListWidget:lista
 hub-settings/QPushButton:Add
 hub-settings/QPushButton:Add Hub to Desktop
 hub-settings/QPushButton:Cargo
+hub-settings/QPushButton:Check now
 hub-settings/QPushButton:Projects
 hub-settings/QPushButton:Remove
+hub-settings/QPushButton:Run setup again
 hub-settings/QToolButton:Settings
 hub-settings/QToolButton:⋯
 java-customize/Combo:
+java-customize/Degrau:1G
+java-customize/Degrau:2G
+java-customize/Degrau:3G
+java-customize/Degrau:768M
 java-customize/QCheckBox:Animations
 java-customize/QCheckBox:Enable AI features
-java-customize/QCheckBox:Visual extras: tree icons and app watermark (needs
+java-customize/QCheckBox:Tree icons and watermark
 java-customize/QPushButton:All settings…
-java-customize/QPushButton:Back to Hub
-java-customize/QPushButton:Choose wallpaper…
+java-customize/QPushButton:Berthline
+java-customize/QPushButton:Choose
 java-customize/QPushButton:Customize
+java-customize/QPushButton:IntelliJ
+java-customize/QPushButton:JetBrains
 java-customize/QPushButton:Keyboard shortcuts…
 java-customize/QPushButton:Learn
 java-customize/QPushButton:Plugins
 java-customize/QPushButton:Projects
-java-customize/QPushButton:Remove wallpaper
+java-customize/QPushButton:VS Code
+java-customize/QPushButton:‹ Cargo
 java-customize/QSlider:
-java-learn/QPushButton:Back to Hub
+java-learn/QPushButton:Change keymap
 java-learn/QPushButton:Customize
 java-learn/QPushButton:Java API reference
 java-learn/QPushButton:Java tutorials
-java-learn/QPushButton:Keymap Reference
 java-learn/QPushButton:Learn
 java-learn/QPushButton:Plugins
 java-learn/QPushButton:Projects
-java-plugins/QCheckBox:Enabled
+java-learn/QPushButton:‹ Cargo
+java-plugins/QCheckBox:Enable Bookmarks
+java-plugins/QCheckBox:Enable EditorConfig
+java-plugins/QCheckBox:Enable Git Branch & Tag Graph
+java-plugins/QCheckBox:Enable Gradle for Java
+java-plugins/QCheckBox:Enable IntelliJ IDEA Keybindings
+java-plugins/QCheckBox:Enable Islands Theme
+java-plugins/QCheckBox:Enable JetBrains New UI Color Theme Extended
+java-plugins/QCheckBox:Enable JetBrains New UI File Icon Theme Extended
+java-plugins/QCheckBox:Enable JetBrains New UI Product Icon Theme
+java-plugins/QCheckBox:Enable Maven for Java
+java-plugins/QCheckBox:Enable Project Manager for Java
+java-plugins/QCheckBox:Enable Test Runner for Java
+java-plugins/QCheckBox:Enable Todo Tree
 java-plugins/QLineEdit:Search installed plugins
 java-plugins/QListWidget:
-java-plugins/QPushButton:Back to Hub
 java-plugins/QPushButton:Customize
 java-plugins/QPushButton:Learn
 java-plugins/QPushButton:Marketplace
 java-plugins/QPushButton:Plugins
 java-plugins/QPushButton:Projects
+java-plugins/QPushButton:‹ Cargo
 java-plugins/QToolButton:
 java-projects/Clone Repository/QLineEdit:
 java-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
@@ -86,7 +108,6 @@ java-projects/New Project/QPushButton:Browse…
 java-projects/New Project/QPushButton:Cancel
 java-projects/New Project/QPushButton:Create
 java-projects/QLineEdit:Search projects
-java-projects/QPushButton:Back to Hub
 java-projects/QPushButton:Clone Repository
 java-projects/QPushButton:Customize
 java-projects/QPushButton:Learn
@@ -94,31 +115,45 @@ java-projects/QPushButton:New Project
 java-projects/QPushButton:Open
 java-projects/QPushButton:Plugins
 java-projects/QPushButton:Projects
+java-projects/QPushButton:‹ Cargo
 java-projects/QToolButton:
+setup/QCheckBox:App menu
+setup/QCheckBox:Desktop
+setup/QCheckBox:Menu
+setup/QLineEdit:Java project folder
+setup/QLineEdit:Standard project folder
+setup/QLineEdit:Web project folder
+setup/QPushButton:Browse
+setup/QPushButton:Dark
+setup/QPushButton:Finish
+setup/QPushButton:IntelliJ
+setup/QPushButton:Light
+setup/QPushButton:Skip
+setup/QPushButton:VS Code
 standard-customize/Combo:
 standard-customize/QCheckBox:Animations
 standard-customize/QCheckBox:Enable AI features
 standard-customize/QPushButton:All settings…
-standard-customize/QPushButton:Back to Hub
 standard-customize/QPushButton:Customize
 standard-customize/QPushButton:Keyboard shortcuts…
 standard-customize/QPushButton:Learn
 standard-customize/QPushButton:Plugins
 standard-customize/QPushButton:Projects
-standard-learn/QPushButton:Back to Hub
+standard-customize/QPushButton:‹ Cargo
 standard-learn/QPushButton:Customize
 standard-learn/QPushButton:Learn
 standard-learn/QPushButton:Plugins
 standard-learn/QPushButton:Projects
 standard-learn/QPushButton:VSCodium docs
+standard-learn/QPushButton:‹ Cargo
 standard-plugins/QLineEdit:Search installed plugins
 standard-plugins/QListWidget:
-standard-plugins/QPushButton:Back to Hub
 standard-plugins/QPushButton:Customize
 standard-plugins/QPushButton:Learn
 standard-plugins/QPushButton:Marketplace
 standard-plugins/QPushButton:Plugins
 standard-plugins/QPushButton:Projects
+standard-plugins/QPushButton:‹ Cargo
 standard-plugins/QToolButton:
 standard-projects/Clone Repository/QLineEdit:
 standard-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
@@ -130,7 +165,6 @@ standard-projects/New Project/QListWidget:
 standard-projects/New Project/QPushButton:Browse…
 standard-projects/New Project/QPushButton:Cancel
 standard-projects/New Project/QPushButton:Create
-standard-projects/QPushButton:Back to Hub
 standard-projects/QPushButton:Clone Repository
 standard-projects/QPushButton:Customize
 standard-projects/QPushButton:Learn
@@ -138,38 +172,60 @@ standard-projects/QPushButton:New Project
 standard-projects/QPushButton:Open
 standard-projects/QPushButton:Plugins
 standard-projects/QPushButton:Projects
+standard-projects/QPushButton:‹ Cargo
+update/QPushButton:Download
+update/QPushButton:Later
+update/QPushButton:Skip this version
 web-customize/Combo:
 web-customize/QCheckBox:Animations
 web-customize/QCheckBox:Enable AI features
-web-customize/QCheckBox:Visual extras: tree icons and app watermark (needs
+web-customize/QCheckBox:Tree icons and watermark
 web-customize/QPushButton:All settings…
-web-customize/QPushButton:Back to Hub
-web-customize/QPushButton:Choose wallpaper…
+web-customize/QPushButton:Berthline
+web-customize/QPushButton:Choose
 web-customize/QPushButton:Customize
+web-customize/QPushButton:IntelliJ
+web-customize/QPushButton:JetBrains
 web-customize/QPushButton:Keyboard shortcuts…
 web-customize/QPushButton:Learn
 web-customize/QPushButton:Plugins
 web-customize/QPushButton:Projects
-web-customize/QPushButton:Remove wallpaper
+web-customize/QPushButton:VS Code
+web-customize/QPushButton:‹ Cargo
 web-customize/QSlider:
-web-learn/QPushButton:Back to Hub
+web-learn/QPushButton:Change keymap
 web-learn/QPushButton:Customize
-web-learn/QPushButton:Keymap Reference
 web-learn/QPushButton:Learn
 web-learn/QPushButton:MDN Web Docs
 web-learn/QPushButton:Plugins
 web-learn/QPushButton:Projects
 web-learn/QPushButton:TypeScript handbook
 web-learn/QPushButton:web.dev
-web-plugins/QCheckBox:Enabled
+web-learn/QPushButton:‹ Cargo
+web-plugins/QCheckBox:Enable Berthline Tools
+web-plugins/QCheckBox:Enable Bookmarks
+web-plugins/QCheckBox:Enable Color Highlight
+web-plugins/QCheckBox:Enable ESLint
+web-plugins/QCheckBox:Enable EditorConfig
+web-plugins/QCheckBox:Enable Git Branch & Tag Graph
+web-plugins/QCheckBox:Enable HTML CSS Support
+web-plugins/QCheckBox:Enable IntelliJ IDEA Keybindings
+web-plugins/QCheckBox:Enable Islands Theme
+web-plugins/QCheckBox:Enable JetBrains New UI Color Theme Extended
+web-plugins/QCheckBox:Enable JetBrains New UI File Icon Theme Extended
+web-plugins/QCheckBox:Enable JetBrains New UI Product Icon Theme
+web-plugins/QCheckBox:Enable Live Server
+web-plugins/QCheckBox:Enable Prettier - Code formatter
+web-plugins/QCheckBox:Enable REST Client
+web-plugins/QCheckBox:Enable Todo Tree
 web-plugins/QLineEdit:Search installed plugins
 web-plugins/QListWidget:
-web-plugins/QPushButton:Back to Hub
 web-plugins/QPushButton:Customize
 web-plugins/QPushButton:Learn
 web-plugins/QPushButton:Marketplace
 web-plugins/QPushButton:Plugins
 web-plugins/QPushButton:Projects
+web-plugins/QPushButton:‹ Cargo
 web-plugins/QToolButton:
 web-projects/Clone Repository/QLineEdit:
 web-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
@@ -183,7 +239,6 @@ web-projects/New Project/QPushButton:Browse…
 web-projects/New Project/QPushButton:Cancel
 web-projects/New Project/QPushButton:Create
 web-projects/QLineEdit:Search projects
-web-projects/QPushButton:Back to Hub
 web-projects/QPushButton:Clone Repository
 web-projects/QPushButton:Customize
 web-projects/QPushButton:Learn
@@ -191,4 +246,5 @@ web-projects/QPushButton:New Project
 web-projects/QPushButton:Open
 web-projects/QPushButton:Plugins
 web-projects/QPushButton:Projects
+web-projects/QPushButton:‹ Cargo
 web-projects/QToolButton:

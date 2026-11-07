@@ -90,15 +90,16 @@ A *berth* is the place where a ship docks. A *line* is a shipping line, a fleet 
 
 ### The look
 
-The interface takes its cues from JetBrains IDEs and Toolbox: one place to launch your tools, a quiet dark theme, IntelliJ-style shortcuts and run buttons where you expect them.
+The Hub's main screen is the Cargo: one boat per language, with its state and main action. A running app sails, a ready one rests at anchor, and the red flag only shows when something needs you. Editors keep a quiet dark theme, a choice of IntelliJ or VS Code shortcuts per app, and run buttons where you expect them.
 
-The icons follow the nautical theme. All of them share the same hull and change only the cargo: steam for Java, `< >` for Web and a prompt for Standard. The Hub is the ship with the red flag. They are flat, in solid colors, so they stay clear at small sizes.
+The app icons follow the nautical theme. All of them share the same hull and change only the cargo: steam for Java, `< >` for Web and a prompt for Standard. The Hub is the ship with the red flag. They are flat, in solid colors, so they stay clear at small sizes.
 
 ## Portability and privacy
 
 - Profiles, settings and extensions stay inside the Berthline folder.
 - The list of trusted folders is stored in `.berthline-shared` in your user folder, and new projects go to `Projects` there. This is what stays on a shared computer.
 - On Linux, the Hub adds a hidden shortcut to your user folder so the taskbar shows the right icon.
+- The Hub asks GitHub for new versions when it opens, and sends nothing else. You can turn this off in Settings.
 - Telemetry stays off. AI features are off by default, and you can turn them on per app under Settings.
 
 ## Limitations

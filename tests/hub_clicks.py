@@ -67,6 +67,8 @@ def testar(app):
     pasta = app.lower()
     hub = subprocess.Popen([PACOTE / 'Hub.exe'])
     try:
+        if not (PACOTE / 'data/hub.json').exists():  # first run shows the setup window
+            clicar(hub.pid, 'Skip')
         achar(hub.pid, app, 60)
         foto(f'{pasta}-1-panel')
         clicar(hub.pid, app)

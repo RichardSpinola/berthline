@@ -33,7 +33,7 @@ os.environ['HOME'] = str(TEMP / 'home')
 (TEMP / 'home/Projects/loja/pom.xml').write_text('<project/>')
 (TEMP / 'home/Projects/site').mkdir()
 (TEMP / 'home/Projects/site/index.html').write_text('<html></html>')
-(RAIZ / 'data/hub.json').write_text(json.dumps({'transitions': False, 'recent': [
+(RAIZ / 'data/hub.json').write_text(json.dumps({'transitions': False, 'setup': True, 'checked': 9e12, 'recent': [
     {'path': str(TEMP / 'home/Projects/loja'), 'app': 'java'}]}))
 sys.path.insert(0, str(AQUI.parent / 'hub'))
 import hub  # noqa: E402
@@ -52,6 +52,8 @@ hub.abrir_app = lambda app, alvos=(), porta=None, comando_=None: None
 hub.janelas_editor = lambda pid: set()
 hub.etapa_atual = lambda app: 'ready'
 hub.TEMPORARIO = None
+hub.checar_novidade = lambda: None
+hub.baixar_verificado = lambda *a, **k: None
 QApplication.quit = staticmethod(lambda: None)
 QDesktopServices.openUrl = staticmethod(lambda u: links.append(u.toString()) or True)
 QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: '')
@@ -224,6 +226,23 @@ def pequenas(painel):
     esperar(300)
     if not feito:
         erros.append('click did not skip the opening')
+    fechar_tudo(painel)
+    preparo = hub.CLASSES['Preparo'](painel)
+    preparo.show()
+    varrer_janela(preparo, 'setup')
+    preparo.hide()
+    hub.gravar_geral('update', {'version': '9.9.9', 'notes': 'Example notes.', 'package': 'x', 'sums': 'y'})
+    painel.ver_novidade()
+    painel.miolo.ir(painel.ferramentas)
+    painel.show()
+    foto(painel, 'hub-cargo-update')
+    if not painel.faixa.isVisible():
+        erros.append('update notice not shown')
+    aviso = hub.CLASSES['Novidade'](painel, hub.novidade())
+    aviso.show()
+    varrer_janela(aviso, 'update')
+    aviso.close()
+    hub.gravar_geral('update', None)
 
 
 def roteiro():
