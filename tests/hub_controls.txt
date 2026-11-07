@@ -184,16 +184,13 @@ web-customize/QPushButton:All settings…
 web-customize/QPushButton:Berthline
 web-customize/QPushButton:Choose
 web-customize/QPushButton:Customize
-web-customize/QPushButton:IntelliJ
 web-customize/QPushButton:JetBrains
 web-customize/QPushButton:Keyboard shortcuts…
 web-customize/QPushButton:Learn
 web-customize/QPushButton:Plugins
 web-customize/QPushButton:Projects
-web-customize/QPushButton:VS Code
 web-customize/QPushButton:‹ Cargo
 web-customize/QSlider:
-web-learn/QPushButton:Change keymap
 web-learn/QPushButton:Customize
 web-learn/QPushButton:Learn
 web-learn/QPushButton:MDN Web Docs

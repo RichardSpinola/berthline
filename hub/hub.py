@@ -31,7 +31,6 @@ CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
 PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keymap': 'intellij', 'folder': ''}
-KEYMAP_EXTENSION = 'k--kato.intellij-idea-keybindings'
 ICON_THEMES = {'Berthline': 'berthline-file-icons', 'JetBrains': 'jetbrains-file-icon-theme-auto'}
 THEMES = {'Dark': ('Islands Dark', 'Dark Modern'), 'Light': ('Islands Light', 'Light Modern')}
 INTELLIJ_KEYS = (
@@ -40,10 +39,6 @@ INTELLIJ_KEYS = (
     ('Step Into', 'F7'), ('Resume', 'F9'), ('Context Actions', 'Alt+Enter'), ('Generate', 'Alt+Insert'),
     ('Rename', 'Shift+F6'), ('File Structure', 'Ctrl+0'), ('Recent Files', 'Ctrl+E'), ('Terminal', 'Alt+F12'),
 )
-VSCODE_EXTRA = [  # the same on Windows and Linux, as people expect from VS Code on Windows
-    {'key': 'shift+alt+up', 'command': 'editor.action.copyLinesUpAction', 'when': 'editorTextFocus && !editorReadonly'},
-    {'key': 'shift+alt+down', 'command': 'editor.action.copyLinesDownAction', 'when': 'editorTextFocus && !editorReadonly'},
-]
 VSCODE_KEYS = (
     ('Command Palette', 'Ctrl+Shift+P'), ('Quick Open', 'Ctrl+P'), ('Run Without Debugging', 'Ctrl+F5'), ('Debug', 'F5'),
     ('Stop', 'Shift+F5'), ('Build', 'Ctrl+Shift+B'), ('Toggle Breakpoint', 'F9'), ('Step Over', 'F10'), ('Step Into', 'F11'),
@@ -214,9 +209,14 @@ def arquivos_teclas(app):
     return [o / 'keybindings.json' for o in origens if (o / 'keybindings.json').exists()]
 
 
+def keymap_de(app):
+    """Only profiles that offer the choice leave IntelliJ."""
+    return opcao(app, 'keymap') if aplicativos()[app].get('keymap') else 'intellij'
+
+
 def teclas_app(app):
     """Shortcuts the Learn screen lists; each one exists in that app."""
-    lista = INTELLIJ_KEYS if opcao(app, 'keymap') == 'intellij' else VSCODE_KEYS
+    lista = INTELLIJ_KEYS if keymap_de(app) == 'intellij' else VSCODE_KEYS
     return [t for t in lista if aplicativos()[app].get('memory') or t[0] not in JAVA_ONLY_KEYS]
 
 
@@ -228,7 +228,8 @@ def aplicar_keymap(app, nome):
         return False
     teclas = arquivos_teclas(app)
     perfil = [e for t in teclas for e in ler_json(t)]
-    proprias = [e for e in atual if e not in perfil and e not in VSCODE_EXTRA]
+    vscode = ler_json(PERFIS / app / 'keymap-vscode.json')
+    proprias = [e for e in atual if e not in perfil and e not in vscode]
     gravar_opcao(app, 'keymap', nome)
     if not arquivo.exists() and nome == 'intellij':
         return True
@@ -238,7 +239,7 @@ def aplicar_keymap(app, nome):
             extra = ',\n'.join(json.dumps(e, ensure_ascii=False) for e in proprias)
             texto = f"{texto[:texto.rindex(']')].rstrip()},\n{extra}\n]\n"
     else:
-        texto = json.dumps(VSCODE_EXTRA + proprias, indent=4, ensure_ascii=False) + '\n'
+        texto = json.dumps(vscode + proprias, indent=4, ensure_ascii=False) + '\n'
     arquivo.parent.mkdir(parents=True, exist_ok=True)
     arquivo.write_text(texto, encoding='utf8')
     return True
@@ -290,7 +291,7 @@ def preparar(app):
     origens.append(PERFIS / app)
     teclas = arquivos_teclas(app)
     if teclas and not (usuario / 'keybindings.json').exists():
-        if opcao(app, 'keymap') == 'intellij':
+        if keymap_de(app) == 'intellij':
             (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
         else:
             aplicar_keymap(app, 'vscode')
@@ -317,10 +318,7 @@ def node():
 def comando(app, alvos=(), porta=None):
     visual = opcao(app, 'visual') and aplicativos()[app].get('base')
     args = [str(editor()), f"--user-data-dir={DADOS / app / 'user'}", f"--extensions-dir={DADOS / app / 'extensions'}"]
-    fora = set(desligadas(app))
-    if opcao(app, 'keymap') == 'vscode':
-        fora.add(KEYMAP_EXTENSION)
-    args += [f'--disable-extension={e}' for e in sorted(fora)]
+    args += [f'--disable-extension={e}' for e in desligadas(app)]
     if not JANELAS:
         args.append('--ozone-platform=x11')
     if porta or visual:
@@ -1563,9 +1561,8 @@ def janela(inicial=None, lancar=None):
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
             p.fillRect(self.rect(), self.cor)
-            sombra = QColor(0, 0, 0, 40)
-            for x in range(4, 44, 4):
-                p.fillRect(QRectF(x, 0, 1, 30), sombra)
+            for x in (38, 41):  # the door's locking bars
+                p.fillRect(QRectF(x, 0, 1.5, 30), QColor(0, 0, 0, 70))
             canto = QColor(0, 0, 0, 105)
             for x, y in ((0, 0), (41, 0), (0, 26), (41, 26)):
                 p.fillRect(QRectF(x, y, 5, 4), canto)
@@ -1573,24 +1570,24 @@ def janela(inicial=None, lancar=None):
             p.setBrush(Qt.NoBrush)
             marca_ = QPainterPath()
             if self.app == 'java':
-                for x in (15, 23, 31):
+                for x in (10, 18, 26):
                     marca_.moveTo(x, 23)
                     marca_.cubicTo(x - 3, 19, x + 3, 15, x, 7)
             elif self.app == 'web':
-                marca_.moveTo(17, 9)
-                marca_.lineTo(11, 15)
-                marca_.lineTo(17, 21)
-                marca_.moveTo(29, 9)
-                marca_.lineTo(35, 15)
-                marca_.lineTo(29, 21)
-                marca_.moveTo(26, 7)
-                marca_.lineTo(20, 23)
-            else:
                 marca_.moveTo(13, 9)
-                marca_.lineTo(19, 15)
+                marca_.lineTo(7, 15)
                 marca_.lineTo(13, 21)
-                marca_.moveTo(22, 22)
-                marca_.lineTo(33, 22)
+                marca_.moveTo(25, 9)
+                marca_.lineTo(31, 15)
+                marca_.lineTo(25, 21)
+                marca_.moveTo(22, 7)
+                marca_.lineTo(16, 23)
+            else:
+                marca_.moveTo(9, 9)
+                marca_.lineTo(15, 15)
+                marca_.lineTo(9, 21)
+                marca_.moveTo(18, 22)
+                marca_.lineTo(29, 22)
             p.drawPath(marca_)
 
     class LinhaProjeto(QWidget):
@@ -1855,12 +1852,13 @@ def janela(inicial=None, lancar=None):
             if info.get('base'):
                 c = self.caixa('Tree icons and watermark', 'visual', esq)
                 c.setToolTip('Uses a local debugging port.')
-                esq.addSpacing(8)
-                esq.addWidget(rotulo('Keymap', 'secao'))
-                nomes = {'intellij': 'IntelliJ', 'vscode': 'VS Code'}
-                self.teclas = segmento(nomes.values(), nomes[opcao(app, 'keymap')], self.mudar_keymap)
-                esq.addLayout(self.campo('Shortcuts', self.teclas))
-                esq.addWidget(rotulo('Shortcuts you added stay as they are.', 'mudo'))
+                if info.get('keymap'):
+                    esq.addSpacing(8)
+                    esq.addWidget(rotulo('Keymap', 'secao'))
+                    nomes = {'intellij': 'IntelliJ', 'vscode': 'VS Code'}
+                    self.teclas = segmento(nomes.values(), nomes[keymap_de(app)], self.mudar_keymap)
+                    esq.addLayout(self.campo('Shortcuts', self.teclas))
+                    esq.addWidget(rotulo('Changes at once, even with the editor open.', 'mudo'))
                 esq.addSpacing(8)
                 esq.addWidget(rotulo('File icons', 'secao'))
                 tema_ = ajuste(app, 'workbench.iconTheme')
@@ -1946,7 +1944,7 @@ def janela(inicial=None, lancar=None):
         def mudar_keymap(self, texto):
             if not aplicar_keymap(self.app, 'intellij' if texto == 'IntelliJ' else 'vscode'):
                 QMessageBox.warning(self, 'Keymap', 'Could not read your keybindings.json. Fix it and try again.')
-                self.teclas.botoes['IntelliJ' if opcao(self.app, 'keymap') == 'intellij' else 'VS Code'].setChecked(True)
+                self.teclas.botoes['IntelliJ' if keymap_de(self.app) == 'intellij' else 'VS Code'].setChecked(True)
 
         def ver_fundo(self):
             tem = (ferramentas(self.app) / 'fundo.jpg').exists()
@@ -2081,7 +2079,7 @@ def janela(inicial=None, lancar=None):
                 self.direita.addWidget(r)
                 self.direita.addStretch(1)
                 return
-            nome = 'IntelliJ' if opcao(self.app, 'keymap') == 'intellij' else 'VS Code'
+            nome = 'IntelliJ' if keymap_de(self.app) == 'intellij' else 'VS Code'
             self.direita.addWidget(rotulo(f'Keymap: {nome}', 'secao'))
             self.direita.addSpacing(6)
             for acao, tecla in teclas_app(self.app):
@@ -2093,8 +2091,9 @@ def janela(inicial=None, lancar=None):
                 fila.addWidget(etiqueta(tecla))
                 self.direita.addWidget(w)
                 self.direita.addWidget(linha('linhaH'))
-            self.direita.addSpacing(8)
-            self.direita.addWidget(link('Change keymap', lambda: self.window().ir('Customize')))
+            if aplicativos()[self.app].get('keymap'):
+                self.direita.addSpacing(8)
+                self.direita.addWidget(link('Change keymap', lambda: self.window().ir('Customize')))
             self.direita.addStretch(1)
 
     class Boasvindas(Raiz):
@@ -2329,12 +2328,10 @@ def janela(inicial=None, lancar=None):
                 menu.setChecked(True)
                 grade.addWidget(mesa, i, 2)
                 grade.addWidget(menu, i, 3)
-                if info.get('base'):
-                    teclas = segmento(('IntelliJ', 'VS Code'), 'IntelliJ' if opcao(app, 'keymap') == 'intellij' else 'VS Code', lambda _: None)
+                teclas = None
+                if info.get('keymap'):
+                    teclas = segmento(('IntelliJ', 'VS Code'), 'IntelliJ' if keymap_de(app) == 'intellij' else 'VS Code', lambda _: None)
                     grade.addWidget(teclas, i, 4)
-                else:
-                    teclas = None
-                    grade.addWidget(rotulo('Editor default', 'mudo'), i, 4)
                 pasta = QLineEdit(curto(pasta_projetos(app)))
                 pasta.setToolTip(f"{info['title']} project folder")
                 grade.addWidget(pasta, i, 5)
@@ -2528,7 +2525,7 @@ def janela(inicial=None, lancar=None):
             topo.addStretch(1)
             ajuste_ = QToolButton()
             ajuste_.setIcon(QIcon(str(ASSETS / 'engrenagem.svg')))
-            ajuste_.setIconSize(QSize(17, 17))
+            ajuste_.setIconSize(QSize(20, 20))
             ajuste_.setToolTip('Settings')
             ajuste_.setObjectName('engrenagem')
             ajuste_.setCheckable(True)
