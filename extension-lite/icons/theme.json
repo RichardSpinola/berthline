@@ -1,0 +1,60 @@
+{
+  "iconDefinitions": {
+    "_java": {
+      "iconPath": "./java.svg"
+    },
+    "_html": {
+      "iconPath": "./html.svg"
+    },
+    "_xml": {
+      "iconPath": "./xml.svg"
+    },
+    "_css": {
+      "iconPath": "./css.svg"
+    },
+    "_js": {
+      "iconPath": "./js.svg"
+    },
+    "_json": {
+      "iconPath": "./json.svg"
+    },
+    "_ts": {
+      "iconPath": "./ts.svg"
+    },
+    "_md": {
+      "iconPath": "./md.svg"
+    },
+    "_file": {
+      "iconPath": "./file.svg"
+    },
+    "_folder": {
+      "iconPath": "./folder.svg"
+    },
+    "_folder-open": {
+      "iconPath": "./folder-open.svg"
+    }
+  },
+  "file": "_file",
+  "folder": "_folder",
+  "folderExpanded": "_folder-open",
+  "fileExtensions": {
+    "java": "_java",
+    "html": "_html",
+    "htm": "_html",
+    "css": "_css",
+    "scss": "_css",
+    "js": "_js",
+    "mjs": "_js",
+    "cjs": "_js",
+    "jsx": "_js",
+    "ts": "_ts",
+    "tsx": "_ts",
+    "json": "_json",
+    "md": "_md",
+    "xml": "_xml"
+  },
+  "fileNames": {
+    "pom.xml": "_xml"
+  },
+  "hidesExplorerArrows": false
+}
