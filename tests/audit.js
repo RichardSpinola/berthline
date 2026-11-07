@@ -374,6 +374,7 @@ async function exportar(h, pasta) {
     if (pergunta && !fs.existsSync(jar)) {
         await h.foto('audit-java-export');
         // The build task opens a terminal and can take focus from the wizard
+        console.log('wizard focus', await h.ev(`document.activeElement?.className ?? ''`));
         await h.ev(`document.querySelector('.quick-input-box input')?.focus()`);
         await h.c('Input.insertText', { text: 'Main' });
         await dormir(500);
