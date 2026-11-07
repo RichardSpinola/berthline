@@ -219,12 +219,17 @@ def extras(painel):
     propria = {'key': 'ctrl+alt+9', 'command': 'minha.acao'}
     dados = hub.ler_json(arquivo)
     arquivo.write_text(json.dumps(dados + [propria]), encoding='utf8')
-    passo('keymap switches', hub.aplicar_keymap('java', 'vscode') and hub.ler_json(arquivo) == [propria])
+    passo('keymap switches', hub.aplicar_keymap('java', 'vscode') and hub.ler_json(arquivo) == hub.VSCODE_EXTRA + [propria])
+    teclas_vs = {e['key']: e['command'] for e in hub.ler_json(arquivo)}
+    passo('vscode keymap copies lines', teclas_vs['shift+alt+up'] == 'editor.action.copyLinesUpAction'
+          and teclas_vs['shift+alt+down'] == 'editor.action.copyLinesDownAction')
     passo('keymap turns off extension', f'--disable-extension={hub.KEYMAP_EXTENSION}' in hub.comando('java'))
     passo('keymap keeps other app', f'--disable-extension={hub.KEYMAP_EXTENSION}' not in hub.comando('web'))
     hub.aplicar_keymap('java', 'intellij')
     volta = hub.ler_json(arquivo)
     passo('keymap returns with own key', propria in volta and len(volta) == len(dados) + 1)
+    passo('intellij keymap moves lines', not any(e in volta for e in hub.VSCODE_EXTRA)
+          and any(e.get('key') == 'alt+shift+up' for e in volta))
     passo('intellij extension back', f'--disable-extension={hub.KEYMAP_EXTENSION}' not in hub.comando('java'))
     ruim = hub.pasta_usuario('web') / 'keybindings.json'
     ruim.parent.mkdir(parents=True, exist_ok=True)

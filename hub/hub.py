@@ -40,10 +40,15 @@ INTELLIJ_KEYS = (
     ('Step Into', 'F7'), ('Resume', 'F9'), ('Context Actions', 'Alt+Enter'), ('Generate', 'Alt+Insert'),
     ('Rename', 'Shift+F6'), ('File Structure', 'Ctrl+0'), ('Recent Files', 'Ctrl+E'), ('Terminal', 'Alt+F12'),
 )
+VSCODE_EXTRA = [  # the same on Windows and Linux, as people expect from VS Code on Windows
+    {'key': 'shift+alt+up', 'command': 'editor.action.copyLinesUpAction', 'when': 'editorTextFocus && !editorReadonly'},
+    {'key': 'shift+alt+down', 'command': 'editor.action.copyLinesDownAction', 'when': 'editorTextFocus && !editorReadonly'},
+]
 VSCODE_KEYS = (
     ('Command Palette', 'Ctrl+Shift+P'), ('Quick Open', 'Ctrl+P'), ('Run Without Debugging', 'Ctrl+F5'), ('Debug', 'F5'),
     ('Stop', 'Shift+F5'), ('Build', 'Ctrl+Shift+B'), ('Toggle Breakpoint', 'F9'), ('Step Over', 'F10'), ('Step Into', 'F11'),
-    ('Quick Fix', 'Ctrl+.'), ('Rename', 'F2'), ('Go to Symbol', 'Ctrl+Shift+O'), ('Terminal', 'Ctrl+`'),
+    ('Quick Fix', 'Ctrl+.'), ('Rename', 'F2'), ('Go to Symbol', 'Ctrl+Shift+O'), ('Copy Line Up', 'Shift+Alt+Up'),
+    ('Copy Line Down', 'Shift+Alt+Down'), ('Terminal', 'Ctrl+`'),
 )
 JAVA_ONLY_KEYS = ('Build', 'Generate')
 LAMPADAS = {'run': '#3FA66B', 'ready': '#5A5F66', 'prep': '#E0A030', 'att': '#C8102E'}
@@ -223,9 +228,9 @@ def aplicar_keymap(app, nome):
         return False
     teclas = arquivos_teclas(app)
     perfil = [e for t in teclas for e in ler_json(t)]
-    proprias = [e for e in atual if e not in perfil]
+    proprias = [e for e in atual if e not in perfil and e not in VSCODE_EXTRA]
     gravar_opcao(app, 'keymap', nome)
-    if not arquivo.exists():
+    if not arquivo.exists() and nome == 'intellij':
         return True
     if nome == 'intellij':
         texto = juntar_teclas(teclas)
@@ -233,7 +238,8 @@ def aplicar_keymap(app, nome):
             extra = ',\n'.join(json.dumps(e, ensure_ascii=False) for e in proprias)
             texto = f"{texto[:texto.rindex(']')].rstrip()},\n{extra}\n]\n"
     else:
-        texto = json.dumps(proprias, indent=4, ensure_ascii=False) + '\n'
+        texto = json.dumps(VSCODE_EXTRA + proprias, indent=4, ensure_ascii=False) + '\n'
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
     arquivo.write_text(texto, encoding='utf8')
     return True
 
@@ -283,8 +289,11 @@ def preparar(app):
     origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
     origens.append(PERFIS / app)
     teclas = arquivos_teclas(app)
-    if teclas and opcao(app, 'keymap') == 'intellij' and not (usuario / 'keybindings.json').exists():
-        (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
+    if teclas and not (usuario / 'keybindings.json').exists():
+        if opcao(app, 'keymap') == 'intellij':
+            (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
+        else:
+            aplicar_keymap(app, 'vscode')
     for origem in origens:
         trechos = origem / 'snippets'
         if trechos.is_dir():
