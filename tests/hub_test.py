@@ -77,9 +77,9 @@ def esperar(ms):
 
 def roteiro():
     painel = next(w for w in QApplication.topLevelWidgets() if hasattr(w, 'miolo'))
-    passo('window title', painel.windowTitle() == 'Berthline · Cargo', painel.windowTitle())
+    passo('window title', painel.windowTitle() == 'Berthline Hub · Cargo', painel.windowTitle())
     painel.miolo.ir(painel.gerais)
-    passo('title follows the page', painel.windowTitle() == 'Berthline · Settings', painel.windowTitle())
+    passo('title follows the page', painel.windowTitle() == 'Berthline Hub · Settings', painel.windowTitle())
     painel.miolo.ir(painel.ferramentas)
     passo('panel cannot maximize', painel.minimumSize() == painel.maximumSize()
           and not painel.windowFlags() & Qt.WindowMaximizeButtonHint)
@@ -91,9 +91,9 @@ def roteiro():
     hub.gravar_geral('transitions', False)
     painel.boasvindas('java')
     tela = painel.tela
-    passo('welcome per app', tela.windowTitle() == 'Berthline Java · Projects', tela.windowTitle())
+    passo('welcome per app', tela.windowTitle() == 'Berthline Hub · Java · Projects', tela.windowTitle())
     tela.ir('Learn')
-    passo('title follows the tab', tela.windowTitle() == 'Berthline Java · Learn', tela.windowTitle())
+    passo('title follows the tab', tela.windowTitle() == 'Berthline Hub · Java · Learn', tela.windowTitle())
     tela.ir('Projects')
     passo('panel hidden', not painel.isVisible())
     tela.close()
