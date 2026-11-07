@@ -82,6 +82,18 @@ def escrever_pasta(pid, atual, nova):
     time.sleep(0.5)
 
 
+def esperar_fechar(pid, titulo, segundos=60):
+    fim = time.time() + segundos
+    while time.time() < fim:
+        try:
+            if not any(re.fullmatch(titulo, j.window_text() or '') for j in Desktop(backend='uia').windows(process=pid)):
+                return
+        except Exception:  # a window can vanish while it is being read
+            pass
+        time.sleep(0.5)
+    raise SystemExit(f'window still open: {titulo}')
+
+
 def atalhos(pasta):
     return {f.stem for f in pasta.glob('*.lnk')}
 
@@ -101,6 +113,7 @@ def preparar_tudo(pid):
     clicar(pid, 'Light')
     foto('setup-2-chosen')
     clicar(pid, 'Finish')
+    esperar_fechar(pid, 'Set up .*')  # the shortcuts are written before the window closes
     mesa = Path(subprocess.run(['powershell', '-NoProfile', '-Command', "[Environment]::GetFolderPath('Desktop')"],
                                capture_output=True, text=True, check=True).stdout.strip())
     inicio = Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs'
