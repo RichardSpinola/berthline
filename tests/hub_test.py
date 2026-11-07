@@ -28,7 +28,7 @@ os.environ['HOME'] = str(TEMP / 'home')
 sys.path.insert(0, str(Path(__file__).parent.parent / 'hub'))
 import hub  # noqa: E402
 
-from PySide6.QtCore import QEventLoop, QTimer  # noqa: E402
+from PySide6.QtCore import QEventLoop, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication, QFileDialog, QFrame, QMessageBox, QPushButton  # noqa: E402
 
 falhas = []
@@ -78,6 +78,8 @@ def esperar(ms):
 def roteiro():
     painel = next(w for w in QApplication.topLevelWidgets() if hasattr(w, 'miolo'))
     passo('window title', painel.windowTitle() == 'Berthline Hub', painel.windowTitle())
+    passo('panel cannot maximize', painel.minimumSize() == painel.maximumSize()
+          and not painel.windowFlags() & Qt.WindowMaximizeButtonHint)
     passo('windows paths collapse', len({hub.chave_caminho(p, True) for p in (
         'C:\\Users\\Ana\\Projects\\loja', 'c:/Users/Ana/Projects/loja', '/c:/users/ana/Projects/loja/')}) == 1)
     passo('other windows folder stays', hub.chave_caminho('C:\\a\\b', True) != hub.chave_caminho('C:\\a\\c', True))

@@ -2493,8 +2493,10 @@ def janela(inicial=None, lancar=None):
             com_vidro(self)
             b = marca()
             self.setWindowTitle(b['hub'])
-            self.setFixedWidth(400)
-            self.resize(400, 620)
+            # A fixed size keeps window managers, KDE included, from maximizing the panel.
+            self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint
+                                | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+            self.setFixedSize(400, 620)
             self.tela = None
             self.linhas = []
             self.miolo = Troca()
