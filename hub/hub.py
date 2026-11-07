@@ -1,6 +1,5 @@
 """Hub of the suite: opens each profile and keeps its settings."""
 import ctypes
-import hashlib
 import json
 import math
 import ntpath
@@ -29,7 +28,7 @@ CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
 PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G'}
-CORES_ICONE = ['#A9C27F', '#C77DBB', '#6AAB73', '#56A8F5', '#E8A33D', '#F75464', '#9B8AE3']
+LAMPADAS = {'run': '#3FA66B', 'ready': '#5A5F66', 'prep': '#E0A030', 'att': '#C8102E'}
 
 
 def marca():
@@ -44,6 +43,10 @@ def aplicativos():
     for f in PERFIS.glob('*/app.json'):
         saida[f.parent.name] = json.loads(f.read_text(encoding='utf8'))
     return dict(sorted(saida.items(), key=lambda x: x[1].get('order', 99)))
+
+
+def versao():
+    return marca().get('version', '')
 
 
 def versao_editor():
@@ -298,7 +301,7 @@ def abrir_app(app, alvos=(), porta=None, comando_=None):
 def registrar(app, alvo):
     tudo = opcoes()
     lista = [p for p in tudo.setdefault('recent', []) if chave_caminho(p['path']) != chave_caminho(alvo)]
-    tudo['recent'] = [{'path': str(alvo), 'app': app}] + lista[:29]
+    tudo['recent'] = [{'path': str(alvo), 'app': app, 'at': time.time()}] + lista[:29]
     OPCOES.parent.mkdir(parents=True, exist_ok=True)
     OPCOES.write_text(json.dumps(tudo, indent=2), encoding='utf8')
 
@@ -328,6 +331,45 @@ def recentes(so_app=None):
     bons = [(Path(p), a, t) for c, (p, a, t) in vistos.items() if c not in fora and Path(p).is_dir()
             and (so_app is None or a == so_app) and not (TEMPORARIO and p.startswith(TEMPORARIO))]
     return [(p, a) for p, a, _ in sorted(bons, key=lambda x: -x[2])]
+
+
+def quando(caminho):
+    """How long ago a project was opened, in words; empty when unknown."""
+    chave = chave_caminho(caminho)
+    instante = next((p.get('at') for p in opcoes().get('recent', []) if chave_caminho(p['path']) == chave), None)
+    if not instante:
+        return ''
+    passou = time.time() - instante
+    if passou < 60:
+        return 'Just now'
+    if passou < 3600:
+        return f'{int(passou // 60)} min ago'
+    if passou < 86400:
+        return f'{int(passou // 3600)} h ago'
+    if passou < 172800:
+        return 'Yesterday'
+    if passou < 604800:
+        return f'{int(passou // 86400)} days ago'
+    return time.strftime('%b %d', time.localtime(instante))
+
+
+def tipo_rotulo(pasta):
+    """Short build or language tag for a project row."""
+    try:
+        nomes = {p.name for p in Path(pasta).iterdir()}
+    except OSError:
+        return ''
+    if 'pom.xml' in nomes:
+        return 'Maven'
+    if nomes & {'build.gradle', 'build.gradle.kts'}:
+        return 'Gradle'
+    if 'tsconfig.json' in nomes:
+        return 'TypeScript'
+    if 'package.json' in nomes:
+        return 'Node'
+    if any(n.endswith('.html') for n in nomes):
+        return 'HTML'
+    return 'Java' if (Path(pasta) / 'src').is_dir() and tipo_projeto(Path(pasta)) == 'java' else ''
 
 
 def ocultar_recente(caminho):
@@ -364,16 +406,54 @@ def etapa_atual(app):
         return ''
 
 
+def processo_vivo(pid):
+    if JANELAS:
+        kernel = ctypes.windll.kernel32
+        alca = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not alca:
+            return False
+        codigo = ctypes.c_ulong()
+        vivo = kernel.GetExitCodeProcess(alca, ctypes.byref(codigo)) and codigo.value == 259  # STILL_ACTIVE
+        kernel.CloseHandle(alca)
+        return bool(vivo)
+    return Path(f'/proc/{pid}').exists()
+
+
+def rodando(app):
+    """True while the app's editor runs: it keeps its pid in code.lock."""
+    try:
+        return processo_vivo(int((DADOS / app / 'user/code.lock').read_text(encoding='utf8')))
+    except (OSError, ValueError):
+        return False
+
+
+def estado_app(app):
+    if not editor().exists():
+        return 'att', 'Needs attention', 'Editor files are missing'
+    if rodando(app):
+        return 'run', 'Running', ''
+    if not (pasta_usuario(app) / 'settings.json').exists():
+        return 'prep', 'Preparing', 'First launch'
+    return 'ready', 'Ready', ''
+
+
 def limpar_etapa(app):
     (ferramentas(app) / 'etapa').unlink(missing_ok=True)
 
 
-def vidro_disponivel():
-    if not opcoes().get('blur', True) or os.environ.get('QT_QPA_PLATFORM') == 'offscreen':
-        return False
+def blur_unsupported():
+    """Why this system can't blur behind a window; empty when it can."""
+    if os.environ.get('QT_QPA_PLATFORM') == 'offscreen':
+        return 'Blur needs a real window.'
     if JANELAS:
-        return sys.getwindowsversion().build >= 22621
-    return 'KDE' in os.environ.get('XDG_CURRENT_DESKTOP', '') and bool(os.environ.get('DISPLAY'))
+        return '' if sys.getwindowsversion().build >= 22621 else 'Blur needs Windows 11 22H2 or newer.'
+    if 'KDE' in os.environ.get('XDG_CURRENT_DESKTOP', '') and os.environ.get('DISPLAY'):
+        return ''
+    return 'Blur needs KDE Plasma.'
+
+
+def vidro_disponivel():
+    return bool(opcoes().get('blur', False)) and not blur_unsupported()
 
 
 def aplicar_vidro(janela_id):
@@ -427,8 +507,7 @@ def secoes(so_app=None):
                     disco.append((p, app))
     if so_app:
         return [(t, l) for t, l in (('Recent', feitos), ('On this computer', disco)) if l]
-    return [(info['title'], [x for x in feitos + disco if x[1] == app]) for app, info in aplicativos().items()
-            if any(x[1] == app for x in feitos + disco)]
+    return [('', feitos + disco)] if feitos or disco else []
 
 
 def marca_dagua(app):
@@ -629,10 +708,13 @@ def criar_projeto(app, modelo_, nome, local, git=False):
     return raiz
 
 
+CLASSES = {}  # the audit reaches the small windows through this
+
+
 def janela(inicial=None, lancar=None):
     if not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ:
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
-    from PySide6.QtCore import Property, QEasingCurve, QProcess, QProcessEnvironment, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
+    from PySide6.QtCore import Property, QEasingCurve, QProcess, QProcessEnvironment, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
     from PySide6.QtGui import (
         QColor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QImage, QPainter, QPainterPath, QPen,
     )
@@ -646,57 +728,73 @@ def janela(inicial=None, lancar=None):
 
     COM_VIDRO = vidro_disponivel()
     ESTILO = """
-    * { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 13px; color: #DFE1E5; }
+    * { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 13px; color: #E6E3DA; }
     QWidget#pagina, QScrollArea, QStackedWidget, QAbstractScrollArea { background: transparent; border: none; }
-    QDialog, QMenu, QMessageBox { background: #26272B; }
-    QFrame#linhaV, QFrame#linhaH { background: rgba(255, 255, 255, 22); border: none; }
+    QDialog, QMenu, QMessageBox { background: #1E2124; }
+    QFrame#linhaV, QFrame#linhaH { background: #34383E; border: none; }
+    QFrame#faixa { background: #1E2124; border: none; }
+    QFrame#lista { border: 1px solid #34383E; }
     QLabel#mudo { color: #8F939A; font-size: 12px; }
-    QLabel#titulo { font-size: 14px; }
-    QLabel#grande { font-size: 19px; }
-    QLabel#secao { color: #B6B9BF; font-size: 12px; }
-    QPushButton { background: transparent; border: 1px solid rgba(255, 255, 255, 40); border-radius: 3px; padding: 5px 12px; }
+    QLabel#titulo { font-size: 19px; font-weight: 600; }
+    QLabel#grande { font-size: 19px; font-weight: 600; }
+    QLabel#forte { font-weight: 600; }
+    QLabel#secao { color: #EDE6D3; font-size: 12px; font-weight: 600; }
+    QLabel#tag { font-size: 11px; font-weight: 600; border: 1px solid #5A5F66; padding: 0 5px; }
+    QPushButton { background: transparent; border: 1px solid #5A5F66; border-radius: 1px; padding: 4px 10px; font-weight: 600; }
     QPushButton:hover { background: rgba(255, 255, 255, 14); }
     QPushButton:pressed { background: rgba(255, 255, 255, 26); }
-    QPushButton:disabled { color: #6F737A; border-color: rgba(255, 255, 255, 18); }
-    QPushButton#azul { background: #DFE1E5; border-color: #DFE1E5; color: #16171A; }
-    QPushButton#azul:hover { background: #FFFFFF; }
-    QPushButton#aba { border: none; border-radius: 3px; text-align: left; padding: 6px 10px; color: #A9ACB2; }
-    QPushButton#aba:hover { background: rgba(255, 255, 255, 12); color: #DFE1E5; }
-    QPushButton#aba:checked { background: rgba(255, 255, 255, 20); color: #FFFFFF; }
-    QPushButton#guia { border: none; border-radius: 3px; padding: 5px 9px; color: #8F939A; }
-    QPushButton#guia:hover { background: transparent; color: #DFE1E5; }
-    QPushButton#guia:checked { color: #FFFFFF; background: rgba(255, 255, 255, 20); }
-    QPushButton#link { border: none; color: #A9C1F5; padding: 2px 0; text-align: left; background: transparent; }
-    QPushButton#link:hover { text-decoration: underline; }
-    QToolButton { border: none; border-radius: 3px; padding: 3px; }
+    QPushButton:disabled { color: #6F737A; border-color: #34383E; }
+    QPushButton#azul { background: ACENTO; border-color: ACENTO; color: #14161A; }
+    QPushButton#azul:hover { background: #EDE6D3; border-color: #EDE6D3; }
+    QPushButton#azul:disabled { background: transparent; color: #6F737A; border-color: #34383E; }
+    QPushButton#aba { border: none; border-left: 3px solid transparent; border-radius: 0; text-align: left; padding: 7px 12px 7px 11px; color: #A9ACB2; font-weight: 400; }
+    QPushButton#aba:hover { background: rgba(255, 255, 255, 12); color: #E6E3DA; }
+    QPushButton#aba:checked { background: #1F2225; border-left-color: ACENTO; color: #FFFFFF; font-weight: 600; }
+    QPushButton#guia { border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 12px 2px 10px; color: #8F939A; }
+    QPushButton#guia:hover { background: transparent; color: #E6E3DA; }
+    QPushButton#guia:checked { color: #FFFFFF; border-bottom-color: #EDE6D3; }
+    QPushButton#seg { border-radius: 0; padding: 3px 10px; font-weight: 400; }
+    QPushButton#seg:checked { background: #EDE6D3; color: #14161A; font-weight: 600; }
+    QPushButton#seg:disabled { color: #6F737A; }
+    QPushButton#link { border: none; color: #FFFFFF; padding: 2px 0; text-align: left; background: transparent; text-decoration: underline; }
+    QPushButton#link:disabled { color: #6F737A; }
+    QPushButton#volta { border: none; border-top: 1px solid #34383E; border-radius: 0; text-align: left; padding: 9px 14px; }
+    QToolButton { border: none; border-radius: 1px; padding: 3px; }
     QToolButton:hover { background: rgba(255, 255, 255, 20); }
     QToolButton::menu-indicator { image: none; }
-    QLineEdit, QComboBox { background: rgba(255, 255, 255, 12); border: 1px solid rgba(255, 255, 255, 34); border-radius: 3px; padding: 4px 7px; }
+    QToolButton#engrenagem { border-bottom: 2px solid transparent; border-radius: 0; padding: 4px 4px 3px; }
+    QToolButton#engrenagem:checked { border-bottom-color: #EDE6D3; }
+    QToolButton#filtro { padding: 1px 6px; color: #8F939A; }
+    QToolButton#filtro:checked { color: #E6E3DA; font-weight: 600; }
+    QLineEdit, QComboBox { background: transparent; border: 1px solid #4A4F56; border-radius: 1px; padding: 3px 7px; }
     QLineEdit#busca { background: transparent; border: none; }
     QLineEdit:focus, QComboBox:focus { border-color: ACENTO; }
     QComboBox::drop-down { border: none; width: 22px; }
     QComboBox::down-arrow { image: url(SETA); }
-    QComboBox QAbstractItemView { background: #26272B; selection-background-color: #3A3C42; }
+    QComboBox QAbstractItemView { background: #1E2124; selection-background-color: #34383E; }
     QListWidget { background: transparent; border: none; outline: 0; }
-    QListWidget::item { border-radius: 3px; }
-    QListWidget::item:hover { background: rgba(255, 255, 255, 12); }
-    QListWidget::item:selected { background: rgba(255, 255, 255, 20); color: #F0F0F0; }
-    QFrame#ferramenta { border-radius: 3px; }
-    QFrame#ferramenta:hover { background: rgba(255, 255, 255, 12); }
-    QMenu { border: 1px solid #3A3C42; padding: 4px; }
-    QMenu::item { padding: 5px 24px 5px 12px; border-radius: 3px; }
-    QMenu::item:selected { background: #3A3C42; }
-    QMenu::separator { height: 1px; background: #3A3C42; margin: 4px 8px; }
+    QListWidget::item { border-radius: 0; }
+    QListWidget::item:hover { background: rgba(255, 255, 255, 10); }
+    QListWidget::item:selected { background: rgba(255, 255, 255, 18); color: #F0F0F0; }
+    QFrame#ferramenta { border: none; border-bottom: 1px solid #2C3035; }
+    QFrame#ferramenta:hover { background: rgba(255, 255, 255, 7); }
+    QMenu { border: 1px solid #34383E; padding: 4px; }
+    QMenu::item { padding: 5px 24px 5px 12px; border-radius: 0; }
+    QMenu::item:selected { background: #34383E; }
+    QMenu::separator { height: 1px; background: #34383E; margin: 4px 8px; }
     QCheckBox { spacing: 7px; }
-    QTableWidget { background: #1E1F22; border: none; gridline-color: #3A3C42; }
-    QHeaderView::section { background: #26272B; border: none; padding: 5px; }
-    QSlider::groove:horizontal { height: 3px; background: rgba(255, 255, 255, 40); }
-    QSlider::handle:horizontal { width: 12px; margin: -5px 0; border-radius: 6px; background: #DFE1E5; }
+    QCheckBox::indicator { width: 12px; height: 12px; border: 1px solid #6A6F76; background: transparent; }
+    QCheckBox::indicator:checked { background: ACENTO; }
+    QCheckBox::indicator:disabled { border-color: #34383E; background: #34383E; }
+    QTableWidget { background: transparent; border: none; gridline-color: #26292D; }
+    QHeaderView::section { background: #1E2124; border: none; padding: 5px; }
+    QSlider::groove:horizontal { height: 3px; background: #4A4F56; }
+    QSlider::handle:horizontal { width: 9px; margin: -6px 0; border-radius: 0; background: #EDE6D3; }
     QScrollBar:vertical { background: transparent; width: 8px; }
-    QScrollBar::handle:vertical { background: rgba(255, 255, 255, 40); border-radius: 4px; min-height: 24px; }
+    QScrollBar::handle:vertical { background: #4A4F56; border-radius: 0; min-height: 24px; }
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
     """
-    AZUL = '#3574F0'
+    AZUL = '#EDE6D3'
 
     def estilo(cor):
         return ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('ACENTO', cor)
@@ -725,7 +823,7 @@ def janela(inicial=None, lancar=None):
         def paintEvent(self, _):
             p = QPainter(self)
             p.setCompositionMode(QPainter.CompositionMode_Source)
-            p.fillRect(self.rect(), QColor(22, 23, 26, 205) if COM_VIDRO else QColor('#1E1F22'))
+            p.fillRect(self.rect(), QColor(22, 24, 27, 205) if COM_VIDRO else QColor('#16181B'))
 
     class Troca(QStackedWidget):
         """Troca de página com passagem suave."""
@@ -771,6 +869,37 @@ def janela(inicial=None, lancar=None):
         b.clicked.connect(acao)
         return b
 
+    def lampada(estado):
+        r = QLabel()
+        r.setFixedSize(9, 9)
+        r.setStyleSheet(f'background:{LAMPADAS[estado]};border-radius:4px;')
+        return r
+
+    def etiqueta(texto, cor=None):
+        r = rotulo(texto, 'tag')
+        if cor:
+            r.setStyleSheet(f'color:{cor};border-color:{cor};')
+        return r
+
+    def segmento(textos, atual, ao_mudar):
+        """Row of joined buttons where exactly one stays selected."""
+        caixa = QWidget()
+        h = QHBoxLayout(caixa)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        grupo = QButtonGroup(caixa)
+        caixa.botoes = {}
+        for texto in textos:
+            b = QPushButton(texto)
+            b.setObjectName('seg')
+            b.setCheckable(True)
+            b.setChecked(texto == atual)
+            b.clicked.connect(lambda _=False, t=texto: ao_mudar(t))
+            grupo.addButton(b)
+            h.addWidget(b)
+            caixa.botoes[texto] = b
+        return caixa
+
     def nome_app(app):
         return f"{marca()['name']} {aplicativos()[app]['title']}"
 
@@ -778,64 +907,189 @@ def janela(inicial=None, lancar=None):
         def wheelEvent(self, evento):
             evento.ignore()
 
-    class Barco(QWidget):
-        """Barco balançando na água, usado em toda espera."""
+    def draw_boat(p, kind, cor, fase):
+        """Draws one boat in a 120 x 78 box, with the hull's keel on y=72."""
+        creme = QColor('#EDE6D3')
 
-        def __init__(self, app, largura=300, altura=150):
+        def traco(caminho, cor_, largura):
+            p.setPen(QPen(cor_, largura, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(caminho)
+
+        casco = QPainterPath()
+        for i, (x, y) in enumerate(((8, 52), (112, 52), (100, 72), (20, 72))):
+            casco.moveTo(x, y) if i == 0 else casco.lineTo(x, y)
+        casco.closeSubpath()
+        p.setPen(Qt.NoPen)
+        p.setBrush(creme if kind == 'hub' else cor)
+        p.drawPath(casco)
+        if kind == 'java':
+            p.fillRect(QRectF(38, 40, 46, 12), cor)
+            p.fillRect(QRectF(52, 24, 14, 16), creme)
+            p.fillRect(QRectF(52, 29, 14, 4), cor)
+            for i, x in enumerate((48, 59, 70)):
+                t = (fase * .3 + i / 3) % 1
+                vapor = QPainterPath()
+                vapor.moveTo(x, 22 - 8 * t)
+                vapor.cubicTo(x - 4, 17 - 8 * t, x + 4, 14 - 8 * t, x, 9 - 8 * t)
+                tom = QColor(cor)
+                tom.setAlphaF(math.sin(math.pi * t))
+                traco(vapor, tom, 3.4)
+        elif kind == 'web':
+            for pontos in (((42, 12), (22, 30), (42, 48)), ((78, 12), (98, 30), (78, 48))):
+                seta = QPainterPath()
+                seta.moveTo(*pontos[0])
+                seta.lineTo(*pontos[1])
+                seta.lineTo(*pontos[2])
+                traco(seta, cor, 6.5)
+            mastro = QPainterPath()
+            mastro.moveTo(68, 4)
+            mastro.lineTo(52, 52)
+            traco(mastro, creme, 4.5)
+        elif kind == 'hub':
+            p.fillRect(QRectF(54, 12, 5, 40), creme)
+            bandeira = QPainterPath()
+            for i, (x, y) in enumerate(((59, 14), (84, 14), (75, 23), (84, 32), (59, 32))):
+                bandeira.moveTo(x, y) if i == 0 else bandeira.lineTo(x, y)
+            bandeira.closeSubpath()
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor('#C8102E'))
+            p.drawPath(bandeira)
+        else:
+            cabine = QPainterPath()
+            cabine.addRect(QRectF(32, 20, 56, 32))
+            traco(cabine, cor, 4)
+            prompt = QPainterPath()
+            prompt.moveTo(41, 28)
+            prompt.lineTo(50, 36)
+            prompt.lineTo(41, 44)
+            prompt.moveTo(55, 44)
+            prompt.lineTo(72, 44)
+            traco(prompt, creme, 3.6)
+
+    class Sea(QWidget):
+        """A boat on animated water. Moving boats sail; anchored ones only rock."""
+
+        def __init__(self, kind, largura=300, altura=150, moving=True, boat=132, x=None, cor=None):
             super().__init__()
             self.setFixedSize(largura, altura)
-            self.fase = 0.0
+            self.setAttribute(Qt.WA_TransparentForMouseEvents)
+            self.kind = kind
+            self.moving = moving
+            self.boat = boat
+            self.x_boat = (largura - boat) / 2 if x is None else x
             self.viagem = None
-            self.desenho = QSvgRenderer(str(ASSETS / f'{app}.svg'), self)
-            self.cor = QColor(aplicativos().get(app, {}).get('accent', '#8C939E'))
-            relogio = QTimer(self)
-            relogio.timeout.connect(self.passo)
-            relogio.start(33)
+            self.fase = 0.0
+            self.cor = QColor(cor or aplicativos().get(kind, {}).get('accent', '#7FA6C9'))
+            self.relogio = QTimer(self)
+            self.relogio.timeout.connect(self.passo)
+            self.animar = opcoes().get('transitions', True)
+
+        def showEvent(self, _):
+            if self.animar:
+                self.relogio.start(33 if self.moving else 66)
+
+        def hideEvent(self, _):
+            self.relogio.stop()
 
         def passo(self):
-            self.fase += 0.07
+            self.fase += .1
             self.update()
 
         def paintEvent(self, _):
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
             largura = self.width()
-            agua = self.height() - 22
-            lado = self.height() * .62
+            agua = self.height() - 15
+            escala = self.boat / 120
+            x = self.x_boat
+            if self.viagem is not None:
+                x = -self.boat + self.viagem * (largura + self.boat)
+            balanco = math.sin(self.fase * .6)
             p.save()
-            x = largura / 2 if self.viagem is None else -lado + self.viagem * (largura + 2 * lado)
-            p.translate(x, agua - lado * .36 + math.sin(self.fase) * 4)
-            p.rotate(math.sin(self.fase * .8) * 3)
-            self.desenho.render(p, QRectF(-lado / 2, -lado * .62, lado, lado))
+            p.translate(x, agua + 3 - 72 * escala + balanco * 1.6)
+            p.scale(escala, escala)
+            if self.moving and self.viagem is None:
+                p.setPen(QPen(QColor('#8F939A'), 1.6))
+                for i, (y, comprimento) in enumerate(((60, 16), (66, 22), (72, 12))):
+                    t = (self.fase * .4 + i / 3) % 1
+                    tom = QColor('#8F939A')
+                    tom.setAlphaF(math.sin(math.pi * t) * .9)
+                    p.setPen(QPen(tom, 1.6))
+                    x0 = -8 - 22 * t - comprimento
+                    p.drawLine(QPointF(x0, y), QPointF(x0 + comprimento, y))
+            p.translate(60, 62)
+            p.rotate(balanco * 1.8)
+            p.translate(-60, -62)
+            draw_boat(p, self.kind, self.cor, self.fase)
             p.restore()
-            for camada, (altura, alfa, passo_) in enumerate(((agua + 2, 255, 1.0), (agua + 11, 90, -.7))):
+            passo_ = self.fase * (5 if self.moving else 1.2)
+            for camada, (y, alfa, grossura, sentido) in enumerate(((agua, 255, 2.0, 1), (agua + 7, 97, 1.3, .6))):
                 onda = QPainterPath()
-                for x in range(0, largura + 1, 4):
-                    y = altura + math.sin(x / 26 + self.fase * 2 * passo_) * 3
-                    onda.moveTo(x, y) if x == 0 else onda.lineTo(x, y)
-                cor = QColor(self.cor)
-                cor.setAlpha(alfa)
-                p.setPen(QPen(cor, 2.2 - camada))
+                for x_ in range(0, largura + 5, 4):
+                    h = y + math.sin((x_ + passo_ * sentido) / 7.64) * 3
+                    onda.moveTo(x_, h) if x_ == 0 else onda.lineTo(x_, h)
+                tom = QColor(self.cor)
+                tom.setAlpha(alfa)
+                p.setPen(QPen(tom, grossura))
                 p.setBrush(Qt.NoBrush)
                 p.drawPath(onda)
 
     class Partida(Raiz):
-        """Janela de espera com o barco, até o editor terminar de carregar."""
+        """Waiting window: the app's boat sails until the editor is ready."""
 
-        def __init__(self, app, texto):
+        def __init__(self, app, texto, etapas=False):
             super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
             self.setObjectName('raiz')
+            self.app = app
             com_vidro(self)
-            self.setStyleSheet(estilo(aplicativos()[app].get('accent', AZUL)))
+            cor = aplicativos()[app].get('accent', AZUL)
+            self.setStyleSheet(estilo(cor))
             self.setFixedSize(380, 250)
             v = QVBoxLayout(self)
-            v.setContentsMargins(40, 26, 40, 22)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(0)
+            v.addSpacing(26)
+            v.addWidget(Sea(app, 380, 180, True, 156))
+            v.addWidget(linha('linhaH'))
+            rodape = QHBoxLayout()
+            rodape.setContentsMargins(14, 0, 14, 0)
+            rodape.setSpacing(14)
             self.texto = rotulo(texto)
-            self.texto.setAlignment(Qt.AlignCenter)
-            v.addWidget(Barco(app), 0, Qt.AlignCenter)
-            v.addWidget(self.texto)
+            self.passos = {}
+            if etapas:
+                self.texto.hide()
+                for chave, nome_ in (('', 'Editor'), ('extensions', 'Extensions'), ('java', 'Java server')):
+                    if chave != 'java' or aplicativos()[app].get('memory'):
+                        self.passos[chave] = rotulo(nome_, 'mudo')
+                        rodape.addWidget(self.passos[chave])
+                self.cor = cor
+                self.etapa('')
+            rodape.addWidget(self.texto)
+            rodape.addStretch(1)
+            if etapas:
+                rodape.addWidget(rotulo('Click to skip', 'mudo'))
+            caixa = QWidget()
+            caixa.setFixedHeight(42)
+            caixa.setLayout(rodape)
+            v.addWidget(caixa)
             tela = QGuiApplication.primaryScreen().availableGeometry()
             self.move(tela.center() - self.rect().center())
+
+        def etapa(self, agora):
+            """Marks the current stage in the footer; earlier ones stay lit."""
+            chaves = list(self.passos)
+            atual = chaves.index(agora) if agora in chaves else len(chaves)
+            for i, chave in enumerate(chaves):
+                estilo_ = f'color:{self.cor};font-weight:600;font-size:12px;' if i == atual else ('color:#E6E3DA;font-size:12px;' if i < atual else '')
+                self.passos[chave].setStyleSheet(estilo_)
+
+        def aviso(self, texto):
+            """Replaces the stages with one sentence."""
+            for r in self.passos.values():
+                r.hide()
+            self.texto.setText(texto)
+            self.texto.show()
 
         def mouseReleaseEvent(self, _):
             if getattr(self, 'pular', None):
@@ -851,7 +1105,7 @@ def janela(inicial=None, lancar=None):
             self.saida = animacao
 
     class Abertura(Raiz):
-        """Logo navegando pelo mar ao abrir o Hub."""
+        """The logo's boat sails across while the Hub opens. One click skips it."""
 
         def __init__(self, depois):
             super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -859,19 +1113,24 @@ def janela(inicial=None, lancar=None):
             com_vidro(self)
             self.setFixedSize(460, 230)
             self.depois = depois
+            self.terminou = False
             v = QVBoxLayout(self)
-            v.setContentsMargins(0, 26, 0, 22)
-            self.barco = Barco('hub', 460, 140)
-            self.barco.cor = QColor('#7FA6C9')
+            v.setContentsMargins(0, 22, 0, 16)
+            v.setSpacing(6)
+            self.barco = Sea('hub', 460, 150, True, 124)
             self.barco.viagem = 0.0
-            nome = rotulo(marca()['name'], 'grande')
-            nome.setAlignment(Qt.AlignCenter)
+            nome = QHBoxLayout()
+            nome.setSpacing(8)
+            nome.addStretch(1)
+            nome.addWidget(rotulo(marca()['name'], 'grande'))
+            nome.addWidget(rotulo(versao(), 'mudo'), 0, Qt.AlignBottom)
+            nome.addStretch(1)
             v.addWidget(self.barco)
-            v.addWidget(nome)
+            v.addLayout(nome)
             tela = QGuiApplication.primaryScreen().availableGeometry()
             self.move(tela.center() - self.rect().center())
             self.curso = QPropertyAnimation(self, b'percurso', self)
-            self.curso.setDuration(1700)
+            self.curso.setDuration(800)
             self.curso.setStartValue(0.0)
             self.curso.setEndValue(1.0)
             self.curso.setEasingCurve(QEasingCurve.InOutSine)
@@ -882,6 +1141,7 @@ def janela(inicial=None, lancar=None):
 
         def mudar(self, valor):
             self.barco.viagem = valor
+            self.barco.update()
 
         percurso = Property(float, ler, mudar)
 
@@ -889,23 +1149,28 @@ def janela(inicial=None, lancar=None):
             surgir(self)
             self.curso.start()
 
+        def mouseReleaseEvent(self, _):
+            self.curso.stop()
+            self.fim()
+
         def fim(self):
+            if self.terminou:
+                return
+            self.terminou = True
             animacao = QPropertyAnimation(self, b'windowOpacity', self)
-            animacao.setDuration(220)
+            animacao.setDuration(120)
             animacao.setStartValue(1.0)
             animacao.setEndValue(0.0)
             animacao.finished.connect(lambda: (self.depois(), self.close()))
             animacao.start()
             self.saida = animacao
 
-    ETAPAS = {'': 'Starting the editor…', 'extensions': 'Loading extensions…', 'java': 'Starting the Java server…', 'ready': 'Ready'}
-
     def abrir(app, *alvos, comando_=None):
         if alvos and not pode_abrir(alvos[0]):
             return
         inicio = time.time()
         limite = 110 if aplicativos()[app].get('memory') else 30
-        partida = Partida(app, ETAPAS[''])
+        partida = Partida(app, '', True)
         for w in QApplication.topLevelWidgets():
             if w is not partida and not isinstance(w, QMenu):
                 w.hide()
@@ -926,13 +1191,22 @@ def janela(inicial=None, lancar=None):
                 opacidade_editor(janela_, False)
                 escondidas.add(janela_)
             agora = etapa_atual(app)
-            partida.texto.setText(ETAPAS.get(agora, ETAPAS['']))
-            if agora == 'ready' or time.time() - inicio > limite:
+            partida.etapa(agora)
+            if agora == 'ready':
                 terminar()
+            elif time.time() - inicio > limite:
+                relogio.stop()
+                partida.aviso('Still loading in the background')
+                QTimer.singleShot(1500, terminar)
         relogio = QTimer(partida)
         relogio.timeout.connect(conferir)
         relogio.start(120)
         partida.pular = terminar
+
+    def mostrar(app, alvo=None):
+        """Brings up an editor that is already running, with no waiting window."""
+        abrir_app(app, [alvo] if alvo else [])
+        QApplication.quit()
 
     def entrar(app, depois):
         """Mostra o barco por um instante ao trocar de app."""
@@ -1065,7 +1339,7 @@ def janela(inicial=None, lancar=None):
             form = QFormLayout()
             form.addRow('URL:', self.url)
             form.addRow('Directory:', self.destino)
-            self.barco = Barco(app, 300, 110)
+            self.barco = Sea(app, 300, 110, True, 96)
             self.barco.hide()
             rodape = QHBoxLayout()
             rodape.addWidget(self.estado, 1)
@@ -1107,25 +1381,32 @@ def janela(inicial=None, lancar=None):
             self.reject()
 
     class LinhaProjeto(QWidget):
-        def __init__(self, caminho, direita=''):
+        """Project row: the bar and tag carry the profile's color."""
+
+        def __init__(self, caminho, app, geral):
             super().__init__()
             self.setAttribute(Qt.WA_TransparentForMouseEvents)
+            cor = aplicativos()[app].get('accent', AZUL)
             h = QHBoxLayout(self)
-            h.setContentsMargins(12, 5, 12, 5)
-            h.setSpacing(12)
-            cor = CORES_ICONE[int(hashlib.md5(caminho.name.encode()).hexdigest(), 16) % len(CORES_ICONE)]
-            letra = QLabel(re.sub(r'[^A-Za-z0-9]', '', caminho.name)[:2].upper() or 'PR')
-            letra.setFixedSize(20, 20)
-            letra.setAlignment(Qt.AlignCenter)
-            letra.setStyleSheet(f'background:{cor};color:#1E1F22;border-radius:4px;font-size:10px;font-weight:600;')
+            h.setContentsMargins(0, 5, 12, 5)
+            h.setSpacing(10)
+            barra = QFrame()
+            barra.setFixedWidth(4)
+            barra.setStyleSheet(f'background:{cor};')
             t = QVBoxLayout()
             t.setSpacing(1)
-            t.addWidget(QLabel(caminho.name))
+            nome = rotulo(caminho.name, 'forte')
+            t.addWidget(nome)
             t.addWidget(rotulo(curto(caminho), 'mudo'))
-            h.addWidget(letra, 0, Qt.AlignTop)
+            h.addWidget(barra)
             h.addLayout(t, 1)
-            if direita:
-                h.addWidget(rotulo(direita, 'mudo'))
+            lado = QVBoxLayout() if geral else QHBoxLayout()
+            lado.setSpacing(2 if geral else 12)
+            texto = aplicativos()[app]['title'] if geral else tipo_rotulo(caminho)
+            if texto:
+                lado.addWidget(etiqueta(texto, cor if geral else None), 0, Qt.AlignRight)
+            lado.addWidget(rotulo(quando(caminho), 'mudo'), 0, Qt.AlignRight)
+            h.addLayout(lado)
 
     class ListaProjetos(QListWidget):
         """Projetos recentes; `app` nulo mostra os de todos os apps."""
@@ -1133,6 +1414,8 @@ def janela(inicial=None, lancar=None):
         def __init__(self, app=None):
             super().__init__()
             self.app = app
+            self.texto = ''
+            self.so = None
             self.setSpacing(1)
             self.setVerticalScrollMode(QListWidget.ScrollPerPixel)
             self.itemClicked.connect(self.ativar)
@@ -1144,28 +1427,35 @@ def janela(inicial=None, lancar=None):
             self.clear()
             self.total = 0
             for titulo, projetos in secoes(self.app):
-                cabeca = QListWidgetItem(self)
-                cabeca.setFlags(Qt.NoItemFlags)
-                cabeca.setSizeHint(QSize(0, 30))
-                r = rotulo(titulo, 'secao')
-                r.setContentsMargins(12, 8, 0, 0)
-                self.setItemWidget(cabeca, r)
+                if titulo:
+                    cabeca = QListWidgetItem(self)
+                    cabeca.setFlags(Qt.NoItemFlags)
+                    cabeca.setSizeHint(QSize(0, 30))
+                    r = rotulo(titulo, 'secao')
+                    r.setContentsMargins(4, 8, 0, 0)
+                    self.setItemWidget(cabeca, r)
                 for caminho, app in projetos:
                     item = QListWidgetItem(self)
                     item.setData(Qt.UserRole, (app, str(caminho)))
-                    item.setSizeHint(QSize(0, 48))
-                    self.setItemWidget(item, LinhaProjeto(caminho))
+                    item.setSizeHint(QSize(0, 50))
+                    self.setItemWidget(item, LinhaProjeto(caminho, app, self.app is None))
                     self.total += 1
 
         def ativar(self, item):
             if item.data(Qt.UserRole):
                 abrir(*item.data(Qt.UserRole))
 
-        def filtrar(self, texto):
+        def filtrar(self, texto=None):
+            self.texto = self.texto if texto is None else texto
             for i in range(self.count()):
                 item = self.item(i)
                 dados = item.data(Qt.UserRole)
-                item.setHidden(bool(texto) and (not dados or texto.lower() not in dados[1].lower()))
+                fora = bool(self.texto) and (not dados or self.texto.lower() not in dados[1].lower())
+                item.setHidden(fora or bool(self.so and (not dados or dados[0] != self.so)))
+
+        def so_app(self, app):
+            self.so = app
+            self.filtrar()
 
         def menu(self, pos):
             item = self.itemAt(pos)
@@ -1522,28 +1812,44 @@ def janela(inicial=None, lancar=None):
                 abrir(self.app, *alvos)
 
     class Ferramenta(QFrame):
-        """Linha de um app no painel: clique abre, os três pontos mostram as ações."""
+        """One app in the Cargo: its boat on the water, its state and main action."""
 
         def __init__(self, app, painel):
             super().__init__()
             self.setObjectName('ferramenta')
             self.setCursor(Qt.PointingHandCursor)
+            self.setFixedSize(400, 146)
             self.app = app
             self.painel = painel
             info = aplicativos()[app]
-            h = QHBoxLayout(self)
-            h.setContentsMargins(10, 8, 6, 8)
-            h.setSpacing(12)
-            t = QVBoxLayout()
-            t.setSpacing(1)
+            self.mar = Sea(app, 400, 146, False, 132, 4)
+            self.mar.setParent(self)
+            coluna = QWidget(self)
+            coluna.setGeometry(170, 18, 222, 100)
+            t = QVBoxLayout(coluna)
+            t.setContentsMargins(0, 0, 0, 0)
+            t.setSpacing(5)
             t.addWidget(rotulo(info['title'], 'titulo'))
-            t.addWidget(rotulo(versao_editor(), 'mudo'))
-            h.addWidget(icone(app, 38))
-            h.addLayout(t, 1)
+            self.linha_estado = QHBoxLayout()
+            self.linha_estado.setSpacing(6)
+            self.lampada = QLabel()
+            self.estado = rotulo('', 'forte')
+            self.detalhe = rotulo('', 'mudo')
+            self.linha_estado.addWidget(self.lampada)
+            self.linha_estado.addWidget(self.estado)
+            self.linha_estado.addWidget(self.detalhe, 1)
+            t.addLayout(self.linha_estado)
+            acoes = QHBoxLayout()
+            self.acao = QPushButton()
+            self.acao.setCursor(Qt.ArrowCursor)
+            self.acao.clicked.connect(self.agir)
+            acoes.addWidget(self.acao)
+            acoes.addStretch(1)
             self.mais = QToolButton()
             self.mais.setText('⋯')
             self.mais.setCursor(Qt.ArrowCursor)
             self.mais.setFixedSize(26, 26)
+            self.mais.setStyleSheet('padding:0;')
             self.mais.setPopupMode(QToolButton.InstantPopup)
             m = QMenu(self.mais)
             m.addAction('Open', lambda: painel.boasvindas(app))
@@ -1554,14 +1860,44 @@ def janela(inicial=None, lancar=None):
             m.addAction('Create Desktop Shortcut', lambda: painel.atalho(app))
             m.addAction('Show Data Folder', lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(DADOS / app))))
             self.mais.setMenu(m)
-            h.addWidget(self.mais)
-            self.mais.setVisible(False)
+            acoes.addWidget(self.mais)
+            t.addLayout(acoes)
+            t.addStretch(1)
+            self.atualizar()
 
-        def enterEvent(self, _):
-            self.mais.setVisible(True)
+        def atualizar(self):
+            """Reads the app's state and project again; called while the Hub is open."""
+            self.tipo, titulo, detalhe = estado_app(self.app)
+            self.projeto = next(iter(recentes(self.app)), (None, None))[0]
+            if not detalhe and self.projeto:
+                detalhe = self.projeto.name
+            self.lampada.setFixedSize(9, 9)
+            self.lampada.setStyleSheet(f'background:{LAMPADAS[self.tipo]};border-radius:4px;')
+            self.estado.setText(titulo)
+            medida = self.detalhe.fontMetrics()
+            self.detalhe.setText(medida.elidedText(detalhe, Qt.ElideMiddle, 90))
+            rodando_ = self.tipo == 'run'
+            if self.mar.moving != rodando_:
+                self.mar.moving = rodando_
+                if self.mar.relogio.isActive():
+                    self.mar.relogio.start(33 if rodando_ else 66)
+            if rodando_:
+                texto = 'Show'
+            elif self.projeto:
+                texto = f'Open {self.projeto.name}'
+            else:
+                texto = 'Open'
+            self.acao.setText(self.acao.fontMetrics().elidedText(texto, Qt.ElideMiddle, 150))
+            self.acao.setToolTip(str(self.projeto) if self.projeto else '')
+            self.acao.setEnabled(self.tipo != 'att')
 
-        def leaveEvent(self, _):
-            self.mais.setVisible(self.mais.menu().isVisible())
+        def agir(self):
+            if self.tipo == 'run':
+                mostrar(self.app, self.projeto)
+            elif self.projeto:
+                abrir(self.app, str(self.projeto))
+            else:
+                self.painel.boasvindas(self.app)
 
         def mouseReleaseEvent(self, e):
             if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
@@ -1579,6 +1915,7 @@ def janela(inicial=None, lancar=None):
             self.setFixedWidth(400)
             self.resize(400, 620)
             self.tela = None
+            self.linhas = []
             self.miolo = Troca()
             self.ferramentas = self.pagina_ferramentas()
             self.lista = ListaProjetos()
@@ -1590,12 +1927,12 @@ def janela(inicial=None, lancar=None):
             v.setContentsMargins(0, 0, 0, 0)
             v.setSpacing(0)
             topo = QHBoxLayout()
-            topo.setContentsMargins(14, 10, 10, 0)
-            topo.setSpacing(16)
-            topo.addWidget(icone('hub', 24), 0, Qt.AlignVCenter)
+            topo.setContentsMargins(12, 0, 12, 0)
+            topo.setSpacing(14)
+            topo.addWidget(icone('hub', 22), 0, Qt.AlignVCenter)
             self.guias = {}
             grupo = QButtonGroup(self)
-            for titulo, pagina in (('Tools', self.ferramentas), ('Projects', self.projetos)):
+            for titulo, pagina in (('Cargo', self.ferramentas), ('Projects', self.projetos)):
                 g = QPushButton(titulo)
                 g.setObjectName('guia')
                 g.setCheckable(True)
@@ -1603,29 +1940,63 @@ def janela(inicial=None, lancar=None):
                 grupo.addButton(g)
                 topo.addWidget(g)
                 self.guias[titulo] = g
-            self.guias['Tools'].setChecked(True)
+            self.guias['Cargo'].setChecked(True)
             topo.addStretch(1)
             ajuste_ = QToolButton()
             ajuste_.setIcon(QIcon(str(ASSETS / 'engrenagem.svg')))
-            ajuste_.setIconSize(QSize(18, 18))
+            ajuste_.setIconSize(QSize(17, 17))
             ajuste_.setToolTip('Settings')
+            ajuste_.setObjectName('engrenagem')
+            ajuste_.setCheckable(True)
             ajuste_.clicked.connect(lambda: self.miolo.ir(self.gerais))
+            grupo.addButton(ajuste_)
+            self.guias['Settings'] = ajuste_
             topo.addWidget(ajuste_)
-            v.addLayout(topo)
+            caixa = QWidget()
+            caixa.setFixedHeight(44)
+            caixa.setLayout(topo)
+            v.addWidget(caixa)
             v.addWidget(linha('linhaH'))
             v.addWidget(self.miolo, 1)
+            v.addWidget(linha('linhaH'))
+            rodape = QHBoxLayout()
+            rodape.setContentsMargins(12, 0, 12, 0)
+            rodape.addWidget(rotulo(f"{marca()['name']} {versao()}", 'forte'))
+            rodape.addStretch(1)
+            rodape.addWidget(rotulo(f'Editor {versao_editor()}', 'mudo'))
+            pe = QWidget()
+            pe.setFixedHeight(26)
+            pe.setLayout(rodape)
+            v.addWidget(pe)
+            self.miolo.currentChanged.connect(self.marcar)
+            self.vigia = QTimer(self)
+            self.vigia.timeout.connect(self.atualizar)
+
+        def marcar(self, _):
+            pagina = self.miolo.currentWidget()
+            nome = {self.ferramentas: 'Cargo', self.projetos: 'Projects', self.gerais: 'Settings'}[pagina]
+            self.guias[nome].setChecked(True)
+
+        def atualizar(self):
+            for f in self.linhas:
+                f.atualizar()
+
+        def showEvent(self, _):
+            self.atualizar()
+            self.vigia.start(3000)
+
+        def hideEvent(self, _):
+            self.vigia.stop()
 
         def pagina_ferramentas(self):
             p = QWidget()
             p.setObjectName('pagina')
             v = QVBoxLayout(p)
-            v.setContentsMargins(10, 14, 10, 12)
-            v.setSpacing(2)
-            r = rotulo('Installed', 'mudo')
-            r.setContentsMargins(10, 0, 0, 6)
-            v.addWidget(r)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(0)
             for app in aplicativos():
-                v.addWidget(Ferramenta(app, self))
+                self.linhas.append(Ferramenta(app, self))
+                v.addWidget(self.linhas[-1])
             v.addStretch(1)
             return p
 
@@ -1633,10 +2004,36 @@ def janela(inicial=None, lancar=None):
             p = QWidget()
             p.setObjectName('pagina')
             v = QVBoxLayout(p)
-            v.setContentsMargins(10, 8, 10, 8)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(0)
             busca = busca_linha()
             busca.textChanged.connect(self.lista.filtrar)
-            v.addWidget(busca)
+            fila = QHBoxLayout()
+            fila.setContentsMargins(10, 6, 12, 6)
+            fila.setSpacing(6)
+            fila.addWidget(busca, 1)
+            grupo = QButtonGroup(p)
+            todos = QToolButton()
+            todos.setText('All')
+            todos.setToolTip('All apps')
+            todos.setObjectName('filtro')
+            todos.setCheckable(True)
+            todos.setChecked(True)
+            todos.clicked.connect(lambda: self.lista.so_app(None))
+            grupo.addButton(todos)
+            fila.addWidget(todos)
+            for app, info in aplicativos().items():
+                b = QToolButton()
+                b.setToolTip(info['title'])
+                b.setCheckable(True)
+                b.setFixedSize(16, 16)
+                b.setStyleSheet('QToolButton{background:%s;border:2px solid #16181B;border-radius:0;padding:0;}'
+                                'QToolButton:checked{border-color:#EDE6D3;}' % info.get('accent', AZUL))
+                b.clicked.connect(lambda _=False, a=app: self.lista.so_app(a))
+                grupo.addButton(b)
+                fila.addWidget(b)
+            v.addLayout(fila)
+            v.addWidget(linha('linhaH'))
             v.addWidget(self.lista, 1)
             return p
 
@@ -1644,44 +2041,61 @@ def janela(inicial=None, lancar=None):
             p = QWidget()
             p.setObjectName('pagina')
             v = QVBoxLayout(p)
-            v.setContentsMargins(18, 14, 18, 14)
-            v.setSpacing(9)
+            v.setContentsMargins(16, 12, 16, 12)
+            v.setSpacing(6)
             v.addWidget(rotulo('Settings', 'grande'))
             v.addSpacing(4)
             v.addWidget(rotulo('Trusted folders', 'secao'))
-            d = rotulo('Projects in these folders open with every feature on, without a prompt. Applies to all apps.', 'mudo')
+            d = rotulo('Projects here open with every feature on. Applies to all apps.', 'mudo')
             d.setWordWrap(True)
             v.addWidget(d)
             self.confiaveis = QListWidget()
-            self.confiaveis.setFixedHeight(110)
+            self.confiaveis.setObjectName('lista')
             v.addWidget(self.confiaveis)
             fila = QHBoxLayout()
-            for texto, acao in (('Add…', self.adicionar), ('Remove', self.retirar)):
-                b = QPushButton(texto)
-                b.clicked.connect(acao)
-                fila.addWidget(b)
+            fila.setSpacing(8)
+            b = QPushButton('Add')
+            b.clicked.connect(self.adicionar)
+            fila.addWidget(b)
+            self.tirar = QPushButton('Remove')
+            self.tirar.clicked.connect(self.retirar)
+            self.tirar.setEnabled(False)
+            fila.addWidget(self.tirar)
             fila.addStretch(1)
             v.addLayout(fila)
+            self.confiaveis.itemSelectionChanged.connect(lambda: self.tirar.setEnabled(bool(self.confiaveis.selectedItems())))
             v.addSpacing(8)
-            v.addWidget(rotulo('Appearance', 'secao'))
-            for texto, chave in (('Window blur', 'blur'), ('Transitions and boat animation', 'transitions')):
-                c = QCheckBox(texto)
-                c.setChecked(opcoes().get(chave, True))
-                c.toggled.connect(lambda n, k=chave: gravar_geral(k, n))
-                v.addWidget(c)
+            v.addWidget(rotulo('Window', 'secao'))
+            fundo = QHBoxLayout()
+            fundo.addWidget(QLabel('Background'))
+            fundo.addStretch(1)
+            motivo = blur_unsupported()
+            atual = 'Blur' if opcoes().get('blur', False) and not motivo else 'Solid'
+            seg = segmento(('Solid', 'Blur'), atual, lambda t: gravar_geral('blur', t == 'Blur'))
+            if motivo:
+                seg.botoes['Blur'].setEnabled(False)
+                seg.botoes['Blur'].setToolTip(motivo)
+            fundo.addWidget(seg)
+            v.addLayout(fundo)
+            v.addWidget(rotulo(motivo or 'Applies the next time the Hub opens.', 'mudo'))
+            c = QCheckBox('Transitions and boat animation')
+            c.setChecked(opcoes().get('transitions', True))
+            c.toggled.connect(lambda n: gravar_geral('transitions', n))
+            v.addWidget(c)
             v.addSpacing(8)
             v.addWidget(rotulo('Shortcuts', 'secao'))
-            atalho_ = QPushButton(f"Add {marca()['hub']} to Desktop")
+            atalho_ = QPushButton('Add Hub to Desktop')
             atalho_.clicked.connect(lambda: self.atalho(None))
             v.addWidget(atalho_, 0, Qt.AlignLeft)
             v.addStretch(1)
-            v.addWidget(rotulo(f"{marca()['name']}  ·  Editor {versao_editor()}", 'mudo'))
             self.listar()
             return p
 
         def listar(self):
             self.confiaveis.clear()
-            self.confiaveis.addItems([str(p) for p in pastas_confiaveis()])
+            self.confiaveis.addItems([curto(p) for p in pastas_confiaveis()])
+            self.caminhos = [str(p) for p in pastas_confiaveis()]
+            self.confiaveis.setFixedHeight(max(1, min(self.confiaveis.count(), 4)) * 26 + 2)
 
         def adicionar(self):
             pasta = QFileDialog.getExistingDirectory(self, 'Trust Folder', str(CASA))
@@ -1690,9 +2104,9 @@ def janela(inicial=None, lancar=None):
                 self.listar()
 
         def retirar(self):
-            item = self.confiaveis.currentItem()
-            if item:
-                retirar_confianca(item.text())
+            linha_ = self.confiaveis.currentRow()
+            if linha_ >= 0:
+                retirar_confianca(self.caminhos[linha_])
                 self.listar()
 
         def boasvindas(self, app, aba=None):
@@ -1710,6 +2124,7 @@ def janela(inicial=None, lancar=None):
             except OSError as e:
                 QMessageBox.warning(self, 'Desktop shortcut', f'Could not create the shortcut: {e}')
 
+    CLASSES.update(Partida=Partida, Abertura=Abertura)
     aplicacao = QApplication(sys.argv)
     aplicacao.setApplicationName(marca()['hub'])
     aplicacao.setStyle('Fusion')
@@ -1721,7 +2136,7 @@ def janela(inicial=None, lancar=None):
     if '--shots' in sys.argv:
         destino = Path(sys.argv[sys.argv.index('--shots') + 1])
         p = Painel()
-        for nome, pagina in (('tools', p.ferramentas), ('projects', p.projetos), ('settings', p.gerais)):
+        for nome, pagina in (('cargo', p.ferramentas), ('projects', p.projetos), ('settings', p.gerais)):
             p.miolo.setCurrentWidget(pagina)
             p.show()
             aplicacao.processEvents()
@@ -1734,7 +2149,7 @@ def janela(inicial=None, lancar=None):
                 aplicacao.processEvents()
                 t.grab().save(str(destino / f'{app}-{aba.lower()}.png'))
             t.close()
-            s = Partida(app, f'Starting {nome_app(app)}…')
+            s = Partida(app, '', True)
             s.show()
             aplicacao.processEvents()
             s.grab().save(str(destino / f'{app}-partida.png'))

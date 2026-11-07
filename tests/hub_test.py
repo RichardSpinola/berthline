@@ -154,7 +154,7 @@ def roteiro():
     (hub.PROJETOS / 'site/index.html').write_text('<p>')
     passo('disk project in java', any(t == 'On this computer' and any(p.name == 'loja' for p, _ in l) for t, l in hub.secoes('java')))
     passo('disk project only in its app', not any(p.name == 'site' for _, l in hub.secoes('java') for p, _ in l))
-    passo('panel groups by app', {'Java', 'Web'} <= {t for t, _ in hub.secoes()})
+    passo('panel lists every app', {'java', 'web'} <= {a for _, l in hub.secoes() for _, a in l})
 
     origem_git = TEMP / 'origem'
     origem_git.mkdir()

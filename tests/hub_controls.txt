@@ -1,3 +1,15 @@
+hub-cargo/QAction:Create Desktop Shortcut
+hub-cargo/QAction:Open
+hub-cargo/QAction:Open Editor Directly
+hub-cargo/QAction:Plugins
+hub-cargo/QAction:Settings
+hub-cargo/QAction:Show Data Folder
+hub-cargo/QPushButton:Cargo
+hub-cargo/QPushButton:Open
+hub-cargo/QPushButton:Open loja
+hub-cargo/QPushButton:Projects
+hub-cargo/QToolButton:Settings
+hub-cargo/QToolButton:⋯
 hub-projects/ListaProjetos:
 hub-projects/QAction:Create Desktop Shortcut
 hub-projects/QAction:Open
@@ -6,10 +18,14 @@ hub-projects/QAction:Plugins
 hub-projects/QAction:Settings
 hub-projects/QAction:Show Data Folder
 hub-projects/QLineEdit:Search projects
+hub-projects/QPushButton:Cargo
 hub-projects/QPushButton:Projects
-hub-projects/QPushButton:Tools
 hub-projects/QToolButton:
+hub-projects/QToolButton:All
+hub-projects/QToolButton:Java
 hub-projects/QToolButton:Settings
+hub-projects/QToolButton:Standard
+hub-projects/QToolButton:Web
 hub-projects/QToolButton:⋯
 hub-settings/QAction:Create Desktop Shortcut
 hub-settings/QAction:Open
@@ -18,25 +34,14 @@ hub-settings/QAction:Plugins
 hub-settings/QAction:Settings
 hub-settings/QAction:Show Data Folder
 hub-settings/QCheckBox:Transitions and boat animation
-hub-settings/QCheckBox:Window blur
-hub-settings/QListWidget:
-hub-settings/QPushButton:Add Berthline Hub to Desktop
-hub-settings/QPushButton:Add…
+hub-settings/QListWidget:lista
+hub-settings/QPushButton:Add
+hub-settings/QPushButton:Add Hub to Desktop
+hub-settings/QPushButton:Cargo
 hub-settings/QPushButton:Projects
 hub-settings/QPushButton:Remove
-hub-settings/QPushButton:Tools
 hub-settings/QToolButton:Settings
 hub-settings/QToolButton:⋯
-hub-tools/QAction:Create Desktop Shortcut
-hub-tools/QAction:Open
-hub-tools/QAction:Open Editor Directly
-hub-tools/QAction:Plugins
-hub-tools/QAction:Settings
-hub-tools/QAction:Show Data Folder
-hub-tools/QPushButton:Projects
-hub-tools/QPushButton:Tools
-hub-tools/QToolButton:Settings
-hub-tools/QToolButton:⋯
 java-customize/Combo:
 java-customize/QCheckBox:Animations
 java-customize/QCheckBox:Enable AI features
@@ -90,6 +95,49 @@ java-projects/QPushButton:Open
 java-projects/QPushButton:Plugins
 java-projects/QPushButton:Projects
 java-projects/QToolButton:
+standard-customize/Combo:
+standard-customize/QCheckBox:Animations
+standard-customize/QCheckBox:Enable AI features
+standard-customize/QPushButton:All settings…
+standard-customize/QPushButton:Back to Hub
+standard-customize/QPushButton:Customize
+standard-customize/QPushButton:Keyboard shortcuts…
+standard-customize/QPushButton:Learn
+standard-customize/QPushButton:Plugins
+standard-customize/QPushButton:Projects
+standard-learn/QPushButton:Back to Hub
+standard-learn/QPushButton:Customize
+standard-learn/QPushButton:Learn
+standard-learn/QPushButton:Plugins
+standard-learn/QPushButton:Projects
+standard-learn/QPushButton:VSCodium docs
+standard-plugins/QLineEdit:Search installed plugins
+standard-plugins/QListWidget:
+standard-plugins/QPushButton:Back to Hub
+standard-plugins/QPushButton:Customize
+standard-plugins/QPushButton:Learn
+standard-plugins/QPushButton:Marketplace
+standard-plugins/QPushButton:Plugins
+standard-plugins/QPushButton:Projects
+standard-plugins/QToolButton:
+standard-projects/Clone Repository/QLineEdit:
+standard-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
+standard-projects/Clone Repository/QPushButton:Cancel
+standard-projects/Clone Repository/QPushButton:Clone
+standard-projects/New Project/QCheckBox:Create Git repository
+standard-projects/New Project/QLineEdit:
+standard-projects/New Project/QListWidget:
+standard-projects/New Project/QPushButton:Browse…
+standard-projects/New Project/QPushButton:Cancel
+standard-projects/New Project/QPushButton:Create
+standard-projects/QPushButton:Back to Hub
+standard-projects/QPushButton:Clone Repository
+standard-projects/QPushButton:Customize
+standard-projects/QPushButton:Learn
+standard-projects/QPushButton:New Project
+standard-projects/QPushButton:Open
+standard-projects/QPushButton:Plugins
+standard-projects/QPushButton:Projects
 web-customize/Combo:
 web-customize/QCheckBox:Animations
 web-customize/QCheckBox:Enable AI features

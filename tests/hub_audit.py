@@ -196,6 +196,36 @@ def aberto(nome, rotulo):
     dialogos.clear()
 
 
+def pequenas(painel):
+    """The waiting and opening windows, with their click to skip."""
+    for app in ('java', 'web', 'standard'):
+        fechar_tudo(painel)
+        p = hub.CLASSES['Partida'](app, '', True)
+        pulou = []
+        p.pular = lambda: pulou.append(1)
+        p.show()
+        esperar(120)
+        foto(p, f'{app}-wait')
+        p.etapa('extensions')
+        foto(p, f'{app}-wait-extensions')
+        p.mouseReleaseEvent(None)
+        if not pulou:
+            erros.append(f'{app}: click did not skip the wait')
+        p.aviso('Still loading in the background')
+        foto(p, f'{app}-wait-timeout')
+        p.close()
+    feito = []
+    a = hub.CLASSES['Abertura'](lambda: feito.append(1))
+    a.barco.viagem = .55
+    a.show()
+    esperar(120)
+    foto(a, 'opening')
+    a.mouseReleaseEvent(None)
+    esperar(300)
+    if not feito:
+        erros.append('click did not skip the opening')
+
+
 def roteiro():
     painel = next(w for w in QApplication.topLevelWidgets() if type(w).__name__ == 'Painel' and w.isVisible())
 
@@ -217,15 +247,16 @@ def roteiro():
             return painel.tela
         return ir
 
-    telas = [('hub-tools', pagina(painel.ferramentas)), ('hub-projects', pagina(painel.projetos)),
+    telas = [('hub-cargo', pagina(painel.ferramentas)), ('hub-projects', pagina(painel.projetos)),
              ('hub-settings', pagina(painel.gerais))]
-    for app in ('java', 'web'):
+    for app in ('java', 'web', 'standard'):
         for titulo in ('Projects', 'Customize', 'Plugins', 'Learn'):
             telas.append((f'{app}-{titulo.lower()}', boas(app, titulo)))
     for nome, ir in telas:
         print('--', nome, flush=True)
         varrer(nome, ir, painel)
 
+    pequenas(painel)
     atual = sorted(set(vistos))
     conhecidos = LISTA.read_text(encoding='utf8').splitlines() if LISTA.exists() else []
     novos, sumidos = sorted(set(atual) - set(conhecidos)), sorted(set(conhecidos) - set(atual))
