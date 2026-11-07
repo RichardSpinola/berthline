@@ -2104,7 +2104,7 @@ def janela(inicial=None, lancar=None):
             self.setObjectName('raiz')
             self.painel = painel
             self.app = app
-            self.setWindowTitle(f'Welcome to {nome_app(app)}')
+            self.setWindowTitle(f'{nome_app(app)} · Projects')
             self.setWindowIcon(QIcon(str(ASSETS / f'{app}.svg')))
             com_vidro(self)
             self.setStyleSheet(estilo(aplicativos()[app].get('accent', AZUL)))
@@ -2135,7 +2135,7 @@ def janela(inicial=None, lancar=None):
                 b = QPushButton(titulo)
                 b.setObjectName('aba')
                 b.setCheckable(True)
-                b.clicked.connect(lambda _=False, w=pagina: self.paginas.ir(w))
+                b.clicked.connect(lambda _=False, w=pagina, t=titulo: (self.paginas.ir(w), self.setWindowTitle(f'{nome_app(app)} · {t}')))
                 grupo.addButton(b)
                 e.addWidget(b)
                 self.abas[titulo] = b
@@ -2492,7 +2492,7 @@ def janela(inicial=None, lancar=None):
             self.setObjectName('raiz')
             com_vidro(self)
             b = marca()
-            self.setWindowTitle(b['hub'])
+            self.setWindowTitle(f"{b['name']} · Cargo")
             # A fixed size keeps window managers, KDE included, from maximizing the panel.
             self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint
                                 | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
@@ -2601,6 +2601,7 @@ def janela(inicial=None, lancar=None):
             pagina = self.miolo.currentWidget()
             nome = {self.ferramentas: 'Cargo', self.projetos: 'Projects', self.gerais: 'Settings'}[pagina]
             self.guias[nome].setChecked(True)
+            self.setWindowTitle(f"{marca()['name']} · {nome}")
 
         def atualizar(self):
             for f in self.linhas:
