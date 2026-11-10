@@ -143,7 +143,7 @@ def roteiro():
 
     def novo():
         d = QApplication.activeModalWidget()
-        passo('empty template offered', d.modelos.item(0).text() == 'Empty Project')
+        passo('empty project offered', any(d.tipos.item(i).text() == 'Empty Project' for i in range(d.tipos.count())))
         d.nome.setText('demo')
         d.local.setText(str(TEMP))
         d.git.setChecked(True)
@@ -237,6 +237,38 @@ def ambiente_do_pacote():
 
 def extras(painel):
     ambiente_do_pacote()
+    guardado = hub.blur_unsupported, hub.translucido_possivel
+    hub.blur_unsupported, hub.translucido_possivel = (lambda: 'Blur needs KDE Plasma.'), (lambda: True)
+    passo('see-through without blur', hub.modo_vidro() == 'translucent')
+    hub.translucido_possivel = lambda: False
+    passo('solid without a compositor', hub.modo_vidro() == '')
+    hub.blur_unsupported = lambda: ''
+    passo('blur where offered', hub.modo_vidro() == 'blur')
+    hub.blur_unsupported, hub.translucido_possivel = guardado
+    passo('web keys default to the editor', hub.keymap_de('web') == 'vscode' and hub.keymap_de('standard') == 'vscode')
+    passo('learn lists editor keys on web', ('Command Palette', 'Ctrl+Shift+P') in hub.teclas_app('web')
+          or all(t not in hub.INTELLIJ_KEYS for t in hub.teclas_app('web')))
+    passo('ready says nothing', hub.estado_app('web')[1] in ('', 'Preparing', 'Running'), hub.estado_app('web')[1])
+    passo('theme per app', hub.tema_de('standard', 'Light') == 'Default Light Modern')
+    fresco = hub.criar_projeto('java', 'Java', 'ignora', TEMP, git=False)
+    passo('gitignore skips .vscode', '.vscode/' in (fresco / '.gitignore').read_text().splitlines())
+    vazio_git = hub.criar_projeto('standard', 'Empty Project', 'vazio-git', TEMP, git=bool(shutil.which('git')))
+    passo('gitignore with git', not shutil.which('git') or (vazio_git / '.gitignore').read_text() == '.vscode/\n')
+    passo('git address check', hub.CLASSES['endereco_git']('https://github.com/a/b.git')
+          and hub.CLASSES['endereco_git']('git@github.com:a/b.git') and not hub.CLASSES['endereco_git']('hello there'))
+    passo('git errors in plain words', 'sign-in' in hub.CLASSES['erro_git']('fatal: could not read Username for x')
+          and 'No repository' in hub.CLASSES['erro_git']("remote: Repository not found."))
+    maven = hub.criar_projeto('java', 'Java', 'com-maven', TEMP, sistema='Maven')
+    passo('maven layout', (maven / 'pom.xml').exists() and (maven / 'src/main/java/Main.java').exists()
+          and 'target/' in (maven / '.gitignore').read_text())
+    gradle = hub.criar_projeto('java', 'Empty Project', 'com-gradle', TEMP, sistema='Gradle')
+    passo('gradle layout', (gradle / 'build.gradle').exists() and (gradle / 'settings.gradle').read_text() == "rootProject.name = 'com-gradle'\n"
+          and (gradle / 'src/main/java').is_dir())
+    teclas = hub.pasta_usuario('web') / 'keybindings.json'
+    teclas.parent.mkdir(parents=True, exist_ok=True)
+    teclas.write_text('[{"key": "mine", "command": "x"}]')
+    hub.preparar('web')
+    passo('own web keys kept', 'mine' in teclas.read_text())
     # Keymap: a shortcut the person added survives both directions.
     hub.preparar('java')
     arquivo = hub.pasta_usuario('java') / 'keybindings.json'
@@ -257,7 +289,7 @@ def extras(painel):
           and any(e.get('key') == 'alt+shift+up' for e in volta))
     passo('keymap only in java', hub.aplicativos()['java'].get('keymap') and not hub.aplicativos()['web'].get('keymap'))
     hub.gravar_opcao('web', 'keymap', 'vscode')
-    passo('web stays out of the choice', hub.keymap_de('web') == 'intellij')
+    passo('web stays on editor keys', hub.keymap_de('web') == 'vscode')
     hub.gravar_opcao('web', 'keymap', 'intellij')
     arquivo.write_text('[{"key": ')
     passo('broken keybindings left alone', not hub.aplicar_keymap('java', 'vscode') and arquivo.read_text() == '[{"key": ')
@@ -306,7 +338,7 @@ def extras(painel):
     passo('setup folder', hub.pasta_projetos('web') == pasta and pasta.is_dir())
     passo('setup creates no shortcut unasked', atalhos() == antes, atalhos())
     passo('setup keymap', hub.opcao('java', 'keymap') == 'vscode')
-    passo('setup theme', hub.ajuste('web', 'workbench.colorTheme') == 'Islands Light' and hub.ajuste('standard', 'workbench.colorTheme') == 'Light Modern')
+    passo('setup theme', hub.ajuste('web', 'workbench.colorTheme') == hub.tema_de('web', 'Light') and hub.ajuste('standard', 'workbench.colorTheme') == 'Default Light Modern')
     passo('setup done', hub.opcoes().get('setup') is True)
     passo('setup returns to panel', painel.isVisible())
 
