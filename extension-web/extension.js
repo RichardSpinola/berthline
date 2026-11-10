@@ -69,7 +69,9 @@ function activate(context) {
         vscode.commands.registerCommand('web.run', () => { const doc = arquivoWeb(); return doc && rodarWeb(doc); }),
         vscode.commands.registerCommand('web.debug', () => { const doc = arquivoWeb(); return doc && depurarWeb(doc); }),
         vscode.commands.registerCommand('web.preview', uri => previa.abrir(context, { arquivo: uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri, focar: false })),
-        vscode.commands.registerCommand('web.insertBlock', inserirBloco)
+        vscode.commands.registerCommand('web.insertBlock', inserirBloco),
+        vscode.commands.registerCommand('web.previewMenu', previa.menu),
+        vscode.commands.registerCommand('web.stopPreview', () => previa.estado()?.painel.dispose())
     );
     previa.ativar(context);
 }

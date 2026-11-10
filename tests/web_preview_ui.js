@@ -35,6 +35,14 @@ async function alvo(filtro, ms = 20000) {
 
 /** The toolbar lives in a webview, an out-of-process frame: attach to it through the workbench and find the frame with our buttons. */
 async function barraDaPrevia() {
+    for (let i = 0; i < 3; i++) {
+        const b = await umaBusca();
+        if (b) return b;
+    }
+    return null;
+}
+
+async function umaBusca() {
     const lista = JSON.parse((await obter(`http://127.0.0.1:${PORTA}/json/list`)).corpo);
     const w = new WebSocket(lista.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(ok => { w.onopen = ok; });
@@ -46,7 +54,7 @@ async function barraDaPrevia() {
     };
     const c = (method, params = {}, sessionId) => new Promise(r => { const i = ++id; pend[i] = r; w.send(JSON.stringify({ id: i, method, params, sessionId })); });
     await c('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 10; i++) {
         for (const s of sessoes.filter(s => s.targetInfo.url.startsWith('vscode-webview://'))) {
             const quadros = [];
             const juntar = n => { quadros.push(n.frame); (n.childFrames || []).forEach(juntar); };
@@ -67,7 +75,7 @@ async function barraDaPrevia() {
 
 async function mudarTema(h, tema) {
     const arquivo = path.join(PACOTE, 'data/web/user/User/settings.json');
-    const s = JSON.parse(fs.readFileSync(arquivo, 'utf8'));
+    const s = JSON.parse(fs.readFileSync(arquivo, 'utf8').replace(/^\s*\/\/.*$/gm, '').replace(/,(\s*[\]}])/g, '$1'));
     s['workbench.colorTheme'] = tema;
     fs.writeFileSync(arquivo, JSON.stringify(s, null, 4));
 }

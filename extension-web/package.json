@@ -24,6 +24,17 @@
         "icon": "$(open-preview)"
       },
       {
+        "command": "web.stopPreview",
+        "title": "Stop Preview",
+        "category": "Web",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "web.previewMenu",
+        "title": "Preview Options",
+        "category": "Web"
+      },
+      {
         "command": "web.insertBlock",
         "title": "Insert Block",
         "category": "Web",

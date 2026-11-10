@@ -94,7 +94,7 @@
     },
     "editor.fontSize": 14,
     "terminal.integrated.fontSize": 14,
-    "workbench.activityBar.compact": false,
+    "workbench.activityBar.compact": true,
     "window.menuBarVisibility": "classic",
     "window.commandCenter": true,
     "workbench.layoutControl.enabled": true,

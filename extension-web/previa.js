@@ -92,14 +92,16 @@ function atualizarBarra() {
     if (estado?.servidor) {
         const porta = new URL(estado.servidor.url).port;
         barra.text = `$(radio-tower) Preview :${porta}`;
-        barra.tooltip = estado.alvo ? `Showing ${estado.alvo} (npm run dev). Click to show the preview.` : `Serving ${estado.raiz} at ${estado.servidor.url}. Click to show the preview.`;
+        barra.tooltip = `${estado.alvo ? `Showing ${estado.alvo} (npm run dev)` : `Serving at ${estado.servidor.url}`}. Click to show or stop it.`;
+        barra.command = 'web.previewMenu';
         return barra.show();
     }
     const doc = vscode.window.activeTextEditor?.document;
     const web = doc && ['html', 'css', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact'].includes(doc.languageId);
     const raiz = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     barra.text = '$(open-preview) Preview';
-    barra.tooltip = 'Open the live preview beside the editor (Ctrl+K V)';
+    barra.tooltip = 'Open the live preview beside the editor (Ctrl+K V). It uses no resources until opened.';
+    barra.command = 'web.preview';
     if (web || (raiz && fs.existsSync(path.join(raiz, 'index.html')))) barra.show();
     else barra.hide();
 }
@@ -454,4 +456,20 @@ async function urlDaPagina(context, arquivo) {
     return estado.servidor.url + caminhoWeb(estado.raiz, arquivo).slice(1);
 }
 
-module.exports = { ativar, abrir, pararTudo, urlDaPagina, estado: () => estado };
+/** Click on the running preview in the status bar: show it, stop it, or choose whether it opens by itself. */
+async function menu() {
+    if (!estado) return abrir(contexto);
+    const config = vscode.workspace.getConfiguration('web.preview');
+    const auto = config.get('openOnStartup', true);
+    const itens = [
+        { label: '$(open-preview) Show Preview', acao: 'mostrar' },
+        { label: '$(debug-stop) Stop Preview', description: 'closes the tab and its server', acao: 'parar' },
+        { label: auto ? '$(circle-slash) Don\'t open by itself' : '$(check) Open by itself when the folder has index.html', acao: 'auto' },
+    ];
+    const e = await vscode.window.showQuickPick(itens, { title: 'Preview' });
+    if (e?.acao === 'mostrar') estado?.painel.reveal(undefined, false);
+    else if (e?.acao === 'parar') estado?.painel.dispose();
+    else if (e?.acao === 'auto') await config.update('openOnStartup', !auto, vscode.ConfigurationTarget.Global);
+}
+
+module.exports = { menu, ativar, abrir, pararTudo, urlDaPagina, estado: () => estado };
