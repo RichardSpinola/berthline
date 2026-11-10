@@ -33,6 +33,21 @@ os.environ['HOME'] = str(TEMP / 'home')
 (TEMP / 'home/Projects/loja/pom.xml').write_text('<project/>')
 (TEMP / 'home/Projects/site').mkdir()
 (TEMP / 'home/Projects/site/index.html').write_text('<html></html>')
+(TEMP / 'home/Pictures/trips').mkdir(parents=True)
+for nome_, (cor_a, cor_b) in {'harbor.png': ('#1d3b53', '#c9b48a'), 'night-sea.png': ('#0b1320', '#2c5a7a'),
+                              'sand.png': ('#d8c7a0', '#8a6f45'), 'notes.txt': (None, None)}.items():
+    if nome_.endswith('.txt'):
+        (TEMP / 'home/Pictures' / nome_).write_text('not an image')
+        continue
+    from PySide6.QtGui import QColor as _Cor, QImage as _Img, QLinearGradient as _Grad, QPainter as _Pintor  # noqa: E402
+    _i = _Img(640, 400, _Img.Format_RGB32)
+    _p = _Pintor(_i)
+    _g = _Grad(0, 0, 0, 400)
+    _g.setColorAt(0, _Cor(cor_a))
+    _g.setColorAt(1, _Cor(cor_b))
+    _p.fillRect(_i.rect(), _g)
+    _p.end()
+    _i.save(str(TEMP / 'home/Pictures' / nome_))
 (RAIZ / 'data/hub.json').write_text(json.dumps({'transitions': False, 'setup': True, 'checked': 9e12, 'recent': [
     {'path': str(TEMP / 'home/Projects/loja'), 'app': 'java'}]}))
 sys.path.insert(0, str(AQUI.parent / 'hub'))
@@ -151,7 +166,7 @@ def varrer_janela(raiz, nome):
     for c in controles(raiz):
         vistos.append(f'{nome}/{rotulo_de(c)}')
         texto = c.text() if isinstance(c, QAbstractButton) else ''
-        if texto not in ('Create', 'Clone', 'OK', 'Cancel', 'Close'):
+        if texto not in ('Create', 'Clone', 'OK', 'Cancel', 'Close', 'Use Image'):
             usar(c, nome)
             esperar(40)
 
