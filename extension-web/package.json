@@ -2,7 +2,7 @@
   "name": "berthline-web",
   "displayName": "Berthline Web",
   "description": "Run, debug and live preview for the Berthline Web profile",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "berthline",
   "engines": {
     "vscode": "^1.90.0"
