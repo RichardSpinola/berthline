@@ -5,9 +5,17 @@ on:
     branches: [main]
     tags: ['v*']
     paths-ignore: ['tests/**', 'docs/**', '*.md', '.github/workflows/audit.yml', '.github/workflows/check.yml']
+  pull_request:
+    paths-ignore: ['docs/**', '*.md']
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   windows:
+    # Pull requests build Linux only; Windows runs on main, tags and by hand
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -41,6 +49,18 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed areas
+        id: areas
+        run: |
+          # On a pull request a change only to the Hub skips the editor smoke test
+          editor=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+            grep -qvE '^(hub/|tests/hub_|tests/update_test)' changed.txt || editor=false
+          fi
+          echo "editor=$editor" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -57,6 +77,7 @@ jobs:
           path: dist/berthline-linux.tar.gz
           compression-level: 0
       - name: Smoke test
+        if: steps.areas.outputs.editor == 'true'
         timeout-minutes: 15
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
