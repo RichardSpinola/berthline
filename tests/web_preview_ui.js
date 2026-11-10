@@ -193,6 +193,21 @@ async function modoDev() {
     await h.foto('preview-4-light');
     await mudarTema(h, 'Default Dark Modern');
 
+    // Insert Block from the Command Palette, with the cursor on a line of <body>
+    await h.tecla('End', 'End', 35);
+    await h.tecla('Enter', 'Enter', 13);
+    await h.tecla('F1', 'F1', 112);
+    await dormir(600);
+    await h.escreve('Web: Insert Block');
+    await dormir(600);
+    await h.tecla('Enter', 'Enter', 13);
+    await dormir(800);
+    await h.escreve('Footer');
+    await dormir(400);
+    await h.foto('preview-8-blocks');
+    await h.tecla('Enter', 'Enter', 13);
+    passo('block CSS appended to style.css', await ate(() => /\/\* Block: Footer \*\/\n\.site-footer \{/.test(fs.readFileSync(path.join(pasta, 'style.css'), 'utf8')), 5000));
+    passo('block markup in the page', await ate(async () => !!await pagina.ev(`document.querySelector('footer.site-footer')`), 8000));
     passo('server answers', (await obter(base + 'style.css')).status === 200);
     const x = await h.ev(`(() => { const t = [...document.querySelectorAll('.tab')].find(e => /Preview/.test(e.innerText)); const b = t && t.querySelector('.tab-actions .action-label').getBoundingClientRect(); return b && { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
     if (x) await h.xy(x.x, x.y);
