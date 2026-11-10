@@ -1,9 +1,9 @@
 [
-    // Run and debug: HTML goes to Live Server, JS and TS to the bundled Node
-    { "key": "shift+f10", "command": "web.run", "when": "editorLangId == html || editorLangId == javascript || editorLangId == typescript" },
-    { "key": "shift+f9", "command": "web.debug", "when": "editorLangId == html || editorLangId == javascript || editorLangId == typescript" },
-    { "key": "ctrl+5", "command": "web.run", "when": "(editorLangId == html || editorLangId == javascript || editorLangId == typescript) && !inDebugMode && !web.rodando" },
-    { "key": "ctrl+5", "command": "web.rerun", "when": "inDebugMode || web.rodando" },
-    { "key": "shift+f10", "command": "web.rerun", "when": "!inDebugMode && terminalFocus" },
-    { "key": "ctrl+2", "command": "web.stop", "when": "inDebugMode || web.emExecucao" }
+    // VS Code keys: F5 debugs, Ctrl+F5 runs (HTML opens the preview, JS and TS run in the bundled Node), Shift+F5 stops
+    { "key": "f5", "command": "web.debug", "when": "!inDebugMode && !web.emExecucao && (editorLangId == html || editorLangId == javascript || editorLangId == typescript) && debugConfigurationType == ''" },
+    { "key": "ctrl+f5", "command": "web.run", "when": "!inDebugMode && (editorLangId == html || editorLangId == javascript || editorLangId == typescript) && debugConfigurationType == ''" },
+    { "key": "shift+f5", "command": "web.stop", "when": "!inDebugMode && web.emExecucao" },
+    { "key": "ctrl+shift+f5", "command": "web.rerun", "when": "!inDebugMode && web.rodando" },
+    { "key": "ctrl+k v", "command": "web.preview", "when": "editorLangId == html || editorLangId == css" },
+    { "key": "ctrl+alt+b", "command": "web.insertBlock", "when": "editorLangId == html && editorTextFocus" }
 ]

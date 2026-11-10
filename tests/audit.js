@@ -11,7 +11,7 @@ const JANELAS = process.platform === 'win32';
 const HUB = path.join(PACOTE, JANELAS ? 'Hub.exe' : 'Hub');
 const INSEGUROS = /^ij\.(newProject|reload|gitPush|gitPull|safeDelete|openFiles)$/;
 const MODIF = { alt: 1, ctrl: 2, shift: 8 };
-const MOLDURA = '38,40,44'; // #26282C, the Islands Dark frame set in profiles/base/settings.json
+const MOLDURA = '38,40,44'; // #26282C, the Islands Dark frame set in profiles/java/settings.json
 const relatorio = { app: APP, plataforma: process.platform, falhas: [], avisos: [], dados: {} };
 
 const falha = (nome, extra = '') => { relatorio.falhas.push(`${nome} ${extra}`.trim()); console.log('FAIL ', nome, extra); };

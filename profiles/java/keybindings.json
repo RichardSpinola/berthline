@@ -1,5 +1,77 @@
 [
-    // Java only; the Hub adds these after profiles/base/keybindings.json
+    // Debug
+    { "key": "ctrl+f5", "command": "workbench.action.debug.restart", "when": "inDebugMode" },
+
+    // Janelas de ferramentas
+    { "key": "alt+4", "command": "workbench.action.terminal.focus" },
+    { "key": "alt+6", "command": "workbench.actions.view.problems" },
+    { "key": "alt+0", "command": "workbench.view.scm" },
+
+    // Favoritos
+    { "key": "f11", "command": "bookmarks.toggle", "when": "editorTextFocus" },
+    { "key": "shift+f11", "command": "bookmarks.list" },
+
+    // Terminal: copiar com seleção; sem seleção Ctrl+C vai para o programa
+    {
+        "key": "ctrl+c",
+        "command": "runCommands",
+        "args": { "commands": ["workbench.action.terminal.copySelection", "workbench.action.terminal.clearSelection"] },
+        "when": "terminalFocus && terminalTextSelected"
+    },
+    { "key": "ctrl+v", "command": "workbench.action.terminal.paste", "when": "terminalFocus" },
+    { "key": "ctrl+shift+v", "command": "workbench.action.terminal.paste", "when": "terminalFocus" },
+
+    // Terminal: abas e foco; programas de tela cheia ficam com o Esc
+    { "key": "ctrl+shift+t", "command": "workbench.action.terminal.new", "when": "terminalFocus" },
+    { "key": "escape", "command": "workbench.action.focusActiveEditorGroup", "when": "terminalFocus && !terminalAltBufferActive" },
+    { "key": "shift+escape", "command": "workbench.action.closePanel", "when": "terminalFocus" },
+
+    // Edição que o pacote de atalhos não cobre
+    { "key": "alt+shift+up", "command": "editor.action.moveLinesUpAction", "when": "editorTextFocus && !editorReadonly" },
+    { "key": "alt+shift+right", "command": "editor.action.smartSelect.expand", "when": "editorTextFocus" },
+    { "key": "alt+shift+left", "command": "editor.action.smartSelect.shrink", "when": "editorTextFocus" },
+    { "key": "alt+shift+down", "command": "editor.action.moveLinesDownAction", "when": "editorTextFocus && !editorReadonly" },
+    { "key": "ctrl+shift+u", "command": "editor.action.transformToUppercase", "when": "editorTextFocus && !editorReadonly" },
+    { "key": "ctrl+alt+shift+j", "command": "editor.action.selectHighlights", "when": "editorFocus" },
+
+    // Teclas do IntelliJ no KDE e ações mapeadas da instalação
+    {"key": "ctrl+1", "command": "editor.action.showHover", "when": "editorTextFocus"},
+    {"key": "ctrl+shift+p", "command": "editor.action.showHover", "when": "editorTextFocus"},
+    {"key": "ctrl+8", "command": "editor.debug.action.toggleBreakpoint", "when": "editorTextFocus"},
+    {"key": "ctrl+shift+8", "command": "workbench.debug.action.focusBreakpointsView"},
+    {"key": "ctrl+0", "command": "workbench.action.gotoSymbol", "when": "editorTextFocus"},
+    {"key": "ctrl+alt+8", "command": "editor.debug.action.showDebugHover", "when": "inDebugMode"},
+    {"key": "shift+alt+9", "command": "editor.debug.action.runToCursor", "when": "inDebugMode"},
+    {"key": "shift+alt+0", "command": "workbench.action.debug.callStackTop", "when": "inDebugMode"},
+    {"key": "shift+alt+l", "command": "editor.action.formatDocument", "when": "editorTextFocus"},
+    {"key": "ctrl+l", "command": "editor.action.nextMatchFindAction", "when": "editorFocus"},
+    {"key": "ctrl+shift+l", "command": "editor.action.previousMatchFindAction", "when": "editorFocus"},
+    {"key": "ctrl+j", "command": "editor.action.insertSnippet", "when": "editorTextFocus"},
+    {"key": "ctrl+alt+j", "command": "editor.action.surroundWithSnippet", "when": "editorTextFocus"},
+    {"key": "ctrl+alt+t", "command": "editor.action.surroundWithSnippet", "when": "editorTextFocus"},
+    {"key": "ctrl+alt+shift+b", "command": "editor.action.surroundWithSnippet", "when": "editorTextFocus"},
+    {"key": "ctrl+[", "command": "editor.action.jumpToBracket", "when": "editorTextFocus"},
+    {"key": "ctrl+]", "command": "editor.action.jumpToBracket", "when": "editorTextFocus"},
+    {"key": "shift+alt+g", "command": "editor.action.insertCursorAtEndOfEachLineSelected", "when": "editorTextFocus"},
+    {"key": "alt+shift+insert", "command": "editor.action.toggleColumnSelection", "when": "editorTextFocus"},
+    {"key": "ctrl+alt+shift+insert", "command": "workbench.action.files.newUntitledFile"},
+    {"key": "ctrl+alt+y", "command": "workbench.action.files.revert"},
+    {"key": "ctrl+shift+f12", "command": "workbench.action.maximizeEditorHideSidebar"},
+    {"key": "f12", "command": "workbench.action.focusPanel", "when": "editorTextFocus"},
+    {"key": "shift+alt+1", "command": "workbench.files.action.showActiveFileInExplorer"},
+    {"key": "shift+f1", "command": "editor.action.showHover", "when": "editorTextFocus"},
+    {"key": "ctrl+alt+up", "command": "search.action.focusPreviousSearchResult"},
+    {"key": "ctrl+alt+down", "command": "search.action.focusNextSearchResult"},
+    {"key": "ctrl+k", "command": "workbench.view.scm", "when": "!terminalFocus"},
+    {"key": "alt+`", "command": "workbench.view.scm"},
+    {"key": "alt+2", "command": "workbench.view.extension.bookmarks"},
+    {"key": "alt+shift+i", "command": "workbench.actions.view.problems"},
+    {"key": "alt+/", "command": "editor.action.triggerSuggest", "when": "editorTextFocus"},
+    {"key": "delete", "command": "moveFileToTrash", "when": "explorerViewletFocus && !inputFocus"},
+    {"key": "f5", "command": "filesExplorer.copy", "when": "explorerViewletFocus && !inputFocus"},
+    {"key": "shift+enter", "command": "explorer.openToSide", "when": "explorerViewletFocus && !inputFocus"},
+
+    // Java: run, debug and refactor
     { "key": "shift+f10", "command": "ij.runSelected", "when": "editorLangId == java || ij.temConfig" },
     { "key": "ctrl+shift+f10", "command": "ij.run", "when": "editorLangId == java" },
     { "key": "shift+f9", "command": "ij.debugSelected", "when": "editorLangId == java || ij.temConfig" },
