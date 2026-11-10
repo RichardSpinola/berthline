@@ -24,5 +24,15 @@ $cliques = $LASTEXITCODE
 & "$pacote\node\node.exe" C:\check\tests\smoke.js $pacote
 $smoke = $LASTEXITCODE
 Write-Output "clicks=$cliques smoke=$smoke"
+
+# The step waits for every process this account started. List what outlived the editor (to find who leaks), then end it.
+Start-Sleep -Seconds 5
+$sobras = Get-CimInstance Win32_Process | Where-Object {
+    $_.ProcessId -ne $PID -and ($_.ExecutablePath -like "$pacote*" -or $_.Name -in 'java.exe', 'javaw.exe', 'node.exe', 'msedge.exe', 'chrome.exe')
+}
+foreach ($p in $sobras) {
+    Write-Output "left running: $($p.ProcessId) $($p.Name) $($p.CommandLine)"
+    Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+}
 if ($cliques -ne 0 -or $smoke -ne 0) { exit 1 }
 exit 0
