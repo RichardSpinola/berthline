@@ -109,6 +109,11 @@ async function comandos(h) {
     }
     relatorio.dados.executados = resultado;
     console.log('commands run', Object.keys(resultado).length, 'timeouts', Object.values(resultado).filter(v => v === 'timeout').length);
+    // Debug can start a real session (a browser where one is installed); the status bar would keep its debugging colour
+    for (let i = 0; i < 3; i++) {
+        await rpc('executar', { comando: 'workbench.action.debug.stop' }).catch(() => {});
+        await dormir(500);
+    }
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
     await rpc('executar', { comando: 'workbench.action.closePanel' });
 }
