@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install PySide6 pyinstaller
+      - run: pip install PySide6 pyinstaller certifi
       - run: python build/build.py
       - name: Zip
         run: Compress-Archive -Path dist/berthline-windows -DestinationPath dist/berthline-windows.zip
@@ -27,6 +27,9 @@ jobs:
       - name: Smoke test
         timeout-minutes: 15
         run: dist/berthline-windows/node/node.exe tests/smoke.js dist/berthline-windows
+      - name: Update test
+        timeout-minutes: 20
+        run: python -u tests/update_test.py dist/berthline-windows
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -44,7 +47,7 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libegl1 libnss3 libgbm1 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 git
-      - run: pip install PySide6 pyinstaller
+      - run: pip install PySide6 pyinstaller certifi
       - run: python build/build.py
       - name: Archive
         run: tar -C dist -czf dist/berthline-linux.tar.gz berthline-linux
@@ -62,6 +65,9 @@ jobs:
         run: |
           python -u tests/hub_test.py dist/berthline-linux
           python -u tests/hub_audit.py dist/berthline-linux
+      - name: Update test
+        timeout-minutes: 20
+        run: python -u tests/update_test.py dist/berthline-linux
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -9,14 +9,23 @@ import posixpath
 import re
 import shutil
 import sqlite3
+import ssl
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+import troca
+
+try:
+    import certifi
+except ImportError:  # run from source without it: the system's certificates still apply
+    certifi = None
 
 JANELAS = sys.platform == 'win32'
 RAIZ = Path(os.environ.get('SUITE_ROOT') or (sys.executable if getattr(sys, 'frozen', False) else __file__)).resolve()
@@ -31,6 +40,9 @@ CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
 PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keymap': 'intellij', 'folder': ''}
+# Defaults of older versions that a later one replaced; a setting still equal to one was never touched.
+LEGADO = {'files.autoSave': 'onFocusChange'}
+COM_TEMAS = ('workbench.colorCustomizations', 'editor.semanticTokenColorCustomizations')
 ICON_THEMES = {'Berthline': 'berthline-file-icons', 'JetBrains': 'jetbrains-file-icon-theme-auto'}
 THEMES = {'Dark': ('Islands Dark', 'Dark Modern'), 'Light': ('Islands Light', 'Light Modern')}
 INTELLIJ_KEYS = (
@@ -251,6 +263,30 @@ def juntar_teclas(arquivos):
     return '[\n' + ',\n'.join(t[t.index('[') + 1:t.rindex(']')].strip('\n') for t in textos) + '\n]\n'
 
 
+def migrar(atual, base, anterior):
+    """Brings a newer profile's defaults to settings the person never changed.
+
+    `anterior` holds the defaults written last time; before 0.2.1 none were kept, so LEGADO stands in.
+    Colors that an old version wrote for every theme move under the theme they were made for.
+    """
+    for chave, valor in base.items():
+        if chave not in atual:
+            continue
+        if chave in COM_TEMAS and isinstance(valor, dict) and isinstance(atual[chave], dict):
+            meu = atual[chave]
+            for nome, bloco in valor.items():
+                if not (nome.startswith('[') and isinstance(bloco, dict)):
+                    continue
+                for k, v in bloco.items():
+                    if k in meu and meu[k] == v:
+                        del meu[k]
+                meu.setdefault(nome, bloco)
+            continue
+        velho = anterior[chave] if chave in anterior else LEGADO.get(chave, valor)
+        if velho != valor and atual[chave] == velho:
+            atual[chave] = valor
+
+
 def preparar(app):
     """Grava o perfil a cada abertura, mantendo o que a pessoa mudou."""
     usuario = pasta_usuario(app)
@@ -262,6 +298,9 @@ def preparar(app):
     arquivo = usuario / 'settings.json'
     atual = ler_json(arquivo) if arquivo.exists() else {}
     base = modelo(app)
+    padroes = DADOS / app / 'defaults.json'
+    migrar(atual, caminhos(base), ler_json(padroes))
+    padroes.write_text(json.dumps(caminhos(base), ensure_ascii=False), encoding='utf8')
     for chave, valor in base.items():
         if chave not in atual or '${SUITE}' in json.dumps(valor):
             atual[chave] = caminhos(valor)
@@ -794,9 +833,39 @@ def pacote_atual():
     return 'berthline-windows.zip' if JANELAS else 'berthline-linux.tar.gz'
 
 
+def contexto_ssl():
+    """The system's certificates plus the bundled ones.
+
+    The packaged libcrypto only looks where Ubuntu keeps certificates, so on Fedora it finds none.
+    """
+    contexto = ssl.create_default_context()
+    if certifi:
+        contexto.load_verify_locations(certifi.where())
+    return contexto
+
+
+def motivo_rede(erro):
+    """Says in plain words why GitHub did not answer."""
+    causa = getattr(erro, 'reason', erro)
+    if isinstance(erro, urllib.error.HTTPError):
+        if erro.code in (403, 429):
+            return 'GitHub refused the request for now (rate limit). Try again in an hour.'
+        return f'GitHub answered with error {erro.code}.'
+    if isinstance(causa, ssl.SSLCertVerificationError):
+        return f"Could not verify GitHub's certificate: {getattr(causa, 'verify_message', '') or causa}."
+    if isinstance(causa, TimeoutError) or 'timed out' in str(causa):
+        return 'GitHub took too long to answer. Check the connection.'
+    if isinstance(causa, OSError) and causa.errno in (-2, -3, 11001, 11002, 11004):
+        return 'No connection: the address of GitHub could not be found.'
+    return f'Could not reach GitHub: {causa}'
+
+
 def ler_url(url):
     pedido = urllib.request.Request(url, headers={'User-Agent': 'Berthline-Hub', 'Accept': 'application/vnd.github+json'})
-    return urllib.request.urlopen(pedido, timeout=8)
+    try:
+        return urllib.request.urlopen(pedido, timeout=8, context=contexto_ssl())
+    except OSError as e:
+        raise OSError(motivo_rede(e)) from e
 
 
 def checar_novidade():
@@ -848,7 +917,35 @@ def baixar_verificado(url, somas, destino, progresso=None):
     return Path(destino)
 
 
+def preparar_novidade(nova, progresso=None):
+    """Downloads, checks and unpacks a release beside the install. Nothing is replaced yet."""
+    area_ = troca.area(RAIZ)
+    shutil.rmtree(area_, ignore_errors=True)
+    arquivo = baixar_verificado(nova['package'], nova['sums'], area_ / pacote_atual(), progresso)
+    if progresso:
+        progresso(None)
+    return troca.preparar_pacote(RAIZ, arquivo, nova['version'])
+
+
+def depois_de_atualizar(area_):
+    """First start of a new version: migrate what the person already has, then tell the helper to keep it."""
+    for app in aplicativos():
+        if (pasta_usuario(app) / 'settings.json').exists():
+            preparar(app)
+    gravar_geral('update', None)
+    troca.confirmar(area_)
+    threading.Thread(target=troca.limpar, args=(area_,), daemon=True).start()
+
+
+def restos_de_troca():
+    """Clears a finished update's work folder that an earlier start could not remove."""
+    area_ = troca.area(RAIZ)
+    if (area_ / 'ok').exists() or (area_ / 'error.txt').exists():
+        threading.Thread(target=troca.limpar, args=(area_, 0), daemon=True).start()
+
+
 CLASSES = {}  # the audit reaches the small windows through this
+AO_ABRIR = []  # work for the moment the first window is up
 
 
 def limpar_ambiente():
@@ -2420,15 +2517,15 @@ def janela(inicial=None, lancar=None):
             surgir(self.painel)
 
     class Novidade(QDialog):
-        """Update notice. Nothing downloads until the person clicks Download."""
+        """Update notice. Nothing downloads until the person clicks Update now."""
 
         def __init__(self, painel, nova):
             super().__init__(painel)
             self.painel = painel
             self.nova = nova
-            self.feito = None
+            self.parte = 0
             self.setWindowTitle(f"{marca()['name']} {nova['version']}")
-            self.resize(460, 340)
+            self.resize(460, 360)
             v = QVBoxLayout(self)
             v.setContentsMargins(18, 16, 18, 16)
             v.setSpacing(8)
@@ -2449,7 +2546,8 @@ def janela(inicial=None, lancar=None):
             v.addWidget(r)
             v.addWidget(linha('linhaH'))
             for chave, valor in (('Package', pacote_atual()), ('Source', 'GitHub release, checked by SHA-256'),
-                                 ('Saved to', curto(CASA / 'Downloads'))):
+                                 ('Kept', 'Projects, settings and your extensions'),
+                                 ('If it fails', 'This version comes back')):
                 fila = QHBoxLayout()
                 fila.addWidget(rotulo(chave, 'mudo'))
                 fila.addStretch(1)
@@ -2461,10 +2559,14 @@ def janela(inicial=None, lancar=None):
             v.addWidget(self.estado)
             fim = QHBoxLayout()
             fim.addWidget(link('Skip this version', self.pular))
+            if nova.get('page'):
+                fim.addWidget(link('Release page', lambda: QDesktopServices.openUrl(QUrl(nova['page']))))
             fim.addStretch(1)
-            depois = QPushButton('Later')
+            self.depois = depois = QPushButton('Later')
             depois.clicked.connect(self.reject)
-            self.baixar = QPushButton('Download')
+            self.relogio = QTimer(self)
+            self.relogio.timeout.connect(self.mostrar)
+            self.baixar = QPushButton('Update now')
             self.baixar.setObjectName('azul')
             self.baixar.clicked.connect(self.agir)
             pode = bool(nova.get('package') and nova.get('sums'))
@@ -2481,25 +2583,41 @@ def janela(inicial=None, lancar=None):
             self.reject()
 
         def agir(self):
-            if self.feito:
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.feito.parent)))
+            abertos = [info['title'] for app, info in aplicativos().items() if rodando(app)]
+            motivo = troca.impedimento(RAIZ)
+            if abertos:
+                self.estado.setText(f"Close {', '.join(abertos)} first: the update replaces the editor.")
+                return
+            if motivo:
+                self.estado.setText(f'This copy cannot update itself. {motivo} Get the package from the release page.')
                 return
             self.baixar.setEnabled(False)
-            self.estado.setText('Downloading…')
-            alvo = CASA / 'Downloads' / pacote_atual()
-            em_fundo(lambda: baixar_verificado(self.nova['package'], self.nova['sums'], alvo, self.andou), self.terminou)
+            self.depois.setEnabled(False)
+            self.parte = 0
+            self.mostrar()
+            self.relogio.start(300)
+            em_fundo(lambda: preparar_novidade(self.nova, self.andou), self.terminou)
 
         def andou(self, parte):
             self.parte = parte
 
-        def terminou(self, arquivo, erro):
-            self.baixar.setEnabled(True)
+        def mostrar(self):
+            self.estado.setText('Unpacking and checking…' if self.parte is None else f'Downloading… {self.parte:.0%}')
+
+        def terminou(self, area_, erro):
+            self.relogio.stop()
+            if not erro:
+                try:
+                    troca.iniciar(RAIZ, area_)
+                except OSError as e:
+                    erro = str(e)
             if erro:
-                self.estado.setText(f'Download failed: {erro[:90]}')
+                self.baixar.setEnabled(True)
+                self.depois.setEnabled(True)
+                self.estado.setText(f'Nothing was changed. {erro[:200]}')
                 return
-            self.feito = arquivo
-            self.estado.setText(f'Saved and verified: {curto(arquivo)}')
-            self.baixar.setText('Show in File Manager')
+            self.estado.setText('Restarting…')
+            QApplication.quit()
 
     class Painel(Raiz):
         """Janela principal: lista os apps e guarda só o que vale para todos."""
@@ -2601,7 +2719,7 @@ def janela(inicial=None, lancar=None):
                 self.ver_novidade()
             if hasattr(self, 'checagem'):
                 if erro:
-                    self.checagem.setText('Could not reach GitHub.')
+                    self.checagem.setText(erro)
                 else:
                     self.checagem.setText(self.faixa_texto.text() if novidade() else 'Up to date.')
 
@@ -2747,6 +2865,7 @@ def janela(inicial=None, lancar=None):
             b = QPushButton('Check now')
             b.clicked.connect(self.checar_agora)
             self.checagem = rotulo('', 'mudo')
+            self.checagem.setWordWrap(True)
             fila.addWidget(b)
             fila.addWidget(self.checagem, 1)
             v.addLayout(fila)
@@ -2847,6 +2966,8 @@ def janela(inicial=None, lancar=None):
     j = Boasvindas(inicial) if inicial else Painel()
     if not inicial and not opcoes().get('setup') and not opcoes().get('recent'):
         j.preparo = j = Preparo(j)
+    for trabalho in AO_ABRIR:
+        QTimer.singleShot(0, lambda t=trabalho: t(j))
     if inicial or not opcoes().get('transitions', True):
         surgir(j)
     else:
@@ -2878,7 +2999,40 @@ def main():
         for app in aplicativos():
             preparar(app)
         return 0
+    if args[:1] == ['--swap']:  # the helper copy: see troca.py
+        return troca.aplicar(args[1], args[2], int(args[3]), processo_vivo)
+    if args[:1] == ['--install-update']:  # a package already downloaded and checked by the person
+        troca.iniciar(RAIZ, troca.preparar_pacote(RAIZ, args[1]))
+        return 0
+    if args[:1] == ['--check-update']:
+        try:
+            nova = checar_novidade()
+        except (OSError, ValueError, KeyError) as e:
+            print(e)
+            return 1
+        print(nova['version'] if nova else 'no release')
+        return 0
+    if args[:1] == ['--updated']:
+        try:
+            depois_de_atualizar(args[1])
+        except Exception:  # any failure here must end the program, so the helper restores the old version
+            return 1
+    elif args[:1] == ['--update-failed']:
+        try:
+            motivo = (Path(args[1]) / 'error.txt').read_text(encoding='utf8')
+        except OSError:
+            motivo = ''
+        AO_ABRIR.append(lambda j: avisar_falha(j, motivo))
+    if args[:1] != ['--updated']:
+        restos_de_troca()
     return janela()
+
+
+def avisar_falha(pai, motivo):
+    from PySide6.QtWidgets import QMessageBox
+    aviso = QMessageBox(QMessageBox.Warning, 'Update', 'The update was not installed.', QMessageBox.Ok, pai)
+    aviso.setInformativeText(f'{motivo}\n\nYour previous version is back, with your settings and projects as they were.')
+    aviso.open()
 
 
 if __name__ == '__main__':
