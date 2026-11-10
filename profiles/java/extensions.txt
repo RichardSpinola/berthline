@@ -12,3 +12,4 @@ fogio.jetbrains-color-theme@1.0.3
 fogio.jetbrains-file-icon-theme@1.8.0
 fogio.jetbrains-product-icon-theme@1.2.1
 kangsou.islands-theme@1.0.5
+asispts.neo-git-graph@0.6.0

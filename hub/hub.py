@@ -9,14 +9,23 @@ import posixpath
 import re
 import shutil
 import sqlite3
+import ssl
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+import troca
+
+try:
+    import certifi
+except ImportError:  # run from source without it: the system's certificates still apply
+    certifi = None
 
 JANELAS = sys.platform == 'win32'
 RAIZ = Path(os.environ.get('SUITE_ROOT') or (sys.executable if getattr(sys, 'frozen', False) else __file__)).resolve()
@@ -31,6 +40,9 @@ CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
 PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keymap': 'intellij', 'folder': ''}
+# Defaults of older versions that a later one replaced; a setting still equal to one was never touched.
+LEGADO = {'files.autoSave': 'onFocusChange'}
+COM_TEMAS = ('workbench.colorCustomizations', 'editor.semanticTokenColorCustomizations')
 ICON_THEMES = {'Berthline': 'berthline-file-icons', 'JetBrains': 'jetbrains-file-icon-theme-auto'}
 THEMES = {'Dark': ('Islands Dark', 'Dark Modern'), 'Light': ('Islands Light', 'Light Modern')}
 INTELLIJ_KEYS = (
@@ -251,6 +263,30 @@ def juntar_teclas(arquivos):
     return '[\n' + ',\n'.join(t[t.index('[') + 1:t.rindex(']')].strip('\n') for t in textos) + '\n]\n'
 
 
+def migrar(atual, base, anterior):
+    """Brings a newer profile's defaults to settings the person never changed.
+
+    `anterior` holds the defaults written last time; before 0.2.1 none were kept, so LEGADO stands in.
+    Colors that an old version wrote for every theme move under the theme they were made for.
+    """
+    for chave, valor in base.items():
+        if chave not in atual:
+            continue
+        if chave in COM_TEMAS and isinstance(valor, dict) and isinstance(atual[chave], dict):
+            meu = atual[chave]
+            for nome, bloco in valor.items():
+                if not (nome.startswith('[') and isinstance(bloco, dict)):
+                    continue
+                for k, v in bloco.items():
+                    if k in meu and meu[k] == v:
+                        del meu[k]
+                meu.setdefault(nome, bloco)
+            continue
+        velho = anterior[chave] if chave in anterior else LEGADO.get(chave, valor)
+        if velho != valor and atual[chave] == velho:
+            atual[chave] = valor
+
+
 def preparar(app):
     """Grava o perfil a cada abertura, mantendo o que a pessoa mudou."""
     usuario = pasta_usuario(app)
@@ -262,6 +298,9 @@ def preparar(app):
     arquivo = usuario / 'settings.json'
     atual = ler_json(arquivo) if arquivo.exists() else {}
     base = modelo(app)
+    padroes = DADOS / app / 'defaults.json'
+    migrar(atual, caminhos(base), ler_json(padroes))
+    padroes.write_text(json.dumps(caminhos(base), ensure_ascii=False), encoding='utf8')
     for chave, valor in base.items():
         if chave not in atual or '${SUITE}' in json.dumps(valor):
             atual[chave] = caminhos(valor)
@@ -640,6 +679,35 @@ def temas(app):
     return sorted(nomes, key=str.lower)
 
 
+def temas_icones(app):
+    """Icon themes the app has, as id -> label."""
+    saida = {}
+    pastas = list((DADOS / app / 'extensions').glob('*/package.json'))
+    pastas += list((RAIZ / 'editor/resources/app/extensions').glob('theme-*/package.json'))
+    for f in pastas:
+        try:
+            temas_ = json.loads(f.read_text(encoding='utf8')).get('contributes', {}).get('iconThemes', [])
+        except (OSError, ValueError):
+            continue
+        for t in temas_:
+            nome = t.get('label') or t.get('id', '')
+            if nome.startswith('%'):
+                nome = ler_json(f.with_name('package.nls.json')).get(nome.strip('%'), '')
+            saida[t.get('id')] = nome
+    return saida
+
+
+def pacotes_icones(app):
+    """Packs the Customize screen offers, as name -> id: ours when installed, and the one in use under its own name."""
+    instalados = temas_icones(app)
+    saida = {n: t for n, t in ICON_THEMES.items() if t in instalados}
+    for tema in (ajuste(app, 'workbench.iconTheme'), modelo(app).get('workbench.iconTheme')):
+        if tema and tema not in saida.values():
+            nome = re.sub(r'\s*\(.*\)$', '', instalados.get(tema) or '').strip() or 'Other'
+            saida[nome if nome not in saida else 'Other'] = tema
+    return saida
+
+
 def plugins(app):
     saida = {}
     for f in (DADOS / app / 'extensions').glob('*/package.json'):
@@ -794,9 +862,39 @@ def pacote_atual():
     return 'berthline-windows.zip' if JANELAS else 'berthline-linux.tar.gz'
 
 
+def contexto_ssl():
+    """The system's certificates plus the bundled ones.
+
+    The packaged libcrypto only looks where Ubuntu keeps certificates, so on Fedora it finds none.
+    """
+    contexto = ssl.create_default_context()
+    if certifi:
+        contexto.load_verify_locations(certifi.where())
+    return contexto
+
+
+def motivo_rede(erro):
+    """Says in plain words why GitHub did not answer."""
+    causa = getattr(erro, 'reason', erro)
+    if isinstance(erro, urllib.error.HTTPError):
+        if erro.code in (403, 429):
+            return 'GitHub refused the request for now (rate limit). Try again in an hour.'
+        return f'GitHub answered with error {erro.code}.'
+    if isinstance(causa, ssl.SSLCertVerificationError):
+        return f"Could not verify GitHub's certificate: {getattr(causa, 'verify_message', '') or causa}."
+    if isinstance(causa, TimeoutError) or 'timed out' in str(causa):
+        return 'GitHub took too long to answer. Check the connection.'
+    if isinstance(causa, OSError) and causa.errno in (-2, -3, 11001, 11002, 11004):
+        return 'No connection: the address of GitHub could not be found.'
+    return f'Could not reach GitHub: {causa}'
+
+
 def ler_url(url):
     pedido = urllib.request.Request(url, headers={'User-Agent': 'Berthline-Hub', 'Accept': 'application/vnd.github+json'})
-    return urllib.request.urlopen(pedido, timeout=8)
+    try:
+        return urllib.request.urlopen(pedido, timeout=8, context=contexto_ssl())
+    except OSError as e:
+        raise OSError(motivo_rede(e)) from e
 
 
 def checar_novidade():
@@ -848,7 +946,35 @@ def baixar_verificado(url, somas, destino, progresso=None):
     return Path(destino)
 
 
+def preparar_novidade(nova, progresso=None):
+    """Downloads, checks and unpacks a release beside the install. Nothing is replaced yet."""
+    area_ = troca.area(RAIZ)
+    shutil.rmtree(area_, ignore_errors=True)
+    arquivo = baixar_verificado(nova['package'], nova['sums'], area_ / pacote_atual(), progresso)
+    if progresso:
+        progresso(None)
+    return troca.preparar_pacote(RAIZ, arquivo, nova['version'])
+
+
+def depois_de_atualizar(area_):
+    """First start of a new version: migrate what the person already has, then tell the helper to keep it."""
+    for app in aplicativos():
+        if (pasta_usuario(app) / 'settings.json').exists():
+            preparar(app)
+    gravar_geral('update', None)
+    troca.confirmar(area_)
+    threading.Thread(target=troca.limpar, args=(area_,), daemon=True).start()
+
+
+def restos_de_troca():
+    """Clears a finished update's work folder that an earlier start could not remove."""
+    area_ = troca.area(RAIZ)
+    if (area_ / 'ok').exists() or (area_ / 'error.txt').exists():
+        threading.Thread(target=troca.limpar, args=(area_, 0), daemon=True).start()
+
+
 CLASSES = {}  # the audit reaches the small windows through this
+AO_ABRIR = []  # work for the moment the first window is up
 
 
 def limpar_ambiente():
@@ -940,9 +1066,11 @@ def janela(inicial=None, lancar=None):
     QMenu::item { padding: 5px 24px 5px 12px; border-radius: 0; }
     QMenu::item:selected { background: #34383E; }
     QMenu::separator { height: 1px; background: #34383E; margin: 4px 8px; }
-    QCheckBox { spacing: 7px; }
-    QCheckBox::indicator { width: 12px; height: 12px; border: 1px solid #6A6F76; background: transparent; }
-    QCheckBox::indicator:checked { background: ACENTO; }
+    QCheckBox { spacing: 7px; color: #A9ADB3; }
+    QCheckBox:checked { color: #F0F0F0; }
+    QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #8F939A; border-radius: 2px; background: transparent; }
+    QCheckBox::indicator:hover { border-color: ACENTO; }
+    QCheckBox::indicator:checked { background: ACENTO; border-color: ACENTO; image: url(VISTO); }
     QCheckBox::indicator:disabled { border-color: #34383E; background: #34383E; }
     QSlider::groove:horizontal { height: 3px; background: #4A4F56; }
     QSlider::handle:horizontal { width: 9px; margin: -6px 0; border-radius: 0; background: #EDE6D3; }
@@ -953,7 +1081,8 @@ def janela(inicial=None, lancar=None):
     AZUL = '#EDE6D3'
 
     def estilo(cor):
-        return ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('ACENTO', cor)
+        return (ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('VISTO', (ASSETS / 'visto.svg').as_posix())
+                .replace('ACENTO', cor))
 
     def com_vidro(janela_):
         """Deixa a janela translúcida com desfoque do sistema, quando existe."""
@@ -1032,8 +1161,8 @@ def janela(inicial=None, lancar=None):
         def rodar():
             try:
                 saida.append((trabalho(), None))
-            except (OSError, ValueError, KeyError) as e:
-                saida.append((None, str(e)))
+            except Exception as e:  # whatever it was, the window has to hear about it
+                saida.append((None, str(e) or type(e).__name__))
         threading.Thread(target=rodar, daemon=True).start()
         vigia = QTimer(QApplication.instance())
 
@@ -1876,12 +2005,7 @@ def janela(inicial=None, lancar=None):
                     self.teclas = segmento(nomes.values(), nomes[keymap_de(app)], self.mudar_keymap)
                     esq.addLayout(self.campo('Shortcuts', self.teclas))
                     esq.addWidget(rotulo('Changes at once, even with the editor open.', 'mudo'))
-                esq.addSpacing(8)
-                esq.addWidget(rotulo('File icons', 'secao'))
-                tema_ = ajuste(app, 'workbench.iconTheme')
-                pacote = next((n for n, t in ICON_THEMES.items() if t == tema_), 'JetBrains')
-                self.icones = segmento(ICON_THEMES, pacote, lambda n: gravar_ajuste(app, 'workbench.iconTheme', ICON_THEMES[n]))
-                esq.addLayout(self.campo('Pack', self.icones))
+                self.pacotes(esq)
                 esq.addSpacing(8)
                 esq.addWidget(rotulo('Wallpaper', 'secao'))
                 self.imagem = rotulo('', 'mudo')
@@ -1903,6 +2027,21 @@ def janela(inicial=None, lancar=None):
                 self.forca.valueChanged.connect(lambda n: gravar_fundo_forca(app, n / 100))
                 esq.addLayout(self.campo('Strength', self.forca))
                 self.ver_fundo()
+            else:
+                self.pacotes(esq)
+            dir_.addWidget(rotulo('Projects', 'secao'))
+            fila = QHBoxLayout()
+            fila.setSpacing(8)
+            self.pasta = QLineEdit(curto(pasta_projetos(app)))
+            self.pasta.setToolTip(f"Folder where new {info['title']} projects are created")
+            self.pasta.editingFinished.connect(lambda: self.mudar_pasta(self.pasta.text()))
+            procurar = QPushButton('Browse')
+            procurar.clicked.connect(self.procurar_pasta)
+            fila.addWidget(self.pasta, 1)
+            fila.addWidget(procurar)
+            dir_.addLayout(fila)
+            dir_.addWidget(rotulo('New projects start in this folder.', 'mudo'))
+            dir_.addSpacing(8)
             if info.get('memory'):
                 dir_.addWidget(rotulo('Memory limit', 'secao'))
                 fila = QHBoxLayout()
@@ -1957,6 +2096,34 @@ def janela(inicial=None, lancar=None):
             fila.addStretch(1)
             fila.addWidget(controle)
             return fila
+
+        def pacotes(self, layout):
+            """The icon pack in use is shown by its own name, even when it is not one of ours."""
+            layout.addSpacing(8)
+            layout.addWidget(rotulo('File icons', 'secao'))
+            opcoes_ = pacotes_icones(self.app)
+            tema_ = ajuste(self.app, 'workbench.iconTheme')
+            pacote = next((n for n, t in opcoes_.items() if t == tema_), None)
+            self.icones = segmento(opcoes_, pacote, lambda n: gravar_ajuste(self.app, 'workbench.iconTheme', opcoes_[n]))
+            layout.addLayout(self.campo('Pack', self.icones))
+
+        def mudar_pasta(self, texto):
+            """An empty field goes back to the usual folder."""
+            alvo = Path(texto.strip()).expanduser() if texto.strip() else PROJETOS
+            if not alvo.is_absolute():
+                alvo = CASA / alvo
+            try:
+                alvo.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                QMessageBox.warning(self, 'Project folder', f'Could not use this folder: {e}')
+                alvo = pasta_projetos(self.app)
+            gravar_opcao(self.app, 'folder', '' if alvo == PROJETOS else str(alvo))
+            self.pasta.setText(curto(alvo))
+
+        def procurar_pasta(self):
+            d = QFileDialog.getExistingDirectory(self, 'Project folder', str(pasta_projetos(self.app)))
+            if d:
+                self.mudar_pasta(d)
 
         def mudar_keymap(self, texto):
             if not aplicar_keymap(self.app, 'intellij' if texto == 'IntelliJ' else 'vscode'):
@@ -2335,14 +2502,14 @@ def janela(inicial=None, lancar=None):
             grade = QGridLayout()
             grade.setHorizontalSpacing(10)
             grade.setVerticalSpacing(7)
-            for coluna, texto in ((1, 'App'), (2, 'Shortcuts'), (4, 'Keymap'), (5, 'Project folder')):
+            for coluna, texto in ((1, 'App'), (2, 'Create shortcut'), (4, 'Keymap'), (5, 'Project folder')):
                 grade.addWidget(rotulo(texto, 'mudo'), 0, coluna)
             for i, (app, info) in enumerate(aplicativos().items(), 1):
                 grade.addWidget(icone(app, 28), i, 0)
                 grade.addWidget(rotulo(info['title'], 'forte'), i, 1)
                 mesa, menu = QCheckBox('Desktop'), QCheckBox('Menu')
-                mesa.setChecked(True)
-                menu.setChecked(True)
+                for c, onde in ((mesa, 'on the Desktop'), (menu, 'in the app menu')):
+                    c.setToolTip(f"Tick to create a {info['title']} shortcut {onde}")
                 grade.addWidget(mesa, i, 2)
                 grade.addWidget(menu, i, 3)
                 teclas = None
@@ -2358,13 +2525,13 @@ def janela(inicial=None, lancar=None):
                 self.linhas[app] = (mesa, menu, teclas, pasta)
             grade.setColumnStretch(5, 1)
             v.addLayout(grade)
+            v.addWidget(rotulo('A shortcut is created only where you tick a box. None are ticked to start with.', 'mudo'))
             v.addSpacing(10)
-            v.addWidget(rotulo('Hub shortcut', 'secao'))
+            v.addWidget(rotulo('Create Hub shortcut', 'secao'))
             fila = QHBoxLayout()
             fila.setSpacing(16)
             self.hub_mesa, self.hub_menu = QCheckBox('Desktop'), QCheckBox('App menu')
             for c in (self.hub_mesa, self.hub_menu):
-                c.setChecked(True)
                 fila.addWidget(c)
             fila.addStretch(1)
             v.addLayout(fila)
@@ -2420,15 +2587,15 @@ def janela(inicial=None, lancar=None):
             surgir(self.painel)
 
     class Novidade(QDialog):
-        """Update notice. Nothing downloads until the person clicks Download."""
+        """Update notice. Nothing downloads until the person clicks Update now."""
 
         def __init__(self, painel, nova):
             super().__init__(painel)
             self.painel = painel
             self.nova = nova
-            self.feito = None
+            self.parte = 0
             self.setWindowTitle(f"{marca()['name']} {nova['version']}")
-            self.resize(460, 340)
+            self.resize(460, 360)
             v = QVBoxLayout(self)
             v.setContentsMargins(18, 16, 18, 16)
             v.setSpacing(8)
@@ -2449,7 +2616,8 @@ def janela(inicial=None, lancar=None):
             v.addWidget(r)
             v.addWidget(linha('linhaH'))
             for chave, valor in (('Package', pacote_atual()), ('Source', 'GitHub release, checked by SHA-256'),
-                                 ('Saved to', curto(CASA / 'Downloads'))):
+                                 ('Kept', 'Projects, settings and your extensions'),
+                                 ('If it fails', 'This version comes back')):
                 fila = QHBoxLayout()
                 fila.addWidget(rotulo(chave, 'mudo'))
                 fila.addStretch(1)
@@ -2461,10 +2629,14 @@ def janela(inicial=None, lancar=None):
             v.addWidget(self.estado)
             fim = QHBoxLayout()
             fim.addWidget(link('Skip this version', self.pular))
+            if nova.get('page'):
+                fim.addWidget(link('Release page', lambda: QDesktopServices.openUrl(QUrl(nova['page']))))
             fim.addStretch(1)
-            depois = QPushButton('Later')
+            self.depois = depois = QPushButton('Later')
             depois.clicked.connect(self.reject)
-            self.baixar = QPushButton('Download')
+            self.relogio = QTimer(self)
+            self.relogio.timeout.connect(self.mostrar)
+            self.baixar = QPushButton('Update now')
             self.baixar.setObjectName('azul')
             self.baixar.clicked.connect(self.agir)
             pode = bool(nova.get('package') and nova.get('sums'))
@@ -2481,25 +2653,41 @@ def janela(inicial=None, lancar=None):
             self.reject()
 
         def agir(self):
-            if self.feito:
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.feito.parent)))
+            abertos = [info['title'] for app, info in aplicativos().items() if rodando(app)]
+            motivo = troca.impedimento(RAIZ)
+            if abertos:
+                self.estado.setText(f"Close {', '.join(abertos)} first: the update replaces the editor.")
+                return
+            if motivo:
+                self.estado.setText(f'This copy cannot update itself. {motivo} Get the package from the release page.')
                 return
             self.baixar.setEnabled(False)
-            self.estado.setText('Downloading…')
-            alvo = CASA / 'Downloads' / pacote_atual()
-            em_fundo(lambda: baixar_verificado(self.nova['package'], self.nova['sums'], alvo, self.andou), self.terminou)
+            self.depois.setEnabled(False)
+            self.parte = 0
+            self.mostrar()
+            self.relogio.start(300)
+            em_fundo(lambda: preparar_novidade(self.nova, self.andou), self.terminou)
 
         def andou(self, parte):
             self.parte = parte
 
-        def terminou(self, arquivo, erro):
-            self.baixar.setEnabled(True)
+        def mostrar(self):
+            self.estado.setText('Unpacking and checking…' if self.parte is None else f'Downloading… {self.parte:.0%}')
+
+        def terminou(self, area_, erro):
+            self.relogio.stop()
+            if not erro:
+                try:
+                    troca.iniciar(RAIZ, area_)
+                except OSError as e:
+                    erro = str(e)
             if erro:
-                self.estado.setText(f'Download failed: {erro[:90]}')
+                self.baixar.setEnabled(True)
+                self.depois.setEnabled(True)
+                self.estado.setText(f'Nothing was changed. {erro[:200]}')
                 return
-            self.feito = arquivo
-            self.estado.setText(f'Saved and verified: {curto(arquivo)}')
-            self.baixar.setText('Show in File Manager')
+            self.estado.setText('Restarting…')
+            QApplication.quit()
 
     class Painel(Raiz):
         """Janela principal: lista os apps e guarda só o que vale para todos."""
@@ -2601,7 +2789,7 @@ def janela(inicial=None, lancar=None):
                 self.ver_novidade()
             if hasattr(self, 'checagem'):
                 if erro:
-                    self.checagem.setText('Could not reach GitHub.')
+                    self.checagem.setText(erro)
                 else:
                     self.checagem.setText(self.faixa_texto.text() if novidade() else 'Up to date.')
 
@@ -2747,6 +2935,7 @@ def janela(inicial=None, lancar=None):
             b = QPushButton('Check now')
             b.clicked.connect(self.checar_agora)
             self.checagem = rotulo('', 'mudo')
+            self.checagem.setWordWrap(True)
             fila.addWidget(b)
             fila.addWidget(self.checagem, 1)
             v.addLayout(fila)
@@ -2807,7 +2996,7 @@ def janela(inicial=None, lancar=None):
             except OSError as e:
                 QMessageBox.warning(self, 'Desktop shortcut', f'Could not create the shortcut: {e}')
 
-    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade)
+    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade, Personalizar=Personalizar)
     aplicacao = QApplication(sys.argv)
     if forcar_xcb:
         del os.environ['QT_QPA_PLATFORM']
@@ -2847,6 +3036,8 @@ def janela(inicial=None, lancar=None):
     j = Boasvindas(inicial) if inicial else Painel()
     if not inicial and not opcoes().get('setup') and not opcoes().get('recent'):
         j.preparo = j = Preparo(j)
+    for trabalho in AO_ABRIR:
+        QTimer.singleShot(0, lambda t=trabalho: t(j))
     if inicial or not opcoes().get('transitions', True):
         surgir(j)
     else:
@@ -2878,7 +3069,43 @@ def main():
         for app in aplicativos():
             preparar(app)
         return 0
+    if args[:1] == ['--swap']:  # the helper copy: see troca.py
+        return troca.aplicar(args[1], args[2], int(args[3]), processo_vivo)
+    if args[:1] == ['--install-update']:  # a package already downloaded and checked by the person
+        if any(rodando(app) for app in aplicativos()):
+            print('Close the editors first: the update replaces them.')
+            return 2
+        troca.iniciar(RAIZ, troca.preparar_pacote(RAIZ, args[1]))
+        return 0
+    if args[:1] == ['--check-update']:
+        try:
+            nova = checar_novidade()
+        except (OSError, ValueError, KeyError) as e:
+            print(e)
+            return 1
+        print(nova['version'] if nova else 'no release')
+        return 0
+    if args[:1] == ['--updated']:
+        try:
+            depois_de_atualizar(args[1])
+        except Exception:  # any failure here must end the program, so the helper restores the old version
+            return 1
+    elif args[:1] == ['--update-failed']:
+        try:
+            motivo = (Path(args[1]) / 'error.txt').read_text(encoding='utf8')
+        except OSError:
+            motivo = ''
+        AO_ABRIR.append(lambda j: avisar_falha(j, motivo))
+    if args[:1] != ['--updated']:
+        restos_de_troca()
     return janela()
+
+
+def avisar_falha(pai, motivo):
+    from PySide6.QtWidgets import QMessageBox
+    aviso = QMessageBox(QMessageBox.Warning, 'Update', 'The update was not installed.', QMessageBox.Ok, pai)
+    aviso.setInformativeText(f'{motivo}\n\nYour previous version is back, with your settings and projects as they were.')
+    aviso.open()
 
 
 if __name__ == '__main__':

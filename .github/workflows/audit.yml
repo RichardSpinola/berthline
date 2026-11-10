@@ -9,13 +9,41 @@ on:
     workflows: [build]
     types: [completed]
 
+concurrency:
+  group: audit-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   actions: read
   contents: read
 
 jobs:
-  windows:
+  areas:
+    # Which profiles changed: by hand or on a tag, both; otherwise only the ones touched
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      java: ${{ steps.c.outputs.java }}
+      web: ${{ steps.c.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: c
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ] || [[ "${{ github.event.workflow_run.head_branch }}" == v* ]]; then
+            echo "java=true" >> "$GITHUB_OUTPUT"; echo "web=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          sha=${{ github.event.workflow_run.head_sha }}
+          git diff --name-only "$sha~1" "$sha" > changed.txt
+          comum='^(profiles/base/|extension-common/|extension-lite/|build/|tests/audit|tests/auditor|tests/cdp)'
+          grep -qE "$comum|^profiles/java/|^extension/|^tests/fixture/java" changed.txt && echo "java=true" >> "$GITHUB_OUTPUT" || echo "java=false" >> "$GITHUB_OUTPUT"
+          grep -qE "$comum|^profiles/web/|^extension-web/|^tests/fixture/web" changed.txt && echo "web=true" >> "$GITHUB_OUTPUT" || echo "web=false" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: areas
+    if: >-
+      github.event_name == 'workflow_dispatch' || startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -28,10 +56,11 @@ jobs:
           github-token: ${{ github.token }}
       - run: tar -xf zip/berthline-windows.zip -C $env:RUNNER_TEMP
       - name: Audit Java
+        if: needs.areas.outputs.java == 'true'
         timeout-minutes: 15
         run: '& "$env:RUNNER_TEMP/berthline-windows/node/node.exe" tests/audit.js "$env:RUNNER_TEMP/berthline-windows" java'
       - name: Audit Web
-        if: always()
+        if: always() && needs.areas.outputs.web == 'true'
         timeout-minutes: 10
         run: '& "$env:RUNNER_TEMP/berthline-windows/node/node.exe" tests/audit.js "$env:RUNNER_TEMP/berthline-windows" web'
       - uses: actions/upload-artifact@v4
@@ -41,7 +70,8 @@ jobs:
           path: tests/out
 
   linux:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    needs: areas
+    if: needs.areas.outputs.java == 'true' || needs.areas.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -58,10 +88,11 @@ jobs:
           github-token: ${{ github.token }}
       - run: tar -xzf pkg/berthline-linux.tar.gz -C "$RUNNER_TEMP"
       - name: Audit Java
+        if: needs.areas.outputs.java == 'true'
         timeout-minutes: 15
         run: xvfb-run -a --server-args='-screen 0 1280x800x24' "$RUNNER_TEMP/berthline-linux/node/bin/node" tests/audit.js "$RUNNER_TEMP/berthline-linux" java
       - name: Audit Web
-        if: always()
+        if: always() && needs.areas.outputs.web == 'true'
         timeout-minutes: 10
         run: xvfb-run -a --server-args='-screen 0 1280x800x24' "$RUNNER_TEMP/berthline-linux/node/bin/node" tests/audit.js "$RUNNER_TEMP/berthline-linux" web
       - uses: actions/upload-artifact@v4

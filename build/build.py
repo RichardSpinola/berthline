@@ -122,11 +122,18 @@ def enxugar_menus(app, destino=DESTINO):
         arquivo.write_text(json.dumps(dados, indent='\t', ensure_ascii=False), encoding='utf8')
 
 
+def listar_empacotadas(app):
+    """Records which extension folders the package ships, so an update can tell the person's own apart."""
+    pastas = sorted(p.name for p in (DESTINO / 'data' / app / 'extensions').iterdir() if p.is_dir())
+    (DESTINO / 'profiles' / app / 'packaged.json').write_text(json.dumps(pastas, indent=1), encoding='utf8')
+
+
 def hub():
     trabalho = RAIZ / 'build/work'
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--windowed', '--onedir', '--name', 'Hub',
                     '--contents-directory', '_hub', '--distpath', str(trabalho / 'dist'),
                     '--workpath', str(trabalho / 'obj'), '--specpath', str(trabalho), '--icon', str(trabalho / 'berthline.ico'),
+                    '--paths', str(RAIZ / 'hub'), '--hidden-import', 'certifi', '--collect-data', 'certifi',
                     str(RAIZ / 'hub/hub.py')], check=True)
     shutil.copytree(trabalho / 'dist/Hub', DESTINO, dirs_exist_ok=True)
 
@@ -203,6 +210,7 @@ def so_hub():
     leve = vsix('extension-lite')
     for app in ('java', 'web', 'standard'):
         instalar(app, 'berthline-hub', leve)
+        listar_empacotadas(app)
 
 
 def main():
@@ -229,6 +237,7 @@ def main():
             instalar(app, f'{EXTENSOES[app]} package', vsix(EXTENSOES[app]))
         instalar(app, 'berthline-hub', leve)
         enxugar_menus(app)
+        listar_empacotadas(app)
     if JANELAS:
         (DESTINO / 'Start-Java.bat').write_text('@start "" "%~dp0Hub.exe" --open java\r\n')
         (DESTINO / 'Start-Web.bat').write_text('@start "" "%~dp0Hub.exe" --open web\r\n')

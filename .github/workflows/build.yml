@@ -5,9 +5,17 @@ on:
     branches: [main]
     tags: ['v*']
     paths-ignore: ['tests/**', 'docs/**', '*.md', '.github/workflows/audit.yml', '.github/workflows/check.yml']
+  pull_request:
+    paths-ignore: ['docs/**', '*.md']
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   windows:
+    # Pull requests build Linux only; Windows runs on main, tags and by hand
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -15,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install PySide6 pyinstaller
+      - run: pip install PySide6 pyinstaller certifi
       - run: python build/build.py
       - name: Zip
         run: Compress-Archive -Path dist/berthline-windows -DestinationPath dist/berthline-windows.zip
@@ -27,6 +35,9 @@ jobs:
       - name: Smoke test
         timeout-minutes: 15
         run: dist/berthline-windows/node/node.exe tests/smoke.js dist/berthline-windows
+      - name: Update test
+        timeout-minutes: 20
+        run: python -u tests/update_test.py dist/berthline-windows
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -38,13 +49,25 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed areas
+        id: areas
+        run: |
+          # On a pull request a change only to the Hub skips the editor smoke test
+          editor=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+            grep -qvE '^(hub/|tests/hub_|tests/update_test)' changed.txt || editor=false
+          fi
+          echo "editor=$editor" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libegl1 libnss3 libgbm1 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 git
-      - run: pip install PySide6 pyinstaller
+      - run: pip install PySide6 pyinstaller certifi
       - run: python build/build.py
       - name: Archive
         run: tar -C dist -czf dist/berthline-linux.tar.gz berthline-linux
@@ -54,6 +77,7 @@ jobs:
           path: dist/berthline-linux.tar.gz
           compression-level: 0
       - name: Smoke test
+        if: steps.areas.outputs.editor == 'true'
         timeout-minutes: 15
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -62,6 +86,9 @@ jobs:
         run: |
           python -u tests/hub_test.py dist/berthline-linux
           python -u tests/hub_audit.py dist/berthline-linux
+      - name: Update test
+        timeout-minutes: 20
+        run: python -u tests/update_test.py dist/berthline-linux
       - uses: actions/upload-artifact@v4
         if: always()
         with:

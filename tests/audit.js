@@ -227,6 +227,17 @@ if(!e)return false;
 const v=getComputedStyle(document.documentElement).getPropertyValue(${JSON.stringify(`--ij-icone-${tipo}`)}).trim();
 return !!v&&getComputedStyle(e,'::before').backgroundImage.replace(/"/g,'')===v})()`);
 
+// Opens a file that may still be on its way: right after a rename the editor can answer
+// "Unable to resolve nonexistent file" for a moment. Returns '' or the last reason it could not open.
+async function abrirQuando(h, arquivo, limite = 20000) {
+    let motivo = '';
+    const abriu = await h.ate(async () => {
+        if (!fs.existsSync(arquivo)) { motivo = 'not on disk yet'; return false; }
+        try { await rpc('abrir', { arquivo }); return true; } catch (e) { motivo = e.message; return false; }
+    }, limite);
+    return abriu ? '' : motivo || 'could not open';
+}
+
 async function iconesReais(h, pasta) {
     const ABA = '.tabs-container .tab .monaco-icon-label', ARVORE = '.explorer-folders-view .monaco-icon-label';
     for (const nome of ['one', 'two']) fs.mkdirSync(path.join(pasta, 'src', nome), { recursive: true });
@@ -252,11 +263,15 @@ async function iconesReais(h, pasta) {
     fs.writeFileSync(path.join(pasta, 'src/Fresh.java'), 'public record Fresh(int a) {\n}\n');
     conferir('new file gets its icon', await h.ate(() => iconeDe(h, ARVORE, 'fresh', 'record'), 8000));
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
-    await rpc('renomear', { de: path.join(pasta, 'src/two'), para: path.join(pasta, 'src/three') });
-    await dormir(500);
-    await h.ate(() => fs.existsSync(path.join(pasta, 'src/three/Item.java')), 10000);
-    await rpc('abrir', { arquivo: path.join(pasta, 'src/three/Item.java') });
-    conferir('icon survives a package rename', await h.ate(() => umaAba('enum'), 5000));
+    const antes = path.join(pasta, 'src/two'), depois = path.join(pasta, 'src/three'), movido = path.join(depois, 'Item.java');
+    await rpc('renomear', { de: antes, para: depois });
+    if (!await h.ate(() => fs.existsSync(movido) && !fs.existsSync(antes), 10000)) {
+        // The Java extension can hold the rename behind a question that nobody answers here
+        aviso('package rename did not land through the editor', 'renamed on disk instead');
+        if (fs.existsSync(antes) && !fs.existsSync(depois)) fs.renameSync(antes, depois);
+    }
+    const falha = await abrirQuando(h, movido);
+    conferir('icon survives a package rename', !falha && await h.ate(() => umaAba('enum'), 5000), falha);
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
     for (const nome of ['Main', 'Pet', 'Shape', 'Color', 'Point', 'Failure']) await rpc('abrir', { arquivo: path.join(pasta, `src/${nome}.java`) });
     await dormir(800);

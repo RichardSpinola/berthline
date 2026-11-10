@@ -15,6 +15,9 @@ Extensions under the GNU GPL v3, included unmodified. Their source code is at:
 - Color Highlight 2.8.0 by Sergii Naumov
   https://github.com/naumovs/vscode-ext-color-highlight
 
+The Git history view is (neo) Git Graph 0.6.0 by asispts, under the MIT License:
+https://github.com/asispts/neo-git-graph
+
 The Language Support for Java extension by Red Hat is under the Eclipse Public
 License 2.0, and it carries its own Java runtime. Source code:
 https://github.com/redhat-developer/vscode-java

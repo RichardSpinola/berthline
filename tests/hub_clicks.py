@@ -99,16 +99,15 @@ def atalhos(pasta):
 
 
 def preparar_tudo(pid):
-    """Web gets no shortcut, the Hub stays off the app menu, Java moves folder, and all apps go light."""
+    """Nothing starts ticked. Web gets no shortcut, the Hub stays off the app menu, Java moves folder, all apps go light."""
     achar(pid, 'Set up .*')
     foto('setup-1-first-use')
     desktop = todos(pid, 'Desktop')
     menu = todos(pid, 'Menu')
     if len(desktop) != 4 or len(menu) != 3:
         raise SystemExit(f'setup rows: {len(desktop)} desktop, {len(menu)} menu')
-    trocar(desktop[1])
-    trocar(menu[1])
-    clicar(pid, 'App menu')
+    for caixa in (desktop[0], desktop[2], desktop[3], menu[0], menu[2]):
+        trocar(caixa)
     escrever_pasta(pid, '~\\Projects', str(PASTA_JAVA))
     clicar(pid, 'Light')
     foto('setup-2-chosen')
