@@ -44,7 +44,9 @@ PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keym
 LEGADO = {'files.autoSave': 'onFocusChange'}
 COM_TEMAS = ('workbench.colorCustomizations', 'editor.semanticTokenColorCustomizations')
 ICON_THEMES = {'Berthline': 'berthline-file-icons', 'JetBrains': 'jetbrains-file-icon-theme-auto'}
-THEMES = {'Dark': ('Islands Dark', 'Dark Modern'), 'Light': ('Islands Light', 'Light Modern')}
+THEMES = {'Dark': ('Islands Dark', 'Default Dark Modern'), 'Light': ('Islands Light', 'Default Light Modern')}
+# keybindings.json files written by 0.2.1 that nobody edited; they move to the new profile's keys
+TECLAS_ANTIGAS = {'web': {'1e7c9eca21f71844c91092c8e84bfc83bf2279bace9ead88001a6f45780d0cd9'}}
 INTELLIJ_KEYS = (
     ('Search Everywhere', 'Shift Shift'), ('Run', 'Shift+F10'), ('Debug', 'Shift+F9'), ('Rerun', 'Ctrl+5'),
     ('Stop', 'Ctrl+2'), ('Build', 'Ctrl+9'), ('Toggle Breakpoint', 'Ctrl+8'), ('Step Over', 'F8'),
@@ -58,6 +60,7 @@ VSCODE_KEYS = (
     ('Copy Line Down', 'Shift+Alt+Down'), ('Terminal', 'Ctrl+`'),
 )
 JAVA_ONLY_KEYS = ('Build', 'Generate')
+ALERTA = '#E0524F'  # errors: the flag's red, lifted to read on the dark background
 LAMPADAS = {'run': '#3FA66B', 'ready': '#5A5F66', 'prep': '#E0A030', 'att': '#C8102E'}
 
 
@@ -221,9 +224,15 @@ def arquivos_teclas(app):
     return [o / 'keybindings.json' for o in origens if (o / 'keybindings.json').exists()]
 
 
+def tema_de(app, claro_ou_escuro):
+    """The app's own theme for Dark or Light: Islands where the profile ships it, the editor's otherwise."""
+    islands = str(modelo(app).get('workbench.colorTheme', '')).startswith('Islands')
+    return THEMES[claro_ou_escuro][0 if islands else 1]
+
+
 def keymap_de(app):
-    """Only profiles that offer the choice leave IntelliJ."""
-    return opcao(app, 'keymap') if aplicativos()[app].get('keymap') else 'intellij'
+    """Only profiles that offer the choice can use IntelliJ keys; the rest keep the editor's own."""
+    return opcao(app, 'keymap') if aplicativos()[app].get('keymap') else 'vscode'
 
 
 def teclas_app(app):
@@ -329,8 +338,11 @@ def preparar(app):
     origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
     origens.append(PERFIS / app)
     teclas = arquivos_teclas(app)
-    if teclas and not (usuario / 'keybindings.json').exists():
-        if keymap_de(app) == 'intellij':
+    proprio = usuario / 'keybindings.json'
+    if proprio.exists() and hashlib.sha256(proprio.read_bytes()).hexdigest() in TECLAS_ANTIGAS.get(app, ()):
+        proprio.unlink()
+    if teclas and not proprio.exists():
+        if keymap_de(app) == 'intellij' or not aplicativos()[app].get('keymap'):
             (usuario / 'keybindings.json').write_text(juntar_teclas(teclas), encoding='utf8')
         else:
             aplicar_keymap(app, 'vscode')
@@ -546,7 +558,7 @@ def estado_app(app):
         return 'run', 'Running', ''
     if not (pasta_usuario(app) / 'settings.json').exists():
         return 'prep', 'Preparing', 'First launch'
-    return 'ready', 'Ready', ''
+    return 'ready', '', ''  # nothing to report: the Hub stays quiet
 
 
 def limpar_etapa(app):
@@ -564,8 +576,49 @@ def blur_unsupported():
     return 'Blur needs KDE Plasma.'
 
 
+def compositor_x11():
+    """True when an X11 desktop composites windows, so a see-through window shows what is behind it."""
+    try:
+        x = ctypes.cdll.LoadLibrary('libX11.so.6')
+        x.XOpenDisplay.restype = ctypes.c_void_p
+        tela = x.XOpenDisplay(None)
+        if not tela:
+            return False
+        x.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+        x.XInternAtom.restype = ctypes.c_ulong
+        x.XGetSelectionOwner.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x.XGetSelectionOwner.restype = ctypes.c_ulong
+        x.XDefaultScreen.argtypes = [ctypes.c_void_p]
+        atomo = x.XInternAtom(tela, f'_NET_WM_CM_S{x.XDefaultScreen(tela)}'.encode(), 0)
+        dono = x.XGetSelectionOwner(tela, atomo)
+        x.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x.XCloseDisplay(tela)
+        return bool(dono)
+    except OSError:
+        return False
+
+
+def translucido_possivel():
+    """Where blur is not offered, a see-through window still works on composited desktops.
+
+    Hyprland, SwayFX and picom blur such windows themselves when the person set them up.
+    """
+    if os.environ.get('QT_QPA_PLATFORM') == 'offscreen':
+        return False
+    if JANELAS:
+        return True
+    return os.environ.get('XDG_SESSION_TYPE') == 'wayland' or compositor_x11()
+
+
+def modo_vidro():
+    """'blur' where the system blurs for us, 'translucent' where it only composites, '' otherwise."""
+    if not blur_unsupported():
+        return 'blur'
+    return 'translucent' if translucido_possivel() else ''
+
+
 def vidro_disponivel():
-    return bool(opcoes().get('blur', False)) and not blur_unsupported()
+    return bool(opcoes().get('blur', False)) and bool(modo_vidro())
 
 
 def aplicar_vidro(janela_id):
@@ -840,13 +893,79 @@ def importar(app, origem):
         shutil.copytree(origem / 'snippets', usuario / 'snippets', dirs_exist_ok=True)
 
 
-def criar_projeto(app, modelo_, nome, local, git=False):
+SISTEMAS_JAVA = {
+    'None': 'Plain .java files in src. Run them with the Run button; nothing to download.',
+    'Maven': 'pom.xml and src/main/java. The usual choice in courses and companies; libraries come from Maven Central.',
+    'Gradle': 'build.gradle and src/main/java. Used by Android and many Spring projects; downloads Gradle the first time.',
+}
+POM = '''<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.example</groupId>
+    <artifactId>{nome}</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+</project>
+'''
+GRADLE = '''plugins {{
+    id 'application'
+}}
+
+repositories {{
+    mavenCentral()
+}}
+
+java {{
+    toolchain {{
+        languageVersion = JavaLanguageVersion.of(21)
+    }}
+}}
+
+application {{
+    mainClass = 'Main'
+}}
+'''
+
+
+def montar_java(raiz, sistema, nome):
+    """Turns a plain src/ project into Maven or Gradle layout; the Java extension imports either."""
+    if sistema not in ('Maven', 'Gradle'):
+        return
+    destino = raiz / 'src/main/java'
+    destino.mkdir(parents=True, exist_ok=True)
+    for f in list((raiz / 'src').glob('*.java')):
+        f.replace(destino / f.name)
+    artefato = re.sub(r'[^a-z0-9-]+', '-', nome.lower()).strip('-') or 'app'
+    if sistema == 'Maven':
+        (raiz / 'pom.xml').write_text(POM.replace('{nome}', artefato), encoding='utf8')
+        ignorar = ['target/']
+    else:
+        (raiz / 'build.gradle').write_text(GRADLE.format(), encoding='utf8')
+        (raiz / 'settings.gradle').write_text(f"rootProject.name = '{artefato}'\n", encoding='utf8')
+        ignorar = ['build/', '.gradle/']
+    arquivo = raiz / '.gitignore'
+    linhas_ = arquivo.read_text(encoding='utf8').splitlines() if arquivo.exists() else []
+    arquivo.write_text('\n'.join([*linhas_, *[i for i in ignorar if i not in linhas_]]) + '\n', encoding='utf8')
+
+
+def criar_projeto(app, modelo_, nome, local, git=False, sistema=None):
     raiz = Path(local) / nome
     origem = PERFIS / app / 'templates' / modelo_
     if origem.is_dir() and modelo_ != 'Empty Project':
         shutil.copytree(origem, raiz)
     else:
         raiz.mkdir(parents=True)
+    montar_java(raiz, sistema, nome)
+    ignorar = raiz / '.gitignore'
+    if git or ignorar.exists():
+        # The editor keeps its own state in .vscode; it is not part of the project.
+        linhas_ = ignorar.read_text(encoding='utf8').splitlines() if ignorar.exists() else []
+        if not any(l.strip().rstrip('/') == '.vscode' for l in linhas_):
+            ignorar.write_text('\n'.join([*linhas_, '.vscode/']) + '\n', encoding='utf8')
     if git:
         subprocess.run(['git', 'init', '-q'], cwd=raiz, check=True)
     if not confiavel(raiz):
@@ -974,6 +1093,67 @@ def restos_de_troca():
 
 
 CLASSES = {}  # the audit reaches the small windows through this
+
+
+def moldura_windows(hwnd):
+    """Cuts the caption off a native Windows frame and keeps its shadow."""
+    import ctypes
+    from ctypes import wintypes
+
+    class MARGINS(ctypes.Structure):
+        _fields_ = [('esq', ctypes.c_int), ('dir', ctypes.c_int), ('topo', ctypes.c_int), ('base', ctypes.c_int)]
+    try:
+        ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(wintypes.HWND(hwnd), ctypes.byref(MARGINS(0, 0, 1, 0)))
+        # Windows 11 draws its rounded corners on this kind of window only when asked
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(wintypes.HWND(hwnd), 33, ctypes.byref(ctypes.c_int(2)), 4)
+    except (OSError, AttributeError):
+        pass
+    sem_mudar = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020  # NOSIZE NOMOVE NOZORDER NOACTIVATE FRAMECHANGED
+    ctypes.windll.user32.SetWindowPos(wintypes.HWND(hwnd), None, 0, 0, 0, 0, sem_mudar)
+
+
+def mensagem_windows(janela_, endereco):
+    """Answers the two messages that decide where the frame is; None leaves the rest to Qt."""
+    import ctypes
+    from ctypes import wintypes
+    msg = wintypes.MSG.from_address(endereco)
+    if msg.message == 0x0083 and msg.wParam:  # WM_NCCALCSIZE: the whole window is client area
+        if ctypes.windll.user32.IsZoomed(msg.hWnd):
+            # maximized windows hang their frame off the screen; pull the content back in
+            borda = ctypes.windll.user32.GetSystemMetrics(32) + ctypes.windll.user32.GetSystemMetrics(92)
+            alto = ctypes.windll.user32.GetSystemMetrics(33) + ctypes.windll.user32.GetSystemMetrics(92)
+            retangulo = wintypes.RECT.from_address(msg.lParam)
+            retangulo.left += borda
+            retangulo.right -= borda
+            retangulo.top += alto
+            retangulo.bottom -= alto
+        return 0
+    if msg.message == 0x0084:  # WM_NCHITTEST: edges resize, the bar moves, the rest is the window's
+        x = ctypes.c_short(msg.lParam & 0xFFFF).value
+        y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
+        caixa = wintypes.RECT()
+        ctypes.windll.user32.GetWindowRect(msg.hWnd, ctypes.byref(caixa))
+        escala = janela_.devicePixelRatioF() or 1
+        borda = int(6 * escala)
+        if janela_.redimensiona_ and not ctypes.windll.user32.IsZoomed(msg.hWnd):
+            esq, dir_ = x < caixa.left + borda, x >= caixa.right - borda
+            cima, baixo = y < caixa.top + borda, y >= caixa.bottom - borda
+            lados = {(True, False, True, False): 13, (False, True, True, False): 14, (True, False, False, True): 16,
+                     (False, True, False, True): 17, (True, False, False, False): 10, (False, True, False, False): 11,
+                     (False, False, True, False): 12, (False, False, False, True): 15}
+            lado = lados.get((esq, dir_, cima, baixo))
+            if lado:
+                return lado
+        barra = janela_.barra_
+        from PySide6.QtCore import QPoint
+        ponto = wintypes.POINT(x, y)
+        ctypes.windll.user32.ScreenToClient(msg.hWnd, ctypes.byref(ponto))
+        local = QPoint(int(ponto.x / escala), int(ponto.y / escala))
+        dentro = barra.mapFrom(janela_, local)
+        if barra.rect().contains(dentro) and barra.arrasta(dentro):
+            return 2  # HTCAPTION: native drag, snap and double-click
+        return 1
+    return None
 AO_ABRIR = []  # work for the moment the first window is up
 
 
@@ -997,19 +1177,20 @@ def janela(inicial=None, lancar=None):
     forcar_xcb = not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ
     if forcar_xcb:
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
-    from PySide6.QtCore import Property, QEasingCurve, QProcess, QProcessEnvironment, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
+    from PySide6.QtCore import QEvent, QObject, QRect, QStandardPaths, Property, QEasingCurve, QProcess, QProcessEnvironment, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
     from PySide6.QtGui import (
-        QColor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QImage, QPainter, QPainterPath, QPen,
+        QColor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QImage, QImageReader, QPainter, QPainterPath, QPen,
+        QPixmap,
     )
     from PySide6.QtSvg import QSvgRenderer
     from PySide6.QtWidgets import (
-        QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame,
+        QAbstractButton, QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QFrame, QProgressBar,
         QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
         QPushButton, QScrollArea, QSlider, QStackedWidget, QToolButton, QVBoxLayout,
         QWidget,
     )
 
-    VIDRO = [vidro_disponivel()]  # changes while the Hub runs
+    VIDRO = [vidro_disponivel(), modo_vidro()]  # changes while the Hub runs
     ESTILO = """
     * { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 13px; color: #E6E3DA; }
     QWidget#pagina, QScrollArea, QStackedWidget, QAbstractScrollArea { background: transparent; border: none; }
@@ -1060,6 +1241,17 @@ def janela(inicial=None, lancar=None):
     QListWidget::item { border-radius: 0; }
     QListWidget::item:hover { background: rgba(255, 255, 255, 10); }
     QListWidget::item:selected { background: rgba(255, 255, 255, 18); color: #F0F0F0; }
+    QListWidget#modelos::item { border-left: 3px solid transparent; }
+    QListWidget#modelos::item:selected { background: #1F2225; border-left-color: ACENTO; }
+    QListWidget#grade::item { padding: 4px; color: #A9ACB2; }
+    QListWidget#grade::item:selected { background: #1F2225; color: #FFFFFF; border: 1px solid ACENTO; }
+    QProgressBar { background: #34383E; border: none; }
+    QLabel#tituloJanela { color: #A9ACB2; font-size: 12px; }
+    QToolButton#botaoJanela, QToolButton#fecharJanela { border: none; border-radius: 3px; padding: 0; }
+    QToolButton#botaoJanela:hover { background: rgba(255, 255, 255, 22); }
+    QToolButton#fecharJanela:hover { background: #C8102E; }
+    Dialogo { border: 1px solid #3A3E44; }
+    QProgressBar::chunk { background: ACENTO; }
     QFrame#ferramenta { border: none; border-bottom: 1px solid #2C3035; }
     QFrame#ferramenta:hover { background: rgba(255, 255, 255, 7); }
     QMenu { border: 1px solid #34383E; padding: 4px; }
@@ -1093,7 +1285,8 @@ def janela(inicial=None, lancar=None):
         janela_.setWindowOpacity(0.0)
         janela_.show()
         if VIDRO[0]:
-            aplicar_vidro(int(janela_.winId()))
+            if VIDRO[1] == 'blur':
+                aplicar_vidro(int(janela_.winId()))
         animacao = QPropertyAnimation(janela_, b'windowOpacity', janela_)
         animacao.setDuration(180)
         animacao.setStartValue(0.0)
@@ -1102,13 +1295,234 @@ def janela(inicial=None, lancar=None):
         animacao.start()
         janela_.entrada = animacao
 
-    class Raiz(QWidget):
+    BORDA = 6  # how far into the window a resize can start, in logical pixels
+
+    class Moldura:
+        """The window draws its own title bar and the system still moves, resizes and snaps it.
+
+        Windows keeps its native frame (shadow, snap, Aero shake) with the caption cut away;
+        Linux gets a frameless window that hands moves and resizes back to the window manager.
+        """
+        barra_ = None
+        redimensiona_ = False
+
+        def showEvent(self, evento):
+            super().showEvent(evento)
+            if JANELAS and self.barra_ and not getattr(self, 'moldada_', False):
+                self.moldada_ = True
+                moldura_windows(int(self.winId()))
+            if VIDRO[0] and VIDRO[1] == 'blur' and self.barra_:
+                aplicar_vidro(int(self.winId()))
+
+        def nativeEvent(self, tipo, mensagem):
+            if JANELAS and self.barra_ and tipo == b'windows_generic_MSG':
+                resposta = mensagem_windows(self, int(mensagem))
+                if resposta is not None:
+                    return True, resposta
+            return super().nativeEvent(tipo, mensagem)
+
+        def changeEvent(self, evento):
+            super().changeEvent(evento)
+            if self.barra_ and evento.type() == QEvent.WindowStateChange:
+                self.barra_.estado_mudou()
+
+    def desenho_botao(tipo, cor):
+        figura = QPixmap(QSize(28, 28) * 2)
+        figura.setDevicePixelRatio(2)
+        figura.fill(Qt.transparent)
+        p = QPainter(figura)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor(cor), 1.0))
+        x, y = 9, 9
+        if tipo == 'min':
+            p.drawLine(QPointF(x, y + 5), QPointF(x + 10, y + 5))
+        elif tipo == 'max':
+            p.drawRect(QRectF(x + 0.5, y + 0.5, 9, 9))
+        elif tipo == 'restaurar':
+            p.drawRect(QRectF(x + 0.5, y + 2.5, 7, 7))
+            p.drawPolyline([QPointF(x + 2.5, y + 2.5), QPointF(x + 2.5, y + 0.5), QPointF(x + 9.5, y + 0.5),
+                            QPointF(x + 9.5, y + 7.5), QPointF(x + 7.5, y + 7.5)])
+        else:
+            p.drawLine(QPointF(x, y), QPointF(x + 10, y + 10))
+            p.drawLine(QPointF(x + 10, y), QPointF(x, y + 10))
+        p.end()
+        return QIcon(figura)
+
+    class BarraTitulo(QWidget):
+        """The window's own title bar: its mark, its title or tabs, and the three buttons."""
+
+        def __init__(self, janela_, redimensiona, conteudo=None, icone_=None):
+            super().__init__(janela_)
+            self.setObjectName('barra')
+            self.janela_ = janela_
+            self.redimensiona = redimensiona
+            self.setFixedHeight(44 if conteudo else 34)
+            h = QHBoxLayout(self)
+            h.setContentsMargins(12 if not conteudo else 0, 0, 8, 0)
+            h.setSpacing(4)
+            if conteudo:
+                h.addWidget(conteudo, 1)
+            else:
+                marca_ = QLabel()
+                marca_.setPixmap(QIcon(icone_ or str(ASSETS / 'hub.svg')).pixmap(16, 16))
+                h.addWidget(marca_)
+                self.titulo = rotulo(janela_.windowTitle(), 'tituloJanela')
+                janela_.windowTitleChanged.connect(self.titulo.setText)
+                h.addWidget(self.titulo, 1)
+            self.botoes = {}
+            for tipo, dica in (('min', 'Minimize'), ('max', 'Maximize'), ('fechar', 'Close')):
+                if (tipo == 'max' and not redimensiona) or (tipo == 'min' and isinstance(janela_, QDialog)):
+                    continue
+                b = QToolButton()
+                b.setObjectName('fecharJanela' if tipo == 'fechar' else 'botaoJanela')
+                b.setAccessibleName(dica)
+                b.setToolTip(dica)
+                b.setFixedSize(28, 28)
+                b.setIconSize(QSize(28, 28))
+                b.setIcon(desenho_botao(tipo, '#C9CCD1'))
+                h.addWidget(b, 0, Qt.AlignVCenter)
+                self.botoes[tipo] = b
+            if 'min' in self.botoes:
+                self.botoes['min'].clicked.connect(janela_.showMinimized)
+            self.botoes['fechar'].clicked.connect(janela_.close)
+            if 'max' in self.botoes:
+                self.botoes['max'].clicked.connect(self.alternar)
+
+        def alternar(self):
+            self.janela_.showNormal() if self.janela_.isMaximized() else self.janela_.showMaximized()
+
+        def estado_mudou(self):
+            if 'max' in self.botoes:
+                maior = self.janela_.isMaximized()
+                self.botoes['max'].setIcon(desenho_botao('restaurar' if maior else 'max', '#C9CCD1'))
+                self.botoes['max'].setAccessibleName('Restore' if maior else 'Maximize')
+                self.botoes['max'].setToolTip('Restore' if maior else 'Maximize')
+
+        def arrasta(self, ponto):
+            """True where a press should move the window: the bar itself or text, never a control."""
+            alvo = self.childAt(ponto)
+            while alvo and alvo is not self:
+                if isinstance(alvo, (QAbstractButton, QLineEdit, QComboBox)):
+                    return False
+                alvo = alvo.parentWidget()
+            return True
+
+        def mousePressEvent(self, e):
+            self.inicio = None
+            if e.button() == Qt.LeftButton and not JANELAS and self.arrasta(e.position().toPoint()):
+                if not self.janela_.windowHandle().startSystemMove():
+                    self.inicio = e.globalPosition().toPoint() - self.janela_.frameGeometry().topLeft()
+
+        def mouseMoveEvent(self, e):
+            if getattr(self, 'inicio', None) is not None and not self.janela_.isMaximized():
+                self.janela_.move(e.globalPosition().toPoint() - self.inicio)
+
+        def mouseReleaseEvent(self, _):
+            self.inicio = None
+
+        def mouseDoubleClickEvent(self, e):
+            if e.button() == Qt.LeftButton and self.redimensiona and not JANELAS:
+                self.alternar()
+
+    class Borda(QWidget):
+        """Invisible strip on a frameless window's edge that starts the system's own resize."""
+
+        CURSORES = {Qt.LeftEdge: Qt.SizeHorCursor, Qt.RightEdge: Qt.SizeHorCursor, Qt.TopEdge: Qt.SizeVerCursor,
+                    Qt.BottomEdge: Qt.SizeVerCursor}
+
+        def __init__(self, janela_, lados):
+            super().__init__(janela_)
+            self.lados = lados
+            canto = lados in (Qt.TopEdge | Qt.LeftEdge, Qt.BottomEdge | Qt.RightEdge)
+            outro = lados in (Qt.TopEdge | Qt.RightEdge, Qt.BottomEdge | Qt.LeftEdge)
+            self.setCursor(Qt.SizeFDiagCursor if canto else Qt.SizeBDiagCursor if outro else self.CURSORES[lados])
+
+        def mousePressEvent(self, e):
+            self.inicio = None
+            if e.button() != Qt.LeftButton or self.window().isMaximized():
+                return
+            if not self.window().windowHandle().startSystemResize(self.lados):
+                # the window manager said no: follow the mouse here instead
+                self.inicio = (e.globalPosition().toPoint(), self.window().geometry())
+
+        def mouseMoveEvent(self, e):
+            if not getattr(self, 'inicio', None):
+                return
+            origem, caixa = self.inicio
+            d = e.globalPosition().toPoint() - origem
+            nova = QRect(caixa)
+            minimo = self.window().minimumSizeHint().expandedTo(QSize(320, 240))
+            if self.lados & Qt.LeftEdge:
+                nova.setLeft(min(caixa.left() + d.x(), caixa.right() - minimo.width()))
+            if self.lados & Qt.RightEdge:
+                nova.setRight(max(caixa.right() + d.x(), caixa.left() + minimo.width()))
+            if self.lados & Qt.TopEdge:
+                nova.setTop(min(caixa.top() + d.y(), caixa.bottom() - minimo.height()))
+            if self.lados & Qt.BottomEdge:
+                nova.setBottom(max(caixa.bottom() + d.y(), caixa.top() + minimo.height()))
+            self.window().setGeometry(nova)
+
+        def mouseReleaseEvent(self, _):
+            self.inicio = None
+
+    class Bordas(QObject):
+        def __init__(self, janela_):
+            super().__init__(janela_)
+            self.janela_ = janela_
+            l, r_, t, b = Qt.LeftEdge, Qt.RightEdge, Qt.TopEdge, Qt.BottomEdge
+            self.faixas = [Borda(janela_, lado) for lado in (l, r_, t, b, t | l, t | r_, b | l, b | r_)]
+            janela_.installEventFilter(self)
+
+        def eventFilter(self, _obj, evento):
+            if evento.type() in (QEvent.Resize, QEvent.Show, QEvent.WindowStateChange):
+                largura, altura, d = self.janela_.width(), self.janela_.height(), BORDA
+                lugares = [(0, d, d, altura - 2 * d), (largura - d, d, d, altura - 2 * d), (d, 0, largura - 2 * d, d),
+                           (d, altura - d, largura - 2 * d, d), (0, 0, d, d), (largura - d, 0, d, d),
+                           (0, altura - d, d, d), (largura - d, altura - d, d, d)]
+                for faixa, lugar in zip(self.faixas, lugares):
+                    faixa.setGeometry(*lugar)
+                    faixa.setVisible(not self.janela_.isMaximized())
+                    faixa.raise_()
+            return False
+
+    def integrar(janela_, redimensiona=False, conteudo=None, icone_=None):
+        """Puts the title bar on top of the window and returns the widget the window builds into."""
+        janela_.redimensiona_ = redimensiona
+        com_vidro(janela_)
+        if not JANELAS:
+            janela_.setWindowFlag(Qt.FramelessWindowHint, True)
+        externo = QVBoxLayout(janela_)
+        externo.setContentsMargins(1, 1, 1, 1) if not JANELAS else externo.setContentsMargins(0, 0, 0, 0)
+        externo.setSpacing(0)
+        janela_.barra_ = BarraTitulo(janela_, redimensiona, conteudo, icone_)
+        externo.addWidget(janela_.barra_)
+        if not conteudo:
+            externo.addWidget(linha('linhaH'))
+        corpo = QWidget()
+        corpo.setObjectName('corpo')
+        externo.addWidget(corpo, 1)
+        if redimensiona and not JANELAS:
+            janela_.bordas_ = Bordas(janela_)
+        return corpo
+
+    class Raiz(Moldura, QWidget):
         """Janela principal: pinta o próprio fundo para o vidro funcionar."""
 
         def paintEvent(self, _):
             p = QPainter(self)
             p.setCompositionMode(QPainter.CompositionMode_Source)
-            p.fillRect(self.rect(), QColor(22, 24, 27, 205) if VIDRO[0] else QColor('#16181B'))
+            # without the system's blur, less of the desktop shows through so text stays easy to read
+            p.fillRect(self.rect(), QColor(22, 24, 27, 205 if VIDRO[1] == 'blur' else 232) if VIDRO[0] else QColor('#16181B'))
+            if self.barra_ and not JANELAS and not self.isMaximized():
+                p.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                p.setPen(QColor('#3A3E44'))
+                p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+
+    class Dialogo(Moldura, QDialog):
+        """Hub dialog with the same title bar as the windows, and the same glass."""
+
+        def paintEvent(self, evento):
+            Raiz.paintEvent(self, evento)
 
     class Troca(QStackedWidget):
         """Troca de página com passagem suave."""
@@ -1553,145 +1967,353 @@ def janela(inicial=None, lancar=None):
             confiar(caminho.parent)
         return escolha in (so_ela, mae, restrito)
 
-    class NovoProjeto(QDialog):
+    def nota():
+        r = rotulo('', 'mudo')
+        r.setWordWrap(True)
+        return r
+
+    def avisar(rotulo_, texto, erro=False):
+        rotulo_.setText(texto)
+        rotulo_.setStyleSheet(f'color:{ALERTA};' if erro else '')
+        rotulo_.setVisible(bool(texto))
+
+    def conteudo_modelo(app, nome):
+        """What a template puts in the folder, said in one line."""
+        origem = PERFIS / app / 'templates' / nome
+        arquivos = sorted(f.name for f in origem.rglob('*') if f.is_file() and not f.name.startswith('.')) if origem.is_dir() else []
+        return ', '.join(arquivos[:3]) + (' …' if len(arquivos) > 3 else '') if arquivos else 'an empty folder'
+
+    class NovoProjeto(Dialogo):
+        """New project the way JetBrains IDEs lay it out: kinds on the left, a short form on the right."""
+
         def __init__(self, pai, app):
             super().__init__(pai)
             self.setWindowTitle('New Project')
-            self.resize(640, 400)
+            self.setFixedSize(660, 430)
             self.app = app
             self.projeto = None
-            self.modelos = QListWidget()
-            self.modelos.setFixedWidth(180)
-            self.modelos.addItem('Empty Project')
-            self.modelos.addItems(aplicativos()[app].get('templates', []))
-            self.modelos.setCurrentRow(1 if self.modelos.count() > 1 else 0)
+            self.modelos_ = aplicativos()[app].get('templates', [])
+            self.tipos = QListWidget()
+            self.tipos.setObjectName('modelos')
+            self.tipos.setFixedWidth(170)
+            for texto in ('New Project', 'Empty Project') if self.modelos_ else ('Empty Project',):
+                item = QListWidgetItem(texto)
+                item.setSizeHint(QSize(160, 34))
+                self.tipos.addItem(item)
+            self.tipos.setCurrentRow(0)
+            self.tipos.currentRowChanged.connect(self.avaliar)
             self.nome = QLineEdit('untitled')
             self.nome.selectAll()
-            self.local = QLineEdit(str(pasta_projetos(app)))
-            pasta = QPushButton('Browse…')
+            self.local = QLineEdit(curto(pasta_projetos(app)))
+            pasta = QPushButton('Browse')
             pasta.clicked.connect(self.escolher)
             fila = QHBoxLayout()
-            fila.addWidget(self.local)
+            fila.setSpacing(6)
+            fila.addWidget(self.local, 1)
             fila.addWidget(pasta)
+            self.sobre_nome = nota()
+            self.existe = nota()
             self.git = QCheckBox('Create Git repository')
             self.git.setEnabled(bool(shutil.which('git')))
-            self.existe = rotulo('', 'mudo')
-            self.existe.setWordWrap(True)
-            self.erro = rotulo('', 'mudo')
-            criar = QPushButton('Create')
-            criar.setObjectName('azul')
-            criar.setDefault(True)
-            criar.clicked.connect(self.criar)
+            self.git.setToolTip('' if shutil.which('git') else 'Git was not found on this computer.')
+            self.sobre_inicio = nota()
+            if len(self.modelos_) > 3:  # too many to sit side by side
+                self.inicio = Combo()
+                self.inicio.addItems(self.modelos_)
+                self.inicio.currentIndexChanged.connect(self.descrever)
+            else:
+                self.inicio = segmento(self.modelos_, self.modelos_[0], self.descrever) if len(self.modelos_) > 1 else None
+            self.exemplo = QCheckBox('Add sample code') if len(self.modelos_) == 1 else None
+            self.sobre_exemplo = nota()
+            if self.exemplo:
+                self.exemplo.setChecked(True)
+                self.exemplo.toggled.connect(lambda _: self.descrever())
+            self.sistema = segmento(SISTEMAS_JAVA, 'None', self.descrever) if app == 'java' else None
+            self.sobre_sistema = nota()
+            self.erro = nota()
+            self.criar_ = QPushButton('Create')
+            self.criar_.setObjectName('azul')
+            self.criar_.setDefault(True)
+            self.criar_.clicked.connect(self.criar)
             cancelar = QPushButton('Cancel')
             cancelar.clicked.connect(self.reject)
-            form = QFormLayout()
-            form.setHorizontalSpacing(14)
-            form.addRow('Name:', self.nome)
-            form.addRow('Location:', fila)
-            form.addRow('', self.git)
+            grade = QGridLayout()
+            grade.setHorizontalSpacing(14)
+            grade.setVerticalSpacing(10)
+            grade.setColumnMinimumWidth(0, 70)
+            grade.addWidget(rotulo('Name'), 0, 0)
+            grade.addWidget(self.nome, 0, 1)
+            grade.addWidget(self.sobre_nome, 1, 1)
+            grade.addWidget(rotulo('Location'), 2, 0)
+            grade.addLayout(fila, 2, 1)
+            grade.addWidget(self.existe, 3, 1)
+            grade.addWidget(self.git, 4, 1)
+            self.extras = []
+            if self.sistema:
+                rot = rotulo('Build system')
+                grade.addWidget(rot, 5, 0)
+                grade.addWidget(self.sistema, 5, 1, Qt.AlignLeft)
+                grade.addWidget(self.sobre_sistema, 6, 1)
+                self.extras += [rot, self.sistema, self.sobre_sistema]
+            if self.inicio:
+                rot = rotulo('Starter')
+                grade.addWidget(rot, 7, 0)
+                grade.addWidget(self.inicio, 7, 1, Qt.AlignLeft)
+                grade.addWidget(self.sobre_inicio, 8, 1)
+                self.extras += [rot, self.inicio, self.sobre_inicio]
+            if self.exemplo:
+                grade.addWidget(self.exemplo, 7, 1)
+                grade.addWidget(self.sobre_exemplo, 8, 1)
+                self.extras += [self.exemplo, self.sobre_exemplo]
+            grade.setColumnMinimumWidth(0, 90)
             direita = QVBoxLayout()
-            direita.setContentsMargins(16, 8, 8, 0)
-            direita.addLayout(form)
-            direita.addWidget(self.existe)
+            direita.setContentsMargins(20, 4, 0, 0)
+            direita.setSpacing(0)
+            direita.addLayout(grade)
             direita.addStretch(1)
+            corpo = QHBoxLayout()
+            corpo.setSpacing(0)
+            corpo.addWidget(self.tipos)
+            corpo.addSpacing(12)
+            corpo.addWidget(linha('linhaV'))
+            corpo.addLayout(direita, 1)
             rodape = QHBoxLayout()
+            rodape.setSpacing(8)
             rodape.addWidget(self.erro, 1)
             rodape.addWidget(cancelar)
-            rodape.addWidget(criar)
-            direita.addLayout(rodape)
-            h = QHBoxLayout(self)
-            h.setContentsMargins(12, 12, 12, 12)
-            h.setSpacing(0)
-            h.addWidget(self.modelos)
-            h.addWidget(linha('linhaV'))
-            h.addLayout(direita, 1)
+            rodape.addWidget(self.criar_)
+            v = QVBoxLayout(integrar(self, icone_=str(ASSETS / f'{app}.svg')))
+            v.setContentsMargins(16, 16, 18, 14)
+            v.setSpacing(0)
+            v.addLayout(corpo, 1)
+            v.addSpacing(12)
+            v.addWidget(linha('linhaH'))
+            v.addSpacing(12)
+            v.addLayout(rodape)
             self.nome.textChanged.connect(self.avaliar)
             self.local.textChanged.connect(self.avaliar)
             self.avaliar()
 
-        def avaliar(self):
-            alvo = Path(self.local.text().strip()) / self.nome.text().strip()
-            self.existe.setText(f'{alvo.name} already exists here. Open it from the project list.' if alvo.exists() else '')
+        def escolhido(self, seg):
+            if isinstance(seg, QComboBox):
+                return seg.currentText()
+            return next(t for t, b in seg.botoes.items() if b.isChecked()) if seg else None
+
+        def descrever(self, *_):
+            if self.sistema:
+                avisar(self.sobre_sistema, SISTEMAS_JAVA[self.escolhido(self.sistema)])
+            if self.inicio:
+                nome = self.escolhido(self.inicio)
+                sobre = aplicativos()[self.app].get('about_templates', {}).get(nome)
+                avisar(self.sobre_inicio, sobre or f'Starts with {conteudo_modelo(self.app, nome)}.')
+            if self.exemplo:
+                avisar(self.sobre_exemplo, f'Adds {conteudo_modelo(self.app, self.modelos_[0])} that prints a greeting.'
+                       if self.exemplo.isChecked() else 'Starts with an empty src folder.')
+
+        def modelo(self):
+            if self.tipos.currentItem().text() == 'Empty Project':
+                return 'Empty Project'
+            if self.inicio:
+                return self.escolhido(self.inicio)
+            return self.modelos_[0] if self.exemplo.isChecked() else 'Empty Project'
+
+        def avaliar(self, *_):
+            for w in self.extras:
+                w.setVisible(self.tipos.currentItem().text() != 'Empty Project')
+            if self.tipos.currentItem().text() != 'Empty Project':
+                self.descrever()
+            nome, local = self.nome.text().strip(), self.local.text().strip()
+            valido = bool(re.fullmatch(r'[\w .-]+', nome)) and nome not in ('.', '..')
+            alvo = Path(local).expanduser() / nome
+            avisar(self.sobre_nome, '' if valido else 'Use letters, numbers, spaces, dots, dashes or underscores.', not valido)
+            if valido and alvo.exists():
+                avisar(self.existe, f'{curto(alvo)} already exists. Open it from the project list.', True)
+            else:
+                avisar(self.existe, f'Creates {curto(alvo)}' if valido and local else '')
+            self.criar_.setEnabled(valido and bool(local) and not alvo.exists())
 
         def escolher(self):
-            d = QFileDialog.getExistingDirectory(self, 'Location', self.local.text())
+            d = QFileDialog.getExistingDirectory(self, 'Location', str(Path(self.local.text()).expanduser()))
             if d:
-                self.local.setText(d)
+                self.local.setText(curto(d))
 
         def criar(self):
-            nome, local = self.nome.text().strip(), self.local.text().strip()
-            if not re.fullmatch(r'[\w .-]+', nome):
-                self.erro.setText('Enter a valid name.')
-            elif (Path(local) / nome).exists():
-                self.erro.setText('This project already exists.')
-            else:
-                try:
-                    self.projeto = criar_projeto(self.app, self.modelos.currentItem().text(), nome, local, self.git.isChecked())
-                    self.accept()
-                except (OSError, subprocess.CalledProcessError) as e:
-                    self.erro.setText(str(e)[:90])
+            self.avaliar()
+            if not self.criar_.isEnabled():
+                return
+            try:
+                self.projeto = criar_projeto(self.app, self.modelo(), self.nome.text().strip(),
+                                             Path(self.local.text().strip()).expanduser(), self.git.isChecked(),
+                                             None if self.tipos.currentItem().text() == 'Empty Project' else self.escolhido(self.sistema))
+                self.accept()
+            except (OSError, subprocess.CalledProcessError) as e:
+                avisar(self.erro, f'Could not create the project: {str(e)[:70]}', True)
 
-    class Clonar(QDialog):
+    def erro_git(texto):
+        """git's last words, said the way a person can act on them."""
+        t = texto.lower()
+        if 'could not read username' in t or 'authentication' in t or 'permission denied' in t:
+            return 'This repository needs a sign-in. Clone private ones from the editor, which can ask for it.'
+        if 'not found' in t or 'does not appear to be a git repository' in t or 'does not exist' in t:
+            return 'No repository at this address. Check it and try again.'
+        if 'could not resolve host' in t or 'unable to access' in t or 'timed out' in t:
+            return 'Could not reach the server. Check the connection.'
+        linhas_ = [l for l in texto.strip().splitlines() if l.strip()]
+        return (linhas_[-1] if linhas_ else 'The clone failed.')[:110]
+
+    def endereco_git(url):
+        """True for what git clone can take: web, ssh and scp-like addresses, or a local folder."""
+        url = url.strip()
+        return bool(re.fullmatch(r'(https?|ssh|git|file)://\S+', url) or re.fullmatch(r'[\w.-]+@[\w.-]+:\S+', url)
+                    or (url and Path(url).expanduser().is_dir()))
+
+    class Clonar(Dialogo):
         def __init__(self, pai, app):
             super().__init__(pai)
             self.setWindowTitle('Clone Repository')
-            self.setMinimumWidth(520)
+            self.setFixedWidth(560)
             self.pasta = None
+            self.criada = False
             self.proc = QProcess(self)
+            self.proc.setProcessChannelMode(QProcess.MergedChannels)
+            self.saida = ''
             self.url = QLineEdit()
             self.url.setPlaceholderText('https://github.com/user/project.git')
-            self.destino = QLineEdit(str(CLONES))
-            self.url.textChanged.connect(lambda t: self.destino.setText(str(CLONES / nome_do_repo(t)) if t else str(CLONES)))
-            self.estado = rotulo('' if shutil.which('git') else 'Git was not found on this computer.', 'mudo')
+            self.sobre_url = nota()
+            self.base = QLineEdit(curto(CLONES))
+            pasta = QPushButton('Browse')
+            pasta.clicked.connect(self.escolher)
+            fila = QHBoxLayout()
+            fila.setSpacing(6)
+            fila.addWidget(self.base, 1)
+            fila.addWidget(pasta)
+            self.sobre_destino = nota()
+            self.etapa = rotulo('', 'mudo')
+            self.barra = QProgressBar()
+            self.barra.setTextVisible(False)
+            self.barra.setFixedHeight(3)
+            self.progresso = QWidget()
+            p = QVBoxLayout(self.progresso)
+            p.setContentsMargins(0, 0, 0, 0)
+            p.setSpacing(6)
+            p.addWidget(self.etapa)
+            p.addWidget(self.barra)
+            self.progresso.hide()
+            self.erro = nota()
             self.botao = QPushButton('Clone')
             self.botao.setObjectName('azul')
             self.botao.setDefault(True)
-            self.botao.setEnabled(bool(shutil.which('git')))
             self.botao.clicked.connect(self.clonar)
-            cancelar = QPushButton('Cancel')
-            cancelar.clicked.connect(self.cancelar)
-            form = QFormLayout()
-            form.addRow('URL:', self.url)
-            form.addRow('Directory:', self.destino)
-            self.barco = Sea(app, 300, 110, True, 96)
-            self.barco.hide()
+            self.cancelar_ = QPushButton('Cancel')
+            self.cancelar_.clicked.connect(self.cancelar)
             rodape = QHBoxLayout()
-            rodape.addWidget(self.estado, 1)
-            rodape.addWidget(cancelar)
+            rodape.setSpacing(8)
+            rodape.addWidget(self.erro, 1)
+            rodape.addWidget(self.cancelar_)
             rodape.addWidget(self.botao)
-            v = QVBoxLayout(self)
-            v.addLayout(form)
-            v.addWidget(self.barco, 0, Qt.AlignCenter)
-            v.addSpacing(10)
+            v = QVBoxLayout(integrar(self, icone_=str(ASSETS / f'{app}.svg')))
+            v.setContentsMargins(22, 18, 22, 16)
+            v.setSpacing(14)
+            grade = QGridLayout()
+            grade.setHorizontalSpacing(14)
+            grade.setVerticalSpacing(8)
+            grade.setColumnMinimumWidth(0, 70)
+            grade.addWidget(rotulo('URL'), 0, 0)
+            grade.addWidget(self.url, 0, 1)
+            grade.addWidget(self.sobre_url, 1, 1)
+            grade.addWidget(rotulo('Directory'), 2, 0)
+            grade.addLayout(fila, 2, 1)
+            grade.addWidget(self.sobre_destino, 3, 1)
+            v.addLayout(grade)
+            v.addWidget(self.progresso)
+            v.addWidget(linha('linhaH'))
             v.addLayout(rodape)
+            self.url.textChanged.connect(self.avaliar)
+            self.base.textChanged.connect(self.avaliar)
+            self.proc.readyRead.connect(self.ler)
             self.proc.finished.connect(self.terminou)
+            self.avaliar()
+            if not shutil.which('git'):
+                avisar(self.erro, 'Git was not found on this computer.', True)
+                self.botao.setEnabled(False)
+
+        def destino(self):
+            return Path(self.base.text().strip()).expanduser() / nome_do_repo(self.url.text().strip())
+
+        def avaliar(self):
+            url = self.url.text().strip()
+            ok = endereco_git(url)
+            if not url:
+                avisar(self.sobre_url, 'From GitHub, GitLab or any Git server.')
+            else:
+                avisar(self.sobre_url, '' if ok else 'Use an https://, ssh:// or git@ address.', not ok)
+            alvo = self.destino()
+            livre = ok and not alvo.exists()
+            if ok and alvo.exists():
+                avisar(self.sobre_destino, f'{curto(alvo)} already exists. Pick another folder.', True)
+            else:
+                avisar(self.sobre_destino, f'Clones into {curto(alvo)}' if ok else '')
+            self.botao.setEnabled(livre and bool(shutil.which('git')) and self.proc.state() == QProcess.NotRunning)
+
+        def escolher(self):
+            d = QFileDialog.getExistingDirectory(self, 'Clone into', str(Path(self.base.text()).expanduser()))
+            if d:
+                self.base.setText(curto(d))
 
         def clonar(self):
-            url, dest = self.url.text().strip(), self.destino.text().strip()
-            if not url or Path(dest).exists():
-                self.estado.setText('Enter a URL and an empty directory.')
+            self.avaliar()
+            if not self.botao.isEnabled():
                 return
-            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            alvo = self.destino()
+            alvo.parent.mkdir(parents=True, exist_ok=True)
             amb = QProcessEnvironment.systemEnvironment()
             amb.insert('GIT_TERMINAL_PROMPT', '0')
             self.proc.setProcessEnvironment(amb)
-            self.estado.setText('Cloning…')
-            self.barco.show()
-            self.botao.setEnabled(False)
-            self.proc.start('git', ['clone', '--', url, dest])
+            self.saida = ''
+            avisar(self.erro, '')
+            self.etapa.setText('Connecting')
+            self.barra.setRange(0, 0)
+            self.progresso.show()
+            for w in (self.url, self.base, self.botao):
+                w.setEnabled(False)
+            self.criada = True
+            self.proc.start('git', ['clone', '--progress', '--', self.url.text().strip(), str(alvo)])
+
+        def ler(self):
+            texto = bytes(self.proc.readAll()).decode(errors='replace')
+            self.saida += texto
+            for parte in reversed(re.split(r'[\r\n]+', texto)):
+                m = re.match(r'(?:remote: )?([A-Za-z ]+):\s+(\d+)%', parte.strip())
+                if m:
+                    self.etapa.setText(f'{m.group(1).strip()} · {m.group(2)}%')
+                    self.barra.setRange(0, 100)
+                    self.barra.setValue(int(m.group(2)))
+                    break
 
         def terminou(self, codigo, _estado):
-            self.barco.hide()
-            self.botao.setEnabled(True)
+            self.ler()
+            for w in (self.url, self.base):
+                w.setEnabled(True)
             if codigo == 0:
-                self.pasta = self.destino.text().strip()
+                self.pasta = str(self.destino())
                 self.accept()
-            else:
-                erro = bytes(self.proc.readAllStandardError()).decode(errors='replace').strip().splitlines()
-                self.estado.setText((erro[-1] if erro else 'Clone failed.')[:90])
+                return
+            self.progresso.hide()
+            self.apagar_parcial()
+            avisar(self.erro, erro_git(self.saida), True)
+            self.avaliar()
+
+        def apagar_parcial(self):
+            if self.criada and self.destino().exists():
+                shutil.rmtree(self.destino(), ignore_errors=True)
+            self.criada = False
 
         def cancelar(self):
-            self.proc.kill()
+            if self.proc.state() != QProcess.NotRunning:
+                self.proc.finished.disconnect(self.terminou)
+                self.proc.kill()
+                self.proc.waitForFinished(3000)
+                self.apagar_parcial()
             self.reject()
 
     class Caixa(QWidget):
@@ -2147,7 +2769,8 @@ def janela(inicial=None, lancar=None):
             return c
 
         def escolher_fundo(self):
-            arquivo, _ = QFileDialog.getOpenFileName(self, 'Background image', str(CASA), 'Images (*.jpg *.jpeg *.png *.webp *.bmp)')
+            d = EscolherImagem(self, self.app)
+            arquivo = d.arquivo if d.exec() else ''
             if arquivo and not gravar_fundo(arquivo, ferramentas(self.app)):
                 QMessageBox.warning(self, 'Background image', 'Could not read this image.')
             self.ver_fundo()
@@ -2155,6 +2778,193 @@ def janela(inicial=None, lancar=None):
         def importar(self, origem, nome_):
             importar(self.app, origem)
             QMessageBox.information(self, 'Import', f'{nome_} settings copied to {nome_app(self.app)}.')
+
+    IMAGENS = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif')
+
+    def miniatura(arquivo, largura, altura):
+        """A small copy of the image, read at that size so a folder of photos opens fast."""
+        leitor = QImageReader(str(arquivo))
+        leitor.setAutoTransform(True)
+        tamanho = leitor.size()
+        if tamanho.isValid():
+            tamanho.scale(largura, altura, Qt.KeepAspectRatio)
+            leitor.setScaledSize(tamanho)
+        imagem = leitor.read()
+        if imagem.isNull():
+            return None
+        quadro = QPixmap(largura, altura)
+        quadro.fill(QColor('#101214'))
+        p = QPainter(quadro)
+        p.drawImage((largura - imagem.width()) // 2, (altura - imagem.height()) // 2, imagem)
+        p.end()
+        return QIcon(quadro)
+
+    class EscolherImagem(Dialogo):
+        """Wallpaper picker with previews; the same on Linux and Windows."""
+
+        LARGURA, ALTURA = 156, 98
+
+        def __init__(self, pai, app):
+            super().__init__(pai)
+            self.setWindowTitle('Choose Wallpaper')
+            self.resize(780, 540)
+            self.arquivo = ''
+            self.fila = []
+            imagens = Path(QStandardPaths.writableLocation(QStandardPaths.PicturesLocation) or CASA / 'Pictures')
+            self.lugares = {'Pictures': imagens, 'Desktop': area_de_trabalho(),
+                            'Downloads': Path(QStandardPaths.writableLocation(QStandardPaths.DownloadLocation) or CASA / 'Downloads'),
+                            'Home': CASA}
+            self.locais = QListWidget()
+            self.locais.setObjectName('modelos')
+            self.locais.setFixedWidth(150)
+            for nome, caminho in self.lugares.items():
+                item = QListWidgetItem(nome)
+                item.setData(Qt.UserRole, str(caminho))
+                item.setSizeHint(QSize(140, 32))
+                self.locais.addItem(item)
+            self.locais.itemClicked.connect(lambda i: self.abrir_pasta(Path(i.data(Qt.UserRole))))
+            outra = link('Other folder…', self.outra)
+            self.subir = QPushButton('Up')
+            self.subir.clicked.connect(lambda: self.abrir_pasta(self.pasta.parent))
+            self.onde = rotulo('', 'mudo')
+            self.grade = QListWidget()
+            self.grade.setObjectName('grade')
+            self.grade.setViewMode(QListWidget.IconMode)
+            self.grade.setIconSize(QSize(self.LARGURA, self.ALTURA))
+            self.grade.setGridSize(QSize(self.LARGURA + 16, self.ALTURA + 34))
+            self.grade.setResizeMode(QListWidget.Adjust)
+            self.grade.setMovement(QListWidget.Static)
+            self.grade.setUniformItemSizes(True)
+            self.grade.setWordWrap(False)
+            self.grade.setTextElideMode(Qt.ElideMiddle)
+            self.grade.itemSelectionChanged.connect(self.marcar)
+            self.grade.itemActivated.connect(self.ativar)
+            self.vazio = rotulo('No images in this folder.', 'mudo')
+            self.vazio.setAlignment(Qt.AlignCenter)
+            self.escolhido = rotulo('', 'mudo')
+            self.usar = QPushButton('Use Image')
+            self.usar.setObjectName('azul')
+            self.usar.setDefault(True)
+            self.usar.setEnabled(False)
+            self.usar.clicked.connect(self.accept)
+            cancelar = QPushButton('Cancel')
+            cancelar.clicked.connect(self.reject)
+            esquerda = QVBoxLayout()
+            esquerda.setContentsMargins(0, 0, 0, 0)
+            esquerda.setSpacing(6)
+            esquerda.addWidget(rotulo('Places', 'secao'))
+            self.locais.setFixedHeight(self.locais.count() * 32 + 4)
+            esquerda.addWidget(self.locais)
+            esquerda.addSpacing(6)
+            esquerda.addWidget(outra)
+            esquerda.addStretch(1)
+            topo = QHBoxLayout()
+            topo.setSpacing(8)
+            topo.addWidget(self.subir)
+            topo.addWidget(self.onde, 1)
+            direita = QVBoxLayout()
+            direita.setContentsMargins(0, 0, 0, 0)
+            direita.setSpacing(8)
+            direita.addLayout(topo)
+            direita.addWidget(self.grade, 1)
+            direita.addWidget(self.vazio, 1)
+            corpo = QHBoxLayout()
+            corpo.setSpacing(16)
+            corpo.addLayout(esquerda)
+            corpo.addWidget(linha('linhaV'))
+            corpo.addLayout(direita, 1)
+            rodape = QHBoxLayout()
+            rodape.setSpacing(8)
+            rodape.addWidget(self.escolhido, 1)
+            rodape.addWidget(cancelar)
+            rodape.addWidget(self.usar)
+            v = QVBoxLayout(integrar(self, True, icone_=str(ASSETS / f'{app}.svg')))
+            v.setContentsMargins(22, 18, 22, 16)
+            v.setSpacing(14)
+            v.addLayout(corpo, 1)
+            v.addWidget(linha('linhaH'))
+            v.addLayout(rodape)
+            self.icone_pasta = self.desenhar_pasta()
+            self.relogio = QTimer(self)
+            self.relogio.timeout.connect(self.carregar)
+            self.abrir_pasta(imagens if imagens.is_dir() else CASA)
+
+        def abrir_pasta(self, pasta):
+            self.pasta = Path(pasta)
+            self.grade.clear()
+            self.fila = []
+            self.onde.setText(curto(self.pasta))
+            self.subir.setEnabled(self.pasta.parent != self.pasta)
+            for i in range(self.locais.count()):
+                self.locais.item(i).setSelected(Path(self.locais.item(i).data(Qt.UserRole)) == self.pasta)
+            try:
+                filhos = sorted(self.pasta.iterdir(), key=lambda f: (not f.is_dir(), f.name.lower()))
+            except OSError:
+                filhos = []
+            vazio_ = QPixmap(self.LARGURA, self.ALTURA)
+            vazio_.fill(QColor('#101214'))
+            for f in filhos:
+                if f.name.startswith('.'):
+                    continue
+                if f.is_dir():
+                    item = QListWidgetItem(self.icone_pasta, f.name)
+                elif f.suffix.lower() in IMAGENS:
+                    item = QListWidgetItem(QIcon(vazio_), f.name)
+                    self.fila.append(item)
+                else:
+                    continue
+                item.setData(Qt.UserRole, str(f))
+                item.setToolTip(f.name)
+                self.grade.addItem(item)
+            tem = self.grade.count() > 0
+            self.grade.setVisible(tem)
+            self.vazio.setVisible(not tem)
+            self.marcar()
+            self.relogio.start(0)
+
+        def desenhar_pasta(self):
+            figura = QPixmap(self.LARGURA, self.ALTURA)
+            figura.fill(QColor('#1A1C1F'))
+            p = QPainter(figura)
+            p.setPen(QPen(QColor('#8F939A'), 1.5))
+            x, y = self.LARGURA // 2 - 22, self.ALTURA // 2 - 15
+            p.drawPolyline([QPointF(x, y + 30), QPointF(x, y), QPointF(x + 15, y), QPointF(x + 19, y + 5),
+                            QPointF(x + 44, y + 5), QPointF(x + 44, y + 30), QPointF(x, y + 30)])
+            p.end()
+            return QIcon(figura)
+
+        def carregar(self):
+            """A few previews per turn, so the window keeps answering while a big folder loads."""
+            for _ in range(4):
+                if not self.fila:
+                    self.relogio.stop()
+                    return
+                item = self.fila.pop(0)
+                figura = miniatura(item.data(Qt.UserRole), self.LARGURA, self.ALTURA)
+                if figura:
+                    item.setIcon(figura)
+                else:
+                    item.setText(f'{item.text()} (unreadable)')
+
+        def marcar(self):
+            item = self.grade.currentItem() if self.grade.selectedItems() else None
+            caminho = Path(item.data(Qt.UserRole)) if item else None
+            imagem = bool(caminho) and caminho.suffix.lower() in IMAGENS
+            self.arquivo = str(caminho) if imagem else ''
+            self.escolhido.setText(caminho.name if imagem else '')
+            self.usar.setEnabled(imagem)
+
+        def ativar(self, item):
+            caminho = Path(item.data(Qt.UserRole))
+            if caminho.is_dir():
+                self.abrir_pasta(caminho)
+            else:
+                self.accept()
+
+        def outra(self):
+            d = QFileDialog.getExistingDirectory(self, 'Folder with images', str(self.pasta))
+            if d:
+                self.abrir_pasta(Path(d))
 
     class Plugins(QWidget):
         def __init__(self, app):
@@ -2334,6 +3144,8 @@ def janela(inicial=None, lancar=None):
             estado.addWidget(self.lampada)
             estado.addWidget(self.estado, 1)
             e.addLayout(estado)
+            self.lampada.setVisible(bool(titulo_estado))
+            self.estado.setVisible(bool(titulo_estado))
             r = rotulo(f"{marca()['name']} {versao()}\nEditor {versao_editor()}", 'mudo')
             r.setContentsMargins(14, 0, 14, 8)
             r.setStyleSheet('font-size:11px;')
@@ -2342,7 +3154,7 @@ def janela(inicial=None, lancar=None):
             voltar.setObjectName('volta')
             voltar.clicked.connect(self.voltar)
             e.addWidget(voltar)
-            h = QHBoxLayout(self)
+            h = QHBoxLayout(integrar(self, True, icone_=str(ASSETS / f'{app}.svg')))
             h.setContentsMargins(0, 0, 0, 0)
             h.setSpacing(0)
             h.addWidget(esquerda)
@@ -2356,7 +3168,9 @@ def janela(inicial=None, lancar=None):
             """Keeps the rail true: coming back from the editor, it may still be closing."""
             tipo, titulo, _ = estado_app(self.app)
             self.lampada.setStyleSheet(f'background:{LAMPADAS[tipo]};border-radius:4px;')
+            self.lampada.setVisible(bool(titulo))
             self.estado.setText(titulo)
+            self.estado.setVisible(bool(titulo))
             self.mar.moving = tipo == 'run'
 
         def ir(self, titulo):
@@ -2442,7 +3256,9 @@ def janela(inicial=None, lancar=None):
                 detalhe = self.projeto.name
             self.lampada.setFixedSize(9, 9)
             self.lampada.setStyleSheet(f'background:{LAMPADAS[self.tipo]};border-radius:4px;')
+            self.lampada.setVisible(bool(titulo))
             self.estado.setText(titulo)
+            self.estado.setVisible(bool(titulo))
             medida = self.detalhe.fontMetrics()
             self.detalhe.setText(medida.elidedText(detalhe, Qt.ElideMiddle, 90))
             rodando_ = self.tipo == 'run'
@@ -2483,7 +3299,7 @@ def janela(inicial=None, lancar=None):
             com_vidro(self)
             self.resize(820, 650)
             self.linhas = {}
-            v = QVBoxLayout(self)
+            v = QVBoxLayout(integrar(self, True))
             v.setContentsMargins(28, 18, 28, 18)
             v.setSpacing(6)
             topo = QHBoxLayout()
@@ -2573,7 +3389,7 @@ def janela(inicial=None, lancar=None):
                     alvo.mkdir(parents=True, exist_ok=True)
                     if teclas:
                         aplicar_keymap(app, 'intellij' if teclas.botoes['IntelliJ'].isChecked() else 'vscode')
-                    gravar_ajuste(app, 'workbench.colorTheme', THEMES[self.tema][0 if aplicativos()[app].get('base') else 1])
+                    gravar_ajuste(app, 'workbench.colorTheme', tema_de(app, self.tema))
                 if self.hub_mesa.isChecked() or self.hub_menu.isChecked():
                     criar_atalho(None, self.hub_mesa.isChecked(), self.hub_menu.isChecked())
             except OSError as e:
@@ -2586,7 +3402,7 @@ def janela(inicial=None, lancar=None):
             self.close()
             surgir(self.painel)
 
-    class Novidade(QDialog):
+    class Novidade(Dialogo):
         """Update notice. Nothing downloads until the person clicks Update now."""
 
         def __init__(self, painel, nova):
@@ -2596,7 +3412,7 @@ def janela(inicial=None, lancar=None):
             self.parte = 0
             self.setWindowTitle(f"{marca()['name']} {nova['version']}")
             self.resize(460, 360)
-            v = QVBoxLayout(self)
+            v = QVBoxLayout(integrar(self))
             v.setContentsMargins(18, 16, 18, 16)
             v.setSpacing(8)
             topo = QHBoxLayout()
@@ -2711,11 +3527,11 @@ def janela(inicial=None, lancar=None):
             self.gerais = self.pagina_gerais()
             for p in (self.ferramentas, self.projetos, self.gerais):
                 self.miolo.addWidget(p)
-            v = QVBoxLayout(self)
+            v = QVBoxLayout()
             v.setContentsMargins(0, 0, 0, 0)
             v.setSpacing(0)
             topo = QHBoxLayout()
-            topo.setContentsMargins(12, 0, 12, 0)
+            topo.setContentsMargins(12, 0, 6, 0)
             topo.setSpacing(14)
             topo.addWidget(icone('hub', 22), 0, Qt.AlignVCenter)
             self.guias = {}
@@ -2737,13 +3553,13 @@ def janela(inicial=None, lancar=None):
             ajuste_.setObjectName('engrenagem')
             ajuste_.setCheckable(True)
             ajuste_.clicked.connect(lambda: self.miolo.ir(self.gerais))
+            ajuste_.setIconSize(QSize(17, 17))
             grupo.addButton(ajuste_)
             self.guias['Settings'] = ajuste_
-            topo.addWidget(ajuste_)
             caixa = QWidget()
             caixa.setFixedHeight(44)
             caixa.setLayout(topo)
-            v.addWidget(caixa)
+            integrar(self, False, caixa).setLayout(v)
             v.addWidget(linha('linhaH'))
             v.addWidget(self.miolo, 1)
             self.faixa = QFrame()
@@ -2765,8 +3581,10 @@ def janela(inicial=None, lancar=None):
             rodape.addWidget(rotulo(f"{marca()['name']} {versao()}", 'forte'))
             rodape.addStretch(1)
             rodape.addWidget(rotulo(f'Editor {versao_editor()}', 'mudo'))
+            rodape.addSpacing(6)
+            rodape.addWidget(ajuste_)
             pe = QWidget()
-            pe.setFixedHeight(26)
+            pe.setFixedHeight(32)
             pe.setLayout(rodape)
             v.addWidget(pe)
             self.miolo.currentChanged.connect(self.marcar)
@@ -2900,16 +3718,23 @@ def janela(inicial=None, lancar=None):
             fundo = QHBoxLayout()
             fundo.addWidget(QLabel('Background'))
             fundo.addStretch(1)
-            motivo = blur_unsupported()
-            atual = 'Blur' if opcoes().get('blur', False) and not motivo else 'Solid'
-            seg = segmento(('Solid', 'Blur'), atual, self.mudar_fundo)
-            if motivo:
-                seg.botoes['Blur'].setEnabled(False)
-                seg.botoes['Blur'].setToolTip(motivo)
+            modo = VIDRO[1]
+            vidro = 'Blur' if modo == 'blur' else 'Translucent'
+            atual = vidro if opcoes().get('blur', False) and modo else 'Solid'
+            seg = segmento(('Solid', vidro), atual, self.mudar_fundo)
+            explica = ''
+            if not modo:
+                seg.botoes[vidro].setEnabled(False)
+                explica = 'This desktop does not show what is behind a window, so the Hub stays solid.'
+            elif modo == 'translucent':
+                explica = (f'{blur_unsupported()} Here the window is only see-through; Hyprland, SwayFX or picom '
+                           'blur it if you set them up.')
             fundo.addWidget(seg)
             v.addLayout(fundo)
-            if motivo:
-                v.addWidget(rotulo(motivo, 'mudo'))
+            if explica:
+                nota_ = rotulo(explica, 'mudo')
+                nota_.setWordWrap(True)
+                v.addWidget(nota_)
             c = QCheckBox('Transitions and boat animation')
             c.setChecked(opcoes().get('transitions', True))
             c.toggled.connect(lambda n: gravar_geral('transitions', n))
@@ -2945,7 +3770,7 @@ def janela(inicial=None, lancar=None):
 
         def mudar_fundo(self, texto):
             """Blur needs a new native window, so the panel reopens itself right away."""
-            quer = texto == 'Blur'
+            quer = texto != 'Solid'
             if quer == VIDRO[0]:
                 return
             gravar_geral('blur', quer)
@@ -2996,7 +3821,8 @@ def janela(inicial=None, lancar=None):
             except OSError as e:
                 QMessageBox.warning(self, 'Desktop shortcut', f'Could not create the shortcut: {e}')
 
-    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade, Personalizar=Personalizar)
+    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade, Personalizar=Personalizar, Boasvindas=Boasvindas,
+                   endereco_git=endereco_git, erro_git=erro_git)
     aplicacao = QApplication(sys.argv)
     if forcar_xcb:
         del os.environ['QT_QPA_PLATFORM']

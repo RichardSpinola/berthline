@@ -11,7 +11,7 @@ const JANELAS = process.platform === 'win32';
 const HUB = path.join(PACOTE, JANELAS ? 'Hub.exe' : 'Hub');
 const INSEGUROS = /^ij\.(newProject|reload|gitPush|gitPull|safeDelete|openFiles)$/;
 const MODIF = { alt: 1, ctrl: 2, shift: 8 };
-const MOLDURA = '38,40,44'; // #26282C, the Islands Dark frame set in profiles/base/settings.json
+const MOLDURA = '38,40,44'; // #26282C, the Islands Dark frame set in profiles/java/settings.json
 const relatorio = { app: APP, plataforma: process.platform, falhas: [], avisos: [], dados: {} };
 
 const falha = (nome, extra = '') => { relatorio.falhas.push(`${nome} ${extra}`.trim()); console.log('FAIL ', nome, extra); };
@@ -109,6 +109,11 @@ async function comandos(h) {
     }
     relatorio.dados.executados = resultado;
     console.log('commands run', Object.keys(resultado).length, 'timeouts', Object.values(resultado).filter(v => v === 'timeout').length);
+    // Debug can start a real session (a browser where one is installed); the status bar would keep its debugging colour
+    for (let i = 0; i < 3; i++) {
+        await rpc('executar', { comando: 'workbench.action.debug.stop' }).catch(() => {});
+        await dormir(500);
+    }
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
     await rpc('executar', { comando: 'workbench.action.closePanel' });
 }
@@ -411,7 +416,8 @@ async function exportar(h, pasta) {
 async function botoes(h) {
     await dormir(1000);
     const canto = await h.ev(`[...document.querySelectorAll('.part.activitybar .action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')||'')`);
-    conferir('one settings button', !canto.some(b => b.startsWith('Manage')), canto.join(' | '));
+    // Java hides the corner gear (the title bar has one); Web keeps the VS Code layout
+    if (APP === 'java') conferir('one settings button', !canto.some(b => b.startsWith('Manage')), canto.join(' | '));
     await rpc('executar', { comando: 'workbench.view.explorer' });
     await dormir(600);
     await h.foto(`audit-${APP}-buttons`);

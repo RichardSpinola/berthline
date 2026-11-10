@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const inicio = require('./inicio');
 
 // Avisa o Hub em qual etapa o editor está; depois de | vai o texto que aparece na janela de espera
 function etapa(nome, detalhe = '') {
@@ -63,6 +64,7 @@ function activate(context) {
         spawn(process.env.SUITE_HUB, [...antes, ...app], { detached: true, stdio: 'ignore', env: ambiente }).unref();
         vscode.commands.executeCommand('workbench.action.closeWindow');
     }));
+    inicio.ativar(context);
     esperarExtensoes().then(esperarJava).catch(() => {}).finally(() => etapa('ready'));
 }
 

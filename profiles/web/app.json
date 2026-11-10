@@ -6,8 +6,18 @@
   "memory": false,
   "templates": [
     "HTML, CSS and JS",
-    "TypeScript"
+    "TypeScript",
+    "Vite",
+    "Vite + React",
+    "Node.js server"
   ],
+  "about_templates": {
+    "HTML, CSS and JS": "One page with a stylesheet and a script. Opens in the preview; nothing to install.",
+    "TypeScript": "A main.ts that runs on the bundled Node with Ctrl+F5. For learning the language.",
+    "Vite": "HTML, CSS and JS served by Vite, with instant reload and a build for publishing. Installs with npm on first run.",
+    "Vite + React": "A React app with Vite. The preview runs npm run dev for you. Installs with npm on first run.",
+    "Node.js server": "A small HTTP server with no dependencies. npm run dev restarts it on save; requests.http tries it."
+  },
   "accent": "#3B82C4",
   "required": [
     "berthline.berthline-web",

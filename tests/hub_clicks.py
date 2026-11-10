@@ -122,7 +122,7 @@ def preparar_tudo(pid):
         raise SystemExit(f'menu shortcuts: {sorted(atalhos(inicio))}')
     for app in ('java', 'web', 'standard'):
         ajustes = json.loads((PACOTE / f'data/{app}/user/User/settings.json').read_text(encoding='utf8'))
-        if ajustes.get('workbench.colorTheme') not in ('Islands Light', 'Light Modern'):
+        if ajustes.get('workbench.colorTheme') not in ('Islands Light', 'Default Light Modern'):
             raise SystemExit(f'{app} theme: {ajustes.get("workbench.colorTheme")}')
     if not PASTA_JAVA.is_dir():
         raise SystemExit(f'folder not created: {PASTA_JAVA}')

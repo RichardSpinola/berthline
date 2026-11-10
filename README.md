@@ -69,7 +69,7 @@ Each profile keeps its own settings and extensions, so nothing touches an editor
 | | Profile | What you get |
 |---|---|---|
 | <img src="hub/assets/java.svg" alt="" width="40"> | **Java** | Run with console input, debug, create classes and profile. The Java runtime is included, so you don't need to install a JDK. |
-| <img src="hub/assets/web.svg" alt="" width="40"> | **Web** | HTML, CSS, JavaScript and TypeScript, with Node.js, Live Server, ESLint, Prettier and a REST client. |
+| <img src="hub/assets/web.svg" alt="" width="40"> | **Web** | HTML, CSS, JavaScript and TypeScript, ready to use: Node.js and npm included, a live preview beside the editor (reload on save, phone and tablet widths, click an element to open its line), Insert Block for plain HTML sections, Prettier on save, ESLint, Emmet and a REST client. VS Code keys and theme. |
 | <img src="hub/assets/standard.svg" alt="" width="40"> | **Standard** | The plain editor, for everything else. |
 
 ![Java profile running a program that reads console input](docs/images/java.png)
@@ -93,6 +93,18 @@ A *berth* is the place where a ship docks. A *line* is a shipping line, a fleet 
 The Hub's main screen is the Cargo: one boat per language, with its state and main action. A running app sails, a ready one rests at anchor, and the red flag only shows when something needs you. Editors keep a quiet dark theme, a choice of IntelliJ or VS Code shortcuts per app, and run buttons where you expect them.
 
 The app icons follow the nautical theme. All of them share the same hull and change only the cargo: steam for Java, `< >` for Web and a prompt for Standard. The Hub is the ship with the red flag. They are flat, in solid colors, so they stay clear at small sizes.
+
+## Measured
+
+One run of `node tests/measure.js dist/berthline-linux` on a modest laptop (Intel Core i3-10110U, 8 GB RAM, Fedora 45), 0.3.0 package. Each profile opens its sample project once to warm the disk cache, then again for the numbers. Memory is the whole process tree after 30 seconds idle, counted as PSS so shared pages are not counted twice. Web includes its preview, which opens by itself.
+
+| Profile | Startup | Memory (PSS) | Processes | Extensions on disk |
+|---|---:|---:|---:|---:|
+| Java | 4.0 s | 1212 MB | 11 | 267 MB |
+| Web | 3.0 s | 811 MB | 13 | 27 MB |
+| Standard | 5.7 s | 731 MB | 10 | 0 MB |
+
+The unpacked package takes 1.5 GB; the editor, Node.js and the Hub (1.06 GB of it) are shared by all profiles. Java's extensions include their own Java runtime. Run the script again after a change to compare.
 
 ## Portability and privacy
 
@@ -120,7 +132,7 @@ The package lands in `dist/`. Tests live in `tests/` and run on GitHub Actions o
 
 ## AI use
 
-AI did most of the work here: Claude Opus 5.5 and, from 0.2.1, Claude Fable 5.2 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. I chose the direction, tested it and decided what to keep.
+AI did most of the work here: Claude Opus 5.5 and, from 0.2.1, Claude Fable 5.2 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. In 0.3.0, Claude Opus 5.5 built the Web preview, blocks and the measure script. I chose the direction, tested it and decided what to keep.
 
 ## License
 

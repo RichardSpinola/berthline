@@ -1,0 +1,2 @@
+### Try the server: run npm run dev, then click "Send Request" above the line below
+GET http://localhost:3000/hello

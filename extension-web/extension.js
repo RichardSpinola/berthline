@@ -1,7 +1,10 @@
 const vscode = require('vscode');
+const path = require('path');
 const { ativarComum, abrirRun, nodeDaSuite } = require('./comum/comum');
+const previa = require('./previa');
+const { inserirBloco } = require('./blocos');
 
-// Web: HTML abre no Live Server; JS e TS rodam no Node da suíte
+// Web: HTML opens in the preview; JS and TS run in the bundled Node
 const LINGUAGENS_WEB = ['html', 'javascript', 'typescript'];
 
 function arquivoWeb() {
@@ -11,7 +14,7 @@ function arquivoWeb() {
 
 async function rodarWeb(doc) {
     await doc.save();
-    if (doc.languageId === 'html') return vscode.commands.executeCommand('extension.liveServer.goOnline');
+    if (doc.languageId === 'html') return previa.abrir(contexto, { arquivo: doc.uri });
     abrirRun({
         nome: 'Run',
         cwd: vscode.workspace.getWorkspaceFolder(doc.uri)?.uri,
@@ -20,25 +23,69 @@ async function rodarWeb(doc) {
     });
 }
 
+// Chromium-based browsers the JavaScript debugger can drive; Firefox can't be, so it is not listed
+const NAVEGADORES = ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge-stable',
+    'microsoft-edge', 'brave-browser', 'brave', 'vivaldi-stable', 'vivaldi', 'com.google.Chrome', 'org.chromium.Chromium',
+    'com.microsoft.Edge', 'com.brave.Browser', 'com.vivaldi.Vivaldi'];
+
 function navegadorWeb() {
-    return process.platform === 'win32' ? { type: 'pwa-msedge' } : { type: 'pwa-chrome', runtimeExecutable: process.env.SUITE_BROWSER ?? 'vivaldi' };
+    if (process.platform === 'win32') return { type: 'pwa-msedge' };
+    const fs = require('fs'), path = require('path'), os = require('os');
+    const pastas = [...(process.env.PATH ?? '').split(path.delimiter), '/var/lib/flatpak/exports/bin', path.join(os.homedir(), '.local/share/flatpak/exports/bin')];
+    const escolhido = process.env.SUITE_BROWSER;
+    for (const nome of escolhido ? [escolhido, ...NAVEGADORES] : NAVEGADORES) {
+        if (path.isAbsolute(nome) && fs.existsSync(nome)) return { type: 'pwa-chrome', runtimeExecutable: nome };
+        for (const p of pastas) {
+            const exe = path.join(p, nome);
+            if (p && fs.existsSync(exe)) return { type: 'pwa-chrome', runtimeExecutable: exe };
+        }
+    }
+    return null;
 }
 
 async function depurarWeb(doc) {
     await doc.save();
     const pasta = vscode.workspace.getWorkspaceFolder(doc.uri);
     if (doc.languageId === 'html') {
-        return vscode.debug.startDebugging(pasta, { ...navegadorWeb(), request: 'launch', name: 'Debug in Browser', file: doc.uri.fsPath, webRoot: pasta?.uri.fsPath });
+        const navegador = navegadorWeb();
+        if (!navegador) {
+            return vscode.window.showWarningMessage('Debugging a page needs Chrome, Chromium, Edge, Brave or Vivaldi, and none was found. '
+                + 'For other browsers, use Open in Browser in the preview and their own DevTools.');
+        }
+        // Debug the page as the preview serves it, so fetch and modules behave like on a real server
+        const url = await previa.urlDaPagina(contexto, doc.uri);
+        return vscode.debug.startDebugging(pasta, { ...navegador, request: 'launch', name: 'Debug in Browser', webRoot: pasta?.uri.fsPath ?? path.dirname(doc.uri.fsPath),
+            ...(url ? { url } : { file: doc.uri.fsPath }) });
     }
     return vscode.debug.startDebugging(pasta, { type: 'pwa-node', request: 'launch', name: 'Debug', program: doc.uri.fsPath, runtimeExecutable: nodeDaSuite(), console: 'integratedTerminal' });
 }
 
+let contexto;
+
 function activate(context) {
-    ativarComum(context, { prefixo: 'web' });
+    contexto = context;
+    ativarComum(context, { prefixo: 'web', estilo: 'vscode' });
     context.subscriptions.push(
         vscode.commands.registerCommand('web.run', () => { const doc = arquivoWeb(); return doc && rodarWeb(doc); }),
-        vscode.commands.registerCommand('web.debug', () => { const doc = arquivoWeb(); return doc && depurarWeb(doc); })
+        vscode.commands.registerCommand('web.debug', () => { const doc = arquivoWeb(); return doc && depurarWeb(doc); }),
+        vscode.commands.registerCommand('web.preview', uri => previa.abrir(context, { arquivo: uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri, focar: false })),
+        vscode.commands.registerCommand('web.insertBlock', inserirBloco),
+        vscode.commands.registerCommand('web.previewMenu', previa.menu),
+        vscode.commands.registerCommand('web.stopPreview', () => previa.estado()?.painel.dispose())
     );
+    previa.ativar(context);
+    // F5 and Ctrl+F5 go to the project's own launch.json when it has one
+    const marcarLaunch = () => vscode.workspace.findFiles('.vscode/launch.json', null, 1)
+        .then(l => vscode.commands.executeCommand('setContext', 'web.hasLaunch', l.length > 0), () => {});
+    const vigia = vscode.workspace.createFileSystemWatcher('**/.vscode/launch.json');
+    vigia.onDidCreate(marcarLaunch);
+    vigia.onDidDelete(marcarLaunch);
+    context.subscriptions.push(vigia);
+    marcarLaunch();
 }
 
-module.exports = { activate };
+function deactivate() {
+    previa.pararTudo();
+}
+
+module.exports = { activate, deactivate };

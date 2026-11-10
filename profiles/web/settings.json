@@ -23,8 +23,6 @@
     "typescript.updateImportsOnFileMove.enabled": "always",
     "emmet.triggerExpansionOnTab": true,
     "emmet.showExpandedAbbreviation": "always",
-    "liveServer.settings.donotShowInfoMsg": true,
-    "liveServer.settings.donotVerifyTags": true,
     "css.lint.unknownProperties": "warning",
     "debug.javascript.autoAttachFilter": "disabled",
     "terminal.integrated.env.windows": {
@@ -32,5 +30,88 @@
     },
     "terminal.integrated.env.linux": {
         "PATH": "${SUITE}/node/bin:${env:PATH}"
-    }
+    },
+    "[javascriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.snippetSuggestions": "top"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.snippetSuggestions": "top"
+    },
+    "[scss]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[less]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[json]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
+    "workbench.colorTheme": "Default Dark Modern",
+    "workbench.iconTheme": "berthline-file-icons",
+    "workbench.productIconTheme": "Default",
+    "editor.tabSize": 2,
+    "editor.rulers": [],
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.lightbulb.enabled": "onCode",
+    "breadcrumbs.enabled": true,
+    "editor.snippetSuggestions": "inline",
+    "editor.suggest.insertMode": "insert",
+    "editor.linkedEditing": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "eslint.validate": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact"
+    ],
+    "prettier.requireConfig": false,
+    "emmet.includeLanguages": {
+        "vue-html": "html",
+        "astro": "html",
+        "svelte": "html"
+    },
+    "html.autoClosingTags": true,
+    "css.validate": true,
+    "terminal.integrated.profiles.linux": {
+        "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+        }
+    },
+    "editor.fontSize": 14,
+    "terminal.integrated.fontSize": 14,
+    "workbench.activityBar.compact": true,
+    "window.menuBarVisibility": "classic",
+    "window.commandCenter": true,
+    "workbench.layoutControl.enabled": true,
+    "workbench.navigationControl.enabled": true,
+    "workbench.editor.enablePreview": true,
+    "workbench.tree.indent": 8,
+    "explorer.compactFolders": true,
+    "editor.minimap.enabled": true,
+    "editor.showFoldingControls": "mouseover",
+    "editor.foldingImportsByDefault": false,
+    "editor.guides.highlightActiveIndentation": true,
+    "workbench.editor.decorations.badges": true,
+    "workbench.editor.decorations.colors": true,
+    "editor.cursorBlinking": "blink",
+    "editor.hover.delay": 300,
+    "terminal.integrated.cursorStyle": "block",
+    "terminal.integrated.tabs.hideCondition": "never",
+    "scm.defaultViewMode": "list",
+    "editor.stickyScroll.enabled": true
 }
