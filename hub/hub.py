@@ -576,8 +576,49 @@ def blur_unsupported():
     return 'Blur needs KDE Plasma.'
 
 
+def compositor_x11():
+    """True when an X11 desktop composites windows, so a see-through window shows what is behind it."""
+    try:
+        x = ctypes.cdll.LoadLibrary('libX11.so.6')
+        x.XOpenDisplay.restype = ctypes.c_void_p
+        tela = x.XOpenDisplay(None)
+        if not tela:
+            return False
+        x.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+        x.XInternAtom.restype = ctypes.c_ulong
+        x.XGetSelectionOwner.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x.XGetSelectionOwner.restype = ctypes.c_ulong
+        x.XDefaultScreen.argtypes = [ctypes.c_void_p]
+        atomo = x.XInternAtom(tela, f'_NET_WM_CM_S{x.XDefaultScreen(tela)}'.encode(), 0)
+        dono = x.XGetSelectionOwner(tela, atomo)
+        x.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x.XCloseDisplay(tela)
+        return bool(dono)
+    except OSError:
+        return False
+
+
+def translucido_possivel():
+    """Where blur is not offered, a see-through window still works on composited desktops.
+
+    Hyprland, SwayFX and picom blur such windows themselves when the person set them up.
+    """
+    if os.environ.get('QT_QPA_PLATFORM') == 'offscreen':
+        return False
+    if JANELAS:
+        return True
+    return os.environ.get('XDG_SESSION_TYPE') == 'wayland' or compositor_x11()
+
+
+def modo_vidro():
+    """'blur' where the system blurs for us, 'translucent' where it only composites, '' otherwise."""
+    if not blur_unsupported():
+        return 'blur'
+    return 'translucent' if translucido_possivel() else ''
+
+
 def vidro_disponivel():
-    return bool(opcoes().get('blur', False)) and not blur_unsupported()
+    return bool(opcoes().get('blur', False)) and bool(modo_vidro())
 
 
 def aplicar_vidro(janela_id):
@@ -1149,7 +1190,7 @@ def janela(inicial=None, lancar=None):
         QWidget,
     )
 
-    VIDRO = [vidro_disponivel()]  # changes while the Hub runs
+    VIDRO = [vidro_disponivel(), modo_vidro()]  # changes while the Hub runs
     ESTILO = """
     * { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 13px; color: #E6E3DA; }
     QWidget#pagina, QScrollArea, QStackedWidget, QAbstractScrollArea { background: transparent; border: none; }
@@ -1244,7 +1285,8 @@ def janela(inicial=None, lancar=None):
         janela_.setWindowOpacity(0.0)
         janela_.show()
         if VIDRO[0]:
-            aplicar_vidro(int(janela_.winId()))
+            if VIDRO[1] == 'blur':
+                aplicar_vidro(int(janela_.winId()))
         animacao = QPropertyAnimation(janela_, b'windowOpacity', janela_)
         animacao.setDuration(180)
         animacao.setStartValue(0.0)
@@ -1269,7 +1311,7 @@ def janela(inicial=None, lancar=None):
             if JANELAS and self.barra_ and not getattr(self, 'moldada_', False):
                 self.moldada_ = True
                 moldura_windows(int(self.winId()))
-            if VIDRO[0] and self.barra_:
+            if VIDRO[0] and VIDRO[1] == 'blur' and self.barra_:
                 aplicar_vidro(int(self.winId()))
 
         def nativeEvent(self, tipo, mensagem):
@@ -1469,7 +1511,8 @@ def janela(inicial=None, lancar=None):
         def paintEvent(self, _):
             p = QPainter(self)
             p.setCompositionMode(QPainter.CompositionMode_Source)
-            p.fillRect(self.rect(), QColor(22, 24, 27, 205) if VIDRO[0] else QColor('#16181B'))
+            # without the system's blur, less of the desktop shows through so text stays easy to read
+            p.fillRect(self.rect(), QColor(22, 24, 27, 205 if VIDRO[1] == 'blur' else 232) if VIDRO[0] else QColor('#16181B'))
             if self.barra_ and not JANELAS and not self.isMaximized():
                 p.setCompositionMode(QPainter.CompositionMode_SourceOver)
                 p.setPen(QColor('#3A3E44'))
@@ -1974,7 +2017,12 @@ def janela(inicial=None, lancar=None):
             self.git.setEnabled(bool(shutil.which('git')))
             self.git.setToolTip('' if shutil.which('git') else 'Git was not found on this computer.')
             self.sobre_inicio = nota()
-            self.inicio = segmento(self.modelos_, self.modelos_[0], self.descrever) if len(self.modelos_) > 1 else None
+            if len(self.modelos_) > 3:  # too many to sit side by side
+                self.inicio = Combo()
+                self.inicio.addItems(self.modelos_)
+                self.inicio.currentIndexChanged.connect(self.descrever)
+            else:
+                self.inicio = segmento(self.modelos_, self.modelos_[0], self.descrever) if len(self.modelos_) > 1 else None
             self.exemplo = QCheckBox('Add sample code') if len(self.modelos_) == 1 else None
             self.sobre_exemplo = nota()
             if self.exemplo:
@@ -2047,13 +2095,17 @@ def janela(inicial=None, lancar=None):
             self.avaliar()
 
         def escolhido(self, seg):
+            if isinstance(seg, QComboBox):
+                return seg.currentText()
             return next(t for t, b in seg.botoes.items() if b.isChecked()) if seg else None
 
         def descrever(self, *_):
             if self.sistema:
                 avisar(self.sobre_sistema, SISTEMAS_JAVA[self.escolhido(self.sistema)])
             if self.inicio:
-                avisar(self.sobre_inicio, f'Starts with {conteudo_modelo(self.app, self.escolhido(self.inicio))}.')
+                nome = self.escolhido(self.inicio)
+                sobre = aplicativos()[self.app].get('about_templates', {}).get(nome)
+                avisar(self.sobre_inicio, sobre or f'Starts with {conteudo_modelo(self.app, nome)}.')
             if self.exemplo:
                 avisar(self.sobre_exemplo, f'Adds {conteudo_modelo(self.app, self.modelos_[0])} that prints a greeting.'
                        if self.exemplo.isChecked() else 'Starts with an empty src folder.')
@@ -2062,7 +2114,7 @@ def janela(inicial=None, lancar=None):
             if self.tipos.currentItem().text() == 'Empty Project':
                 return 'Empty Project'
             if self.inicio:
-                return next(t for t, b in self.inicio.botoes.items() if b.isChecked())
+                return self.escolhido(self.inicio)
             return self.modelos_[0] if self.exemplo.isChecked() else 'Empty Project'
 
         def avaliar(self, *_):
@@ -3666,16 +3718,23 @@ def janela(inicial=None, lancar=None):
             fundo = QHBoxLayout()
             fundo.addWidget(QLabel('Background'))
             fundo.addStretch(1)
-            motivo = blur_unsupported()
-            atual = 'Blur' if opcoes().get('blur', False) and not motivo else 'Solid'
-            seg = segmento(('Solid', 'Blur'), atual, self.mudar_fundo)
-            if motivo:
-                seg.botoes['Blur'].setEnabled(False)
-                seg.botoes['Blur'].setToolTip(motivo)
+            modo = VIDRO[1]
+            vidro = 'Blur' if modo == 'blur' else 'Translucent'
+            atual = vidro if opcoes().get('blur', False) and modo else 'Solid'
+            seg = segmento(('Solid', vidro), atual, self.mudar_fundo)
+            explica = ''
+            if not modo:
+                seg.botoes[vidro].setEnabled(False)
+                explica = 'This desktop does not show what is behind a window, so the Hub stays solid.'
+            elif modo == 'translucent':
+                explica = (f'{blur_unsupported()} Here the window is only see-through; Hyprland, SwayFX or picom '
+                           'blur it if you set them up.')
             fundo.addWidget(seg)
             v.addLayout(fundo)
-            if motivo:
-                v.addWidget(rotulo(motivo, 'mudo'))
+            if explica:
+                nota_ = rotulo(explica, 'mudo')
+                nota_.setWordWrap(True)
+                v.addWidget(nota_)
             c = QCheckBox('Transitions and boat animation')
             c.setChecked(opcoes().get('transitions', True))
             c.toggled.connect(lambda n: gravar_geral('transitions', n))
@@ -3711,7 +3770,7 @@ def janela(inicial=None, lancar=None):
 
         def mudar_fundo(self, texto):
             """Blur needs a new native window, so the panel reopens itself right away."""
-            quer = texto == 'Blur'
+            quer = texto != 'Solid'
             if quer == VIDRO[0]:
                 return
             gravar_geral('blur', quer)

@@ -237,6 +237,14 @@ def ambiente_do_pacote():
 
 def extras(painel):
     ambiente_do_pacote()
+    guardado = hub.blur_unsupported, hub.translucido_possivel
+    hub.blur_unsupported, hub.translucido_possivel = (lambda: 'Blur needs KDE Plasma.'), (lambda: True)
+    passo('see-through without blur', hub.modo_vidro() == 'translucent')
+    hub.translucido_possivel = lambda: False
+    passo('solid without a compositor', hub.modo_vidro() == '')
+    hub.blur_unsupported = lambda: ''
+    passo('blur where offered', hub.modo_vidro() == 'blur')
+    hub.blur_unsupported, hub.translucido_possivel = guardado
     passo('web keys default to the editor', hub.keymap_de('web') == 'vscode' and hub.keymap_de('standard') == 'vscode')
     passo('learn lists editor keys on web', ('Command Palette', 'Ctrl+Shift+P') in hub.teclas_app('web')
           or all(t not in hub.INTELLIJ_KEYS for t in hub.teclas_app('web')))

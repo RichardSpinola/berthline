@@ -8,6 +8,8 @@ hub-cargo/QPushButton:Cargo
 hub-cargo/QPushButton:Open
 hub-cargo/QPushButton:Open loja
 hub-cargo/QPushButton:Projects
+hub-cargo/QToolButton:Close
+hub-cargo/QToolButton:Minimize
 hub-cargo/QToolButton:Settings
 hub-cargo/QToolButton:⋯
 hub-projects/ListaProjetos:
@@ -22,7 +24,9 @@ hub-projects/QPushButton:Cargo
 hub-projects/QPushButton:Projects
 hub-projects/QToolButton:
 hub-projects/QToolButton:All
+hub-projects/QToolButton:Close
 hub-projects/QToolButton:Java
+hub-projects/QToolButton:Minimize
 hub-projects/QToolButton:Settings
 hub-projects/QToolButton:Standard
 hub-projects/QToolButton:Web
@@ -43,8 +47,17 @@ hub-settings/QPushButton:Check now
 hub-settings/QPushButton:Projects
 hub-settings/QPushButton:Remove
 hub-settings/QPushButton:Run setup again
+hub-settings/QToolButton:Close
+hub-settings/QToolButton:Minimize
 hub-settings/QToolButton:Settings
 hub-settings/QToolButton:⋯
+java-customize/Choose Wallpaper/QListWidget:grade
+java-customize/Choose Wallpaper/QListWidget:modelos
+java-customize/Choose Wallpaper/QPushButton:Cancel
+java-customize/Choose Wallpaper/QPushButton:Other folder…
+java-customize/Choose Wallpaper/QPushButton:Up
+java-customize/Choose Wallpaper/QToolButton:Close
+java-customize/Choose Wallpaper/QToolButton:Maximize
 java-customize/Combo:
 java-customize/Degrau:1G
 java-customize/Degrau:2G
@@ -68,6 +81,9 @@ java-customize/QPushButton:Projects
 java-customize/QPushButton:VS Code
 java-customize/QPushButton:‹ Cargo
 java-customize/QSlider:
+java-customize/QToolButton:Close
+java-customize/QToolButton:Maximize
+java-customize/QToolButton:Minimize
 java-learn/QPushButton:Change keymap
 java-learn/QPushButton:Customize
 java-learn/QPushButton:Java API reference
@@ -76,6 +92,9 @@ java-learn/QPushButton:Learn
 java-learn/QPushButton:Plugins
 java-learn/QPushButton:Projects
 java-learn/QPushButton:‹ Cargo
+java-learn/QToolButton:Close
+java-learn/QToolButton:Maximize
+java-learn/QToolButton:Minimize
 java-plugins/QCheckBox:Enable (neo) Git Graph
 java-plugins/QCheckBox:Enable Bookmarks
 java-plugins/QCheckBox:Enable EditorConfig
@@ -98,17 +117,26 @@ java-plugins/QPushButton:Plugins
 java-plugins/QPushButton:Projects
 java-plugins/QPushButton:‹ Cargo
 java-plugins/QToolButton:
+java-plugins/QToolButton:Close
+java-plugins/QToolButton:Maximize
+java-plugins/QToolButton:Minimize
 java-projects/Clone Repository/QLineEdit:
 java-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
+java-projects/Clone Repository/QPushButton:Browse
 java-projects/Clone Repository/QPushButton:Cancel
-java-projects/Clone Repository/QPushButton:Clone
+java-projects/Clone Repository/QToolButton:Close
 java-projects/ListaProjetos:
+java-projects/New Project/QCheckBox:Add sample code
 java-projects/New Project/QCheckBox:Create Git repository
 java-projects/New Project/QLineEdit:
-java-projects/New Project/QListWidget:
-java-projects/New Project/QPushButton:Browse…
+java-projects/New Project/QListWidget:modelos
+java-projects/New Project/QPushButton:Browse
 java-projects/New Project/QPushButton:Cancel
 java-projects/New Project/QPushButton:Create
+java-projects/New Project/QPushButton:Gradle
+java-projects/New Project/QPushButton:Maven
+java-projects/New Project/QPushButton:None
+java-projects/New Project/QToolButton:Close
 java-projects/QLineEdit:Search projects
 java-projects/QPushButton:Clone Repository
 java-projects/QPushButton:Customize
@@ -119,6 +147,9 @@ java-projects/QPushButton:Plugins
 java-projects/QPushButton:Projects
 java-projects/QPushButton:‹ Cargo
 java-projects/QToolButton:
+java-projects/QToolButton:Close
+java-projects/QToolButton:Maximize
+java-projects/QToolButton:Minimize
 setup/QCheckBox:App menu
 setup/QCheckBox:Desktop
 setup/QCheckBox:Menu
@@ -132,6 +163,9 @@ setup/QPushButton:IntelliJ
 setup/QPushButton:Light
 setup/QPushButton:Skip
 setup/QPushButton:VS Code
+setup/QToolButton:Close
+setup/QToolButton:Maximize
+setup/QToolButton:Minimize
 standard-customize/Combo:
 standard-customize/QCheckBox:Animations
 standard-customize/QCheckBox:Enable AI features
@@ -146,12 +180,18 @@ standard-customize/QPushButton:Plugins
 standard-customize/QPushButton:Projects
 standard-customize/QPushButton:Seti
 standard-customize/QPushButton:‹ Cargo
+standard-customize/QToolButton:Close
+standard-customize/QToolButton:Maximize
+standard-customize/QToolButton:Minimize
 standard-learn/QPushButton:Customize
 standard-learn/QPushButton:Learn
 standard-learn/QPushButton:Plugins
 standard-learn/QPushButton:Projects
 standard-learn/QPushButton:VSCodium docs
 standard-learn/QPushButton:‹ Cargo
+standard-learn/QToolButton:Close
+standard-learn/QToolButton:Maximize
+standard-learn/QToolButton:Minimize
 standard-plugins/QLineEdit:Search installed plugins
 standard-plugins/QListWidget:
 standard-plugins/QPushButton:Customize
@@ -161,16 +201,21 @@ standard-plugins/QPushButton:Plugins
 standard-plugins/QPushButton:Projects
 standard-plugins/QPushButton:‹ Cargo
 standard-plugins/QToolButton:
+standard-plugins/QToolButton:Close
+standard-plugins/QToolButton:Maximize
+standard-plugins/QToolButton:Minimize
 standard-projects/Clone Repository/QLineEdit:
 standard-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
+standard-projects/Clone Repository/QPushButton:Browse
 standard-projects/Clone Repository/QPushButton:Cancel
-standard-projects/Clone Repository/QPushButton:Clone
+standard-projects/Clone Repository/QToolButton:Close
 standard-projects/New Project/QCheckBox:Create Git repository
 standard-projects/New Project/QLineEdit:
-standard-projects/New Project/QListWidget:
-standard-projects/New Project/QPushButton:Browse…
+standard-projects/New Project/QListWidget:modelos
+standard-projects/New Project/QPushButton:Browse
 standard-projects/New Project/QPushButton:Cancel
 standard-projects/New Project/QPushButton:Create
+standard-projects/New Project/QToolButton:Close
 standard-projects/QPushButton:Clone Repository
 standard-projects/QPushButton:Customize
 standard-projects/QPushButton:Learn
@@ -179,9 +224,20 @@ standard-projects/QPushButton:Open
 standard-projects/QPushButton:Plugins
 standard-projects/QPushButton:Projects
 standard-projects/QPushButton:‹ Cargo
+standard-projects/QToolButton:Close
+standard-projects/QToolButton:Maximize
+standard-projects/QToolButton:Minimize
 update/QPushButton:Later
 update/QPushButton:Skip this version
 update/QPushButton:Update now
+update/QToolButton:Close
+web-customize/Choose Wallpaper/QListWidget:grade
+web-customize/Choose Wallpaper/QListWidget:modelos
+web-customize/Choose Wallpaper/QPushButton:Cancel
+web-customize/Choose Wallpaper/QPushButton:Other folder…
+web-customize/Choose Wallpaper/QPushButton:Up
+web-customize/Choose Wallpaper/QToolButton:Close
+web-customize/Choose Wallpaper/QToolButton:Maximize
 web-customize/Combo:
 web-customize/QCheckBox:Animations
 web-customize/QCheckBox:Enable AI features
@@ -199,6 +255,9 @@ web-customize/QPushButton:Plugins
 web-customize/QPushButton:Projects
 web-customize/QPushButton:‹ Cargo
 web-customize/QSlider:
+web-customize/QToolButton:Close
+web-customize/QToolButton:Maximize
+web-customize/QToolButton:Minimize
 web-learn/QPushButton:Customize
 web-learn/QPushButton:Learn
 web-learn/QPushButton:MDN Web Docs
@@ -207,6 +266,9 @@ web-learn/QPushButton:Projects
 web-learn/QPushButton:TypeScript handbook
 web-learn/QPushButton:web.dev
 web-learn/QPushButton:‹ Cargo
+web-learn/QToolButton:Close
+web-learn/QToolButton:Maximize
+web-learn/QToolButton:Minimize
 web-plugins/QCheckBox:Enable (neo) Git Graph
 web-plugins/QCheckBox:Enable Bookmarks
 web-plugins/QCheckBox:Enable Color Highlight
@@ -231,17 +293,24 @@ web-plugins/QPushButton:Plugins
 web-plugins/QPushButton:Projects
 web-plugins/QPushButton:‹ Cargo
 web-plugins/QToolButton:
+web-plugins/QToolButton:Close
+web-plugins/QToolButton:Maximize
+web-plugins/QToolButton:Minimize
 web-projects/Clone Repository/QLineEdit:
 web-projects/Clone Repository/QLineEdit:https://github.com/user/project.git
+web-projects/Clone Repository/QPushButton:Browse
 web-projects/Clone Repository/QPushButton:Cancel
-web-projects/Clone Repository/QPushButton:Clone
+web-projects/Clone Repository/QToolButton:Close
 web-projects/ListaProjetos:
 web-projects/New Project/QCheckBox:Create Git repository
 web-projects/New Project/QLineEdit:
-web-projects/New Project/QListWidget:
-web-projects/New Project/QPushButton:Browse…
+web-projects/New Project/QListWidget:modelos
+web-projects/New Project/QPushButton:Browse
 web-projects/New Project/QPushButton:Cancel
 web-projects/New Project/QPushButton:Create
+web-projects/New Project/QPushButton:HTML, CSS and JS
+web-projects/New Project/QPushButton:TypeScript
+web-projects/New Project/QToolButton:Close
 web-projects/QLineEdit:Search projects
 web-projects/QPushButton:Clone Repository
 web-projects/QPushButton:Customize
@@ -252,3 +321,6 @@ web-projects/QPushButton:Plugins
 web-projects/QPushButton:Projects
 web-projects/QPushButton:‹ Cargo
 web-projects/QToolButton:
+web-projects/QToolButton:Close
+web-projects/QToolButton:Maximize
+web-projects/QToolButton:Minimize
