@@ -1,15 +1,52 @@
 {
   "name": "berthline-hub",
   "displayName": "Berthline Hub",
-  "description": "Back to Hub button, startup progress and file icons",
+  "description": "Back to Hub button, start page, startup progress and file icons",
   "version": "0.2.1",
   "publisher": "berthline",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other"],
-  "activationEvents": ["*"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "*"
+  ],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{ "command": "berthline.openHub", "title": "Back to Hub" }],
-    "iconThemes": [{ "id": "berthline-file-icons", "label": "Berthline", "path": "./icons/theme.json" }]
+    "commands": [
+      {
+        "command": "berthline.openHub",
+        "title": "Back to Hub"
+      },
+      {
+        "command": "berthline.welcome",
+        "title": "Welcome",
+        "category": "Berthline"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "berthline-file-icons",
+        "label": "Berthline",
+        "path": "./icons/theme.json"
+      }
+    ],
+    "configuration": {
+      "title": "Berthline",
+      "properties": {
+        "berthline.welcome.onStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Berthline start page when the editor opens without a folder."
+        },
+        "berthline.welcome.animation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Let the boat on the start page bob on the water. Off when the Hub's Animations option is off."
+        }
+      }
+    }
   }
 }

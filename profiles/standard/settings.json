@@ -1,5 +1,6 @@
 {
     "workbench.colorTheme": "Default Dark Modern",
     "workbench.iconTheme": "vs-seti",
-    "scm.showInputActionButton": false
+    "scm.showInputActionButton": false,
+    "workbench.startupEditor": "none"
 }

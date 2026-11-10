@@ -421,4 +421,11 @@ function ativar(context) {
     }
 }
 
-module.exports = { ativar, abrir, pararTudo, estado: () => estado };
+/** The address the preview serves this page at, opening the preview if needed; null without a static server. */
+async function urlDaPagina(context, arquivo) {
+    await abrir(context, { arquivo });
+    if (!estado?.servidor || estado.alvo) return estado?.servidor?.url ?? null;
+    return estado.servidor.url + caminhoWeb(estado.raiz, arquivo).slice(1);
+}
+
+module.exports = { ativar, abrir, pararTudo, urlDaPagina, estado: () => estado };
