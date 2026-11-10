@@ -3072,6 +3072,9 @@ def main():
     if args[:1] == ['--swap']:  # the helper copy: see troca.py
         return troca.aplicar(args[1], args[2], int(args[3]), processo_vivo)
     if args[:1] == ['--install-update']:  # a package already downloaded and checked by the person
+        if any(rodando(app) for app in aplicativos()):
+            print('Close the editors first: the update replaces them.')
+            return 2
         troca.iniciar(RAIZ, troca.preparar_pacote(RAIZ, args[1]))
         return 0
     if args[:1] == ['--check-update']:
