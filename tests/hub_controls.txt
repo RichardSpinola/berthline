@@ -248,7 +248,6 @@ web-customize/QPushButton:Berthline
 web-customize/QPushButton:Browse
 web-customize/QPushButton:Choose
 web-customize/QPushButton:Customize
-web-customize/QPushButton:JetBrains
 web-customize/QPushButton:Keyboard shortcuts…
 web-customize/QPushButton:Learn
 web-customize/QPushButton:Plugins
@@ -275,12 +274,6 @@ web-plugins/QCheckBox:Enable Color Highlight
 web-plugins/QCheckBox:Enable ESLint
 web-plugins/QCheckBox:Enable EditorConfig
 web-plugins/QCheckBox:Enable HTML CSS Support
-web-plugins/QCheckBox:Enable IntelliJ IDEA Keybindings
-web-plugins/QCheckBox:Enable Islands Theme
-web-plugins/QCheckBox:Enable JetBrains New UI Color Theme Extended
-web-plugins/QCheckBox:Enable JetBrains New UI File Icon Theme Extended
-web-plugins/QCheckBox:Enable JetBrains New UI Product Icon Theme
-web-plugins/QCheckBox:Enable Live Server
 web-plugins/QCheckBox:Enable Prettier - Code formatter
 web-plugins/QCheckBox:Enable REST Client
 web-plugins/QCheckBox:Enable Todo Tree
@@ -302,14 +295,13 @@ web-projects/Clone Repository/QPushButton:Browse
 web-projects/Clone Repository/QPushButton:Cancel
 web-projects/Clone Repository/QToolButton:Close
 web-projects/ListaProjetos:
+web-projects/New Project/Combo:
 web-projects/New Project/QCheckBox:Create Git repository
 web-projects/New Project/QLineEdit:
 web-projects/New Project/QListWidget:modelos
 web-projects/New Project/QPushButton:Browse
 web-projects/New Project/QPushButton:Cancel
 web-projects/New Project/QPushButton:Create
-web-projects/New Project/QPushButton:HTML, CSS and JS
-web-projects/New Project/QPushButton:TypeScript
 web-projects/New Project/QToolButton:Close
 web-projects/QLineEdit:Search projects
 web-projects/QPushButton:Clone Repository
