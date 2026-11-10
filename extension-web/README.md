@@ -18,6 +18,13 @@ stops when the preview tab closes. No extra browser runs.
 - **Inspect**: click an element to open its line in the HTML file. While inspect is on, the cursor
   in the HTML file outlines its element in the preview. Exact for plain HTML; for React, Vue and
   Svelte it uses their development metadata when it is there.
+- **DevTools**: right-click in the page > Inspect, or the toolbar's DevTools button, docks Chromium's
+  own DevTools (Elements, Console, Sources, Network) under the page. Its window button moves it to a
+  window of its own. It uses the editor's debugging port, which the Hub opens; the preview server
+  relays it and accepts it only from itself and only for the preview page.
+- Console errors of the page are counted in the toolbar and listed under Output > Preview.
+- Status bar: **Preview** opens it; while it runs it shows the port, and a click offers Show, Stop
+  and whether it opens by itself. Nothing runs while the preview is closed.
 - `web.preview.openOnStartup` turns the automatic opening off.
 
 ## Insert Block
@@ -32,7 +39,7 @@ the stylesheet the page links to (`style.css` when there is none).
 | Action | Keys |
 | --- | --- |
 | Run (HTML opens the preview; JS and TS run on the bundled Node) | Ctrl+F5 |
-| Debug | F5 |
+| Debug (HTML: in Chrome, Chromium, Edge, Brave or Vivaldi if one is installed, breakpoints in the editor) | F5 |
 | Stop | Shift+F5 |
 | Run again | Ctrl+Shift+F5 |
 
