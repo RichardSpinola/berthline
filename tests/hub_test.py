@@ -17,7 +17,7 @@ RAIZ.mkdir()
 for nome in ('profiles', 'assets', 'editor'):
     (RAIZ / nome).symlink_to(PACOTE / nome)
 shutil.copy(PACOTE / 'brand.json', RAIZ)
-for app in ('java', 'web'):
+for app in ('java', 'web', 'standard'):
     (RAIZ / 'data' / app).mkdir(parents=True)
     (RAIZ / 'data' / app / 'extensions').symlink_to(PACOTE / 'data' / app / 'extensions')
 (RAIZ / 'data/hub.json').write_text('{"setup": true, "checked": 9e12}')
@@ -293,12 +293,18 @@ def extras(painel):
     # Setup window.
     pasta = TEMP / 'projetos-web'
     preparo = hub.CLASSES['Preparo'](painel)
+    menu.unlink()
+    atalhos = lambda: sorted(str(p) for pasta_ in (menu.parent, mesa.parent) for p in pasta_.glob('berthline*.desktop'))  # noqa: E731
+    antes = atalhos()
+    caixas = [c for linha in preparo.linhas.values() for c in linha[:2]] + [preparo.hub_mesa, preparo.hub_menu]
+    passo('setup starts with no shortcut ticked', not any(c.isChecked() for c in caixas))
     preparo.linhas['web'][3].setText(str(pasta))
     passo('setup offers keymap only in java', preparo.linhas['web'][2] is None and preparo.linhas['standard'][2] is None)
     preparo.linhas['java'][2].botoes['VS Code'].setChecked(True)
     preparo.escolher_tema('Light')
     preparo.concluir()
     passo('setup folder', hub.pasta_projetos('web') == pasta and pasta.is_dir())
+    passo('setup creates no shortcut unasked', atalhos() == antes, atalhos())
     passo('setup keymap', hub.opcao('java', 'keymap') == 'vscode')
     passo('setup theme', hub.ajuste('web', 'workbench.colorTheme') == 'Islands Light' and hub.ajuste('standard', 'workbench.colorTheme') == 'Light Modern')
     passo('setup done', hub.opcoes().get('setup') is True)
@@ -334,6 +340,21 @@ def extras(painel):
     hub.gravar_ajuste('web', 'workbench.iconTheme', hub.ICON_THEMES['Berthline'])
     passo('icon pack per app', hub.ajuste('web', 'workbench.iconTheme') == 'berthline-file-icons'
           and hub.ajuste('java', 'workbench.iconTheme') == hub.ICON_THEMES['JetBrains'])
+
+    passo('standard shows its real icon pack', list(hub.pacotes_icones('standard')) == ['Berthline', 'Seti'], list(hub.pacotes_icones('standard')))
+    passo('java offers both packs', list(hub.pacotes_icones('java')) == ['Berthline', 'JetBrains'], list(hub.pacotes_icones('java')))
+    tela = hub.CLASSES['Personalizar']('standard')
+    marcados = [n for n, b in tela.icones.botoes.items() if b.isChecked()]
+    passo('standard marks the pack in use', marcados == ['Seti'], marcados)
+    hub.gravar_ajuste('standard', 'workbench.iconTheme', 'some-other-pack')
+    passo('unknown pack is named Other', list(hub.pacotes_icones('standard')) == ['Berthline', 'Other', 'Seti'], list(hub.pacotes_icones('standard')))
+
+    # Projects folder is set per app, in that app's screen.
+    aulas = TEMP / 'aulas-standard'
+    tela.mudar_pasta(str(aulas))
+    passo('project folder per app', hub.pasta_projetos('standard') == aulas and aulas.is_dir() and hub.pasta_projetos('web') == pasta)
+    tela.mudar_pasta('')
+    passo('empty project folder returns to the usual one', hub.pasta_projetos('standard') == hub.PROJETOS and tela.pasta.text() == hub.curto(hub.PROJETOS))
 
 
 QApplication.exec = lambda *a: (QTimer.singleShot(100, roteiro), QEventLoop().exec())[1]

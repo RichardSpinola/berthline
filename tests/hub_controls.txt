@@ -53,8 +53,10 @@ java-customize/Degrau:768M
 java-customize/QCheckBox:Animations
 java-customize/QCheckBox:Enable AI features
 java-customize/QCheckBox:Tree icons and watermark
+java-customize/QLineEdit:Folder where new Java projects are created
 java-customize/QPushButton:All settings…
 java-customize/QPushButton:Berthline
+java-customize/QPushButton:Browse
 java-customize/QPushButton:Choose
 java-customize/QPushButton:Customize
 java-customize/QPushButton:IntelliJ
@@ -74,6 +76,7 @@ java-learn/QPushButton:Learn
 java-learn/QPushButton:Plugins
 java-learn/QPushButton:Projects
 java-learn/QPushButton:‹ Cargo
+java-plugins/QCheckBox:Enable (neo) Git Graph
 java-plugins/QCheckBox:Enable Bookmarks
 java-plugins/QCheckBox:Enable EditorConfig
 java-plugins/QCheckBox:Enable Gradle for Java
@@ -132,12 +135,16 @@ setup/QPushButton:VS Code
 standard-customize/Combo:
 standard-customize/QCheckBox:Animations
 standard-customize/QCheckBox:Enable AI features
+standard-customize/QLineEdit:Folder where new Standard projects are created
 standard-customize/QPushButton:All settings…
+standard-customize/QPushButton:Berthline
+standard-customize/QPushButton:Browse
 standard-customize/QPushButton:Customize
 standard-customize/QPushButton:Keyboard shortcuts…
 standard-customize/QPushButton:Learn
 standard-customize/QPushButton:Plugins
 standard-customize/QPushButton:Projects
+standard-customize/QPushButton:Seti
 standard-customize/QPushButton:‹ Cargo
 standard-learn/QPushButton:Customize
 standard-learn/QPushButton:Learn
@@ -172,15 +179,17 @@ standard-projects/QPushButton:Open
 standard-projects/QPushButton:Plugins
 standard-projects/QPushButton:Projects
 standard-projects/QPushButton:‹ Cargo
-update/QPushButton:Download
 update/QPushButton:Later
 update/QPushButton:Skip this version
+update/QPushButton:Update now
 web-customize/Combo:
 web-customize/QCheckBox:Animations
 web-customize/QCheckBox:Enable AI features
 web-customize/QCheckBox:Tree icons and watermark
+web-customize/QLineEdit:Folder where new Web projects are created
 web-customize/QPushButton:All settings…
 web-customize/QPushButton:Berthline
+web-customize/QPushButton:Browse
 web-customize/QPushButton:Choose
 web-customize/QPushButton:Customize
 web-customize/QPushButton:JetBrains
@@ -198,6 +207,7 @@ web-learn/QPushButton:Projects
 web-learn/QPushButton:TypeScript handbook
 web-learn/QPushButton:web.dev
 web-learn/QPushButton:‹ Cargo
+web-plugins/QCheckBox:Enable (neo) Git Graph
 web-plugins/QCheckBox:Enable Bookmarks
 web-plugins/QCheckBox:Enable Color Highlight
 web-plugins/QCheckBox:Enable ESLint

@@ -679,6 +679,35 @@ def temas(app):
     return sorted(nomes, key=str.lower)
 
 
+def temas_icones(app):
+    """Icon themes the app has, as id -> label."""
+    saida = {}
+    pastas = list((DADOS / app / 'extensions').glob('*/package.json'))
+    pastas += list((RAIZ / 'editor/resources/app/extensions').glob('theme-*/package.json'))
+    for f in pastas:
+        try:
+            temas_ = json.loads(f.read_text(encoding='utf8')).get('contributes', {}).get('iconThemes', [])
+        except (OSError, ValueError):
+            continue
+        for t in temas_:
+            nome = t.get('label') or t.get('id', '')
+            if nome.startswith('%'):
+                nome = ler_json(f.with_name('package.nls.json')).get(nome.strip('%'), '')
+            saida[t.get('id')] = nome
+    return saida
+
+
+def pacotes_icones(app):
+    """Packs the Customize screen offers, as name -> id: ours when installed, and the one in use under its own name."""
+    instalados = temas_icones(app)
+    saida = {n: t for n, t in ICON_THEMES.items() if t in instalados}
+    for tema in (ajuste(app, 'workbench.iconTheme'), modelo(app).get('workbench.iconTheme')):
+        if tema and tema not in saida.values():
+            nome = re.sub(r'\s*\(.*\)$', '', instalados.get(tema) or '').strip() or 'Other'
+            saida[nome if nome not in saida else 'Other'] = tema
+    return saida
+
+
 def plugins(app):
     saida = {}
     for f in (DADOS / app / 'extensions').glob('*/package.json'):
@@ -1037,9 +1066,11 @@ def janela(inicial=None, lancar=None):
     QMenu::item { padding: 5px 24px 5px 12px; border-radius: 0; }
     QMenu::item:selected { background: #34383E; }
     QMenu::separator { height: 1px; background: #34383E; margin: 4px 8px; }
-    QCheckBox { spacing: 7px; }
-    QCheckBox::indicator { width: 12px; height: 12px; border: 1px solid #6A6F76; background: transparent; }
-    QCheckBox::indicator:checked { background: ACENTO; }
+    QCheckBox { spacing: 7px; color: #A9ADB3; }
+    QCheckBox:checked { color: #F0F0F0; }
+    QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #8F939A; border-radius: 2px; background: transparent; }
+    QCheckBox::indicator:hover { border-color: ACENTO; }
+    QCheckBox::indicator:checked { background: ACENTO; border-color: ACENTO; image: url(VISTO); }
     QCheckBox::indicator:disabled { border-color: #34383E; background: #34383E; }
     QSlider::groove:horizontal { height: 3px; background: #4A4F56; }
     QSlider::handle:horizontal { width: 9px; margin: -6px 0; border-radius: 0; background: #EDE6D3; }
@@ -1050,7 +1081,8 @@ def janela(inicial=None, lancar=None):
     AZUL = '#EDE6D3'
 
     def estilo(cor):
-        return ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('ACENTO', cor)
+        return (ESTILO.replace('SETA', (ASSETS / 'seta.svg').as_posix()).replace('VISTO', (ASSETS / 'visto.svg').as_posix())
+                .replace('ACENTO', cor))
 
     def com_vidro(janela_):
         """Deixa a janela translúcida com desfoque do sistema, quando existe."""
@@ -1129,8 +1161,8 @@ def janela(inicial=None, lancar=None):
         def rodar():
             try:
                 saida.append((trabalho(), None))
-            except (OSError, ValueError, KeyError) as e:
-                saida.append((None, str(e)))
+            except Exception as e:  # whatever it was, the window has to hear about it
+                saida.append((None, str(e) or type(e).__name__))
         threading.Thread(target=rodar, daemon=True).start()
         vigia = QTimer(QApplication.instance())
 
@@ -1973,12 +2005,7 @@ def janela(inicial=None, lancar=None):
                     self.teclas = segmento(nomes.values(), nomes[keymap_de(app)], self.mudar_keymap)
                     esq.addLayout(self.campo('Shortcuts', self.teclas))
                     esq.addWidget(rotulo('Changes at once, even with the editor open.', 'mudo'))
-                esq.addSpacing(8)
-                esq.addWidget(rotulo('File icons', 'secao'))
-                tema_ = ajuste(app, 'workbench.iconTheme')
-                pacote = next((n for n, t in ICON_THEMES.items() if t == tema_), 'JetBrains')
-                self.icones = segmento(ICON_THEMES, pacote, lambda n: gravar_ajuste(app, 'workbench.iconTheme', ICON_THEMES[n]))
-                esq.addLayout(self.campo('Pack', self.icones))
+                self.pacotes(esq)
                 esq.addSpacing(8)
                 esq.addWidget(rotulo('Wallpaper', 'secao'))
                 self.imagem = rotulo('', 'mudo')
@@ -2000,6 +2027,21 @@ def janela(inicial=None, lancar=None):
                 self.forca.valueChanged.connect(lambda n: gravar_fundo_forca(app, n / 100))
                 esq.addLayout(self.campo('Strength', self.forca))
                 self.ver_fundo()
+            else:
+                self.pacotes(esq)
+            dir_.addWidget(rotulo('Projects', 'secao'))
+            fila = QHBoxLayout()
+            fila.setSpacing(8)
+            self.pasta = QLineEdit(curto(pasta_projetos(app)))
+            self.pasta.setToolTip(f"Folder where new {info['title']} projects are created")
+            self.pasta.editingFinished.connect(lambda: self.mudar_pasta(self.pasta.text()))
+            procurar = QPushButton('Browse')
+            procurar.clicked.connect(self.procurar_pasta)
+            fila.addWidget(self.pasta, 1)
+            fila.addWidget(procurar)
+            dir_.addLayout(fila)
+            dir_.addWidget(rotulo('New projects start in this folder.', 'mudo'))
+            dir_.addSpacing(8)
             if info.get('memory'):
                 dir_.addWidget(rotulo('Memory limit', 'secao'))
                 fila = QHBoxLayout()
@@ -2054,6 +2096,34 @@ def janela(inicial=None, lancar=None):
             fila.addStretch(1)
             fila.addWidget(controle)
             return fila
+
+        def pacotes(self, layout):
+            """The icon pack in use is shown by its own name, even when it is not one of ours."""
+            layout.addSpacing(8)
+            layout.addWidget(rotulo('File icons', 'secao'))
+            opcoes_ = pacotes_icones(self.app)
+            tema_ = ajuste(self.app, 'workbench.iconTheme')
+            pacote = next((n for n, t in opcoes_.items() if t == tema_), None)
+            self.icones = segmento(opcoes_, pacote, lambda n: gravar_ajuste(self.app, 'workbench.iconTheme', opcoes_[n]))
+            layout.addLayout(self.campo('Pack', self.icones))
+
+        def mudar_pasta(self, texto):
+            """An empty field goes back to the usual folder."""
+            alvo = Path(texto.strip()).expanduser() if texto.strip() else PROJETOS
+            if not alvo.is_absolute():
+                alvo = CASA / alvo
+            try:
+                alvo.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                QMessageBox.warning(self, 'Project folder', f'Could not use this folder: {e}')
+                alvo = pasta_projetos(self.app)
+            gravar_opcao(self.app, 'folder', '' if alvo == PROJETOS else str(alvo))
+            self.pasta.setText(curto(alvo))
+
+        def procurar_pasta(self):
+            d = QFileDialog.getExistingDirectory(self, 'Project folder', str(pasta_projetos(self.app)))
+            if d:
+                self.mudar_pasta(d)
 
         def mudar_keymap(self, texto):
             if not aplicar_keymap(self.app, 'intellij' if texto == 'IntelliJ' else 'vscode'):
@@ -2432,14 +2502,14 @@ def janela(inicial=None, lancar=None):
             grade = QGridLayout()
             grade.setHorizontalSpacing(10)
             grade.setVerticalSpacing(7)
-            for coluna, texto in ((1, 'App'), (2, 'Shortcuts'), (4, 'Keymap'), (5, 'Project folder')):
+            for coluna, texto in ((1, 'App'), (2, 'Create shortcut'), (4, 'Keymap'), (5, 'Project folder')):
                 grade.addWidget(rotulo(texto, 'mudo'), 0, coluna)
             for i, (app, info) in enumerate(aplicativos().items(), 1):
                 grade.addWidget(icone(app, 28), i, 0)
                 grade.addWidget(rotulo(info['title'], 'forte'), i, 1)
                 mesa, menu = QCheckBox('Desktop'), QCheckBox('Menu')
-                mesa.setChecked(True)
-                menu.setChecked(True)
+                for c, onde in ((mesa, 'on the Desktop'), (menu, 'in the app menu')):
+                    c.setToolTip(f"Tick to create a {info['title']} shortcut {onde}")
                 grade.addWidget(mesa, i, 2)
                 grade.addWidget(menu, i, 3)
                 teclas = None
@@ -2455,13 +2525,13 @@ def janela(inicial=None, lancar=None):
                 self.linhas[app] = (mesa, menu, teclas, pasta)
             grade.setColumnStretch(5, 1)
             v.addLayout(grade)
+            v.addWidget(rotulo('A shortcut is created only where you tick a box. None are ticked to start with.', 'mudo'))
             v.addSpacing(10)
-            v.addWidget(rotulo('Hub shortcut', 'secao'))
+            v.addWidget(rotulo('Create Hub shortcut', 'secao'))
             fila = QHBoxLayout()
             fila.setSpacing(16)
             self.hub_mesa, self.hub_menu = QCheckBox('Desktop'), QCheckBox('App menu')
             for c in (self.hub_mesa, self.hub_menu):
-                c.setChecked(True)
                 fila.addWidget(c)
             fila.addStretch(1)
             v.addLayout(fila)
@@ -2926,7 +2996,7 @@ def janela(inicial=None, lancar=None):
             except OSError as e:
                 QMessageBox.warning(self, 'Desktop shortcut', f'Could not create the shortcut: {e}')
 
-    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade)
+    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade, Personalizar=Personalizar)
     aplicacao = QApplication(sys.argv)
     if forcar_xcb:
         del os.environ['QT_QPA_PLATFORM']
