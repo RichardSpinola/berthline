@@ -2,7 +2,7 @@
   "name": "berthline-hub",
   "displayName": "Berthline Hub",
   "description": "Back to Hub button, startup progress and file icons",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "publisher": "berthline",
   "engines": { "vscode": "^1.90.0" },
   "categories": ["Other"],

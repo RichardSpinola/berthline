@@ -105,14 +105,14 @@ The app icons follow the nautical theme. All of them share the same hull and cha
 ## Limitations
 
 - Early preview: expect rough edges.
-- No automatic updates yet. Download a new release to update.
+- Updates install from the Hub starting with 0.2.1: it downloads the release, checks its SHA-256, swaps the program and keeps your settings, projects and extensions. If the new version does not start, the old one comes back. From 0.2.0, download 0.2.1 by hand once.
 - A managed computer can block `.exe` files. Only its administrator can change that.
 
 ## Build from source
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install PySide6 pyinstaller
+.venv/bin/pip install PySide6 pyinstaller certifi
 .venv/bin/python build/build.py
 ```
 
@@ -120,7 +120,7 @@ The package lands in `dist/`. Tests live in `tests/` and run on GitHub Actions o
 
 ## AI use
 
-AI did most of the work here: Claude Opus 5.5 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. I chose the direction, tested it and decided what to keep.
+AI did most of the work here: Claude Opus 5.5 and, from 0.2.1, Claude Fable 5.2 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. I chose the direction, tested it and decided what to keep.
 
 ## License
 
