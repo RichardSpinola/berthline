@@ -852,13 +852,73 @@ def importar(app, origem):
         shutil.copytree(origem / 'snippets', usuario / 'snippets', dirs_exist_ok=True)
 
 
-def criar_projeto(app, modelo_, nome, local, git=False):
+SISTEMAS_JAVA = {
+    'None': 'Plain .java files in src. Run them with the Run button; nothing to download.',
+    'Maven': 'pom.xml and src/main/java. The usual choice in courses and companies; libraries come from Maven Central.',
+    'Gradle': 'build.gradle and src/main/java. Used by Android and many Spring projects; downloads Gradle the first time.',
+}
+POM = '''<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.example</groupId>
+    <artifactId>{nome}</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+</project>
+'''
+GRADLE = '''plugins {{
+    id 'application'
+}}
+
+repositories {{
+    mavenCentral()
+}}
+
+java {{
+    toolchain {{
+        languageVersion = JavaLanguageVersion.of(21)
+    }}
+}}
+
+application {{
+    mainClass = 'Main'
+}}
+'''
+
+
+def montar_java(raiz, sistema, nome):
+    """Turns a plain src/ project into Maven or Gradle layout; the Java extension imports either."""
+    if sistema not in ('Maven', 'Gradle'):
+        return
+    destino = raiz / 'src/main/java'
+    destino.mkdir(parents=True, exist_ok=True)
+    for f in list((raiz / 'src').glob('*.java')):
+        f.replace(destino / f.name)
+    artefato = re.sub(r'[^a-z0-9-]+', '-', nome.lower()).strip('-') or 'app'
+    if sistema == 'Maven':
+        (raiz / 'pom.xml').write_text(POM.replace('{nome}', artefato), encoding='utf8')
+        ignorar = ['target/']
+    else:
+        (raiz / 'build.gradle').write_text(GRADLE.format(), encoding='utf8')
+        (raiz / 'settings.gradle').write_text(f"rootProject.name = '{artefato}'\n", encoding='utf8')
+        ignorar = ['build/', '.gradle/']
+    arquivo = raiz / '.gitignore'
+    linhas_ = arquivo.read_text(encoding='utf8').splitlines() if arquivo.exists() else []
+    arquivo.write_text('\n'.join([*linhas_, *[i for i in ignorar if i not in linhas_]]) + '\n', encoding='utf8')
+
+
+def criar_projeto(app, modelo_, nome, local, git=False, sistema=None):
     raiz = Path(local) / nome
     origem = PERFIS / app / 'templates' / modelo_
     if origem.is_dir() and modelo_ != 'Empty Project':
         shutil.copytree(origem, raiz)
     else:
         raiz.mkdir(parents=True)
+    montar_java(raiz, sistema, nome)
     ignorar = raiz / '.gitignore'
     if git or ignorar.exists():
         # The editor keeps its own state in .vscode; it is not part of the project.
@@ -1076,7 +1136,7 @@ def janela(inicial=None, lancar=None):
     forcar_xcb = not JANELAS and os.environ.get('DISPLAY') and 'QT_QPA_PLATFORM' not in os.environ
     if forcar_xcb:
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
-    from PySide6.QtCore import QEvent, QObject, QStandardPaths, Property, QEasingCurve, QProcess, QProcessEnvironment, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
+    from PySide6.QtCore import QEvent, QObject, QRect, QStandardPaths, Property, QEasingCurve, QProcess, QProcessEnvironment, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, QUrl
     from PySide6.QtGui import (
         QColor, QDesktopServices, QFont, QFontDatabase, QGuiApplication, QIcon, QImage, QImageReader, QPainter, QPainterPath, QPen,
         QPixmap,
@@ -1146,8 +1206,8 @@ def janela(inicial=None, lancar=None):
     QListWidget#grade::item:selected { background: #1F2225; color: #FFFFFF; border: 1px solid ACENTO; }
     QProgressBar { background: #34383E; border: none; }
     QLabel#tituloJanela { color: #A9ACB2; font-size: 12px; }
-    QToolButton#botaoJanela, QToolButton#fecharJanela { border: none; border-radius: 0; padding: 0; }
-    QToolButton#botaoJanela:hover { background: rgba(255, 255, 255, 18); }
+    QToolButton#botaoJanela, QToolButton#fecharJanela { border: none; border-radius: 3px; padding: 0; }
+    QToolButton#botaoJanela:hover { background: rgba(255, 255, 255, 22); }
     QToolButton#fecharJanela:hover { background: #C8102E; }
     Dialogo { border: 1px solid #3A3E44; }
     QProgressBar::chunk { background: ACENTO; }
@@ -1209,6 +1269,8 @@ def janela(inicial=None, lancar=None):
             if JANELAS and self.barra_ and not getattr(self, 'moldada_', False):
                 self.moldada_ = True
                 moldura_windows(int(self.winId()))
+            if VIDRO[0] and self.barra_:
+                aplicar_vidro(int(self.winId()))
 
         def nativeEvent(self, tipo, mensagem):
             if JANELAS and self.barra_ and tipo == b'windows_generic_MSG':
@@ -1223,13 +1285,13 @@ def janela(inicial=None, lancar=None):
                 self.barra_.estado_mudou()
 
     def desenho_botao(tipo, cor):
-        figura = QPixmap(QSize(46, 32) * 2)
+        figura = QPixmap(QSize(28, 28) * 2)
         figura.setDevicePixelRatio(2)
         figura.fill(Qt.transparent)
         p = QPainter(figura)
         p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(QPen(QColor(cor), 1.1))
-        x, y = 18, 11
+        p.setPen(QPen(QColor(cor), 1.0))
+        x, y = 9, 9
         if tipo == 'min':
             p.drawLine(QPointF(x, y + 5), QPointF(x + 10, y + 5))
         elif tipo == 'max':
@@ -1254,8 +1316,8 @@ def janela(inicial=None, lancar=None):
             self.redimensiona = redimensiona
             self.setFixedHeight(44 if conteudo else 34)
             h = QHBoxLayout(self)
-            h.setContentsMargins(12 if not conteudo else 0, 0, 0, 0)
-            h.setSpacing(9)
+            h.setContentsMargins(12 if not conteudo else 0, 0, 8, 0)
+            h.setSpacing(4)
             if conteudo:
                 h.addWidget(conteudo, 1)
             else:
@@ -1273,10 +1335,10 @@ def janela(inicial=None, lancar=None):
                 b.setObjectName('fecharJanela' if tipo == 'fechar' else 'botaoJanela')
                 b.setAccessibleName(dica)
                 b.setToolTip(dica)
-                b.setFixedSize(46, self.height() if not conteudo else 34)
-                b.setIconSize(QSize(46, 32))
+                b.setFixedSize(28, 28)
+                b.setIconSize(QSize(28, 28))
                 b.setIcon(desenho_botao(tipo, '#C9CCD1'))
-                h.addWidget(b, 0, Qt.AlignTop)
+                h.addWidget(b, 0, Qt.AlignVCenter)
                 self.botoes[tipo] = b
             if 'min' in self.botoes:
                 self.botoes['min'].clicked.connect(janela_.showMinimized)
@@ -1304,8 +1366,17 @@ def janela(inicial=None, lancar=None):
             return True
 
         def mousePressEvent(self, e):
+            self.inicio = None
             if e.button() == Qt.LeftButton and not JANELAS and self.arrasta(e.position().toPoint()):
-                self.janela_.windowHandle().startSystemMove()
+                if not self.janela_.windowHandle().startSystemMove():
+                    self.inicio = e.globalPosition().toPoint() - self.janela_.frameGeometry().topLeft()
+
+        def mouseMoveEvent(self, e):
+            if getattr(self, 'inicio', None) is not None and not self.janela_.isMaximized():
+                self.janela_.move(e.globalPosition().toPoint() - self.inicio)
+
+        def mouseReleaseEvent(self, _):
+            self.inicio = None
 
         def mouseDoubleClickEvent(self, e):
             if e.button() == Qt.LeftButton and self.redimensiona and not JANELAS:
@@ -1325,8 +1396,32 @@ def janela(inicial=None, lancar=None):
             self.setCursor(Qt.SizeFDiagCursor if canto else Qt.SizeBDiagCursor if outro else self.CURSORES[lados])
 
         def mousePressEvent(self, e):
-            if e.button() == Qt.LeftButton and not self.window().isMaximized():
-                self.window().windowHandle().startSystemResize(self.lados)
+            self.inicio = None
+            if e.button() != Qt.LeftButton or self.window().isMaximized():
+                return
+            if not self.window().windowHandle().startSystemResize(self.lados):
+                # the window manager said no: follow the mouse here instead
+                self.inicio = (e.globalPosition().toPoint(), self.window().geometry())
+
+        def mouseMoveEvent(self, e):
+            if not getattr(self, 'inicio', None):
+                return
+            origem, caixa = self.inicio
+            d = e.globalPosition().toPoint() - origem
+            nova = QRect(caixa)
+            minimo = self.window().minimumSizeHint().expandedTo(QSize(320, 240))
+            if self.lados & Qt.LeftEdge:
+                nova.setLeft(min(caixa.left() + d.x(), caixa.right() - minimo.width()))
+            if self.lados & Qt.RightEdge:
+                nova.setRight(max(caixa.right() + d.x(), caixa.left() + minimo.width()))
+            if self.lados & Qt.TopEdge:
+                nova.setTop(min(caixa.top() + d.y(), caixa.bottom() - minimo.height()))
+            if self.lados & Qt.BottomEdge:
+                nova.setBottom(max(caixa.bottom() + d.y(), caixa.top() + minimo.height()))
+            self.window().setGeometry(nova)
+
+        def mouseReleaseEvent(self, _):
+            self.inicio = None
 
     class Bordas(QObject):
         def __init__(self, janela_):
@@ -1351,6 +1446,7 @@ def janela(inicial=None, lancar=None):
     def integrar(janela_, redimensiona=False, conteudo=None, icone_=None):
         """Puts the title bar on top of the window and returns the widget the window builds into."""
         janela_.redimensiona_ = redimensiona
+        com_vidro(janela_)
         if not JANELAS:
             janela_.setWindowFlag(Qt.FramelessWindowHint, True)
         externo = QVBoxLayout(janela_)
@@ -1380,7 +1476,10 @@ def janela(inicial=None, lancar=None):
                 p.drawRect(self.rect().adjusted(0, 0, -1, -1))
 
     class Dialogo(Moldura, QDialog):
-        """Hub dialog with the same title bar as the windows."""
+        """Hub dialog with the same title bar as the windows, and the same glass."""
+
+        def paintEvent(self, evento):
+            Raiz.paintEvent(self, evento)
 
     class Troca(QStackedWidget):
         """Troca de página com passagem suave."""
@@ -1835,13 +1934,19 @@ def janela(inicial=None, lancar=None):
         rotulo_.setStyleSheet(f'color:{ALERTA};' if erro else '')
         rotulo_.setVisible(bool(texto))
 
+    def conteudo_modelo(app, nome):
+        """What a template puts in the folder, said in one line."""
+        origem = PERFIS / app / 'templates' / nome
+        arquivos = sorted(f.name for f in origem.rglob('*') if f.is_file() and not f.name.startswith('.')) if origem.is_dir() else []
+        return ', '.join(arquivos[:3]) + (' …' if len(arquivos) > 3 else '') if arquivos else 'an empty folder'
+
     class NovoProjeto(Dialogo):
         """New project the way JetBrains IDEs lay it out: kinds on the left, a short form on the right."""
 
         def __init__(self, pai, app):
             super().__init__(pai)
             self.setWindowTitle('New Project')
-            self.setFixedSize(620, 400)
+            self.setFixedSize(660, 430)
             self.app = app
             self.projeto = None
             self.modelos_ = aplicativos()[app].get('templates', [])
@@ -1868,10 +1973,15 @@ def janela(inicial=None, lancar=None):
             self.git = QCheckBox('Create Git repository')
             self.git.setEnabled(bool(shutil.which('git')))
             self.git.setToolTip('' if shutil.which('git') else 'Git was not found on this computer.')
-            self.inicio = segmento(self.modelos_, self.modelos_[0], lambda _: None) if len(self.modelos_) > 1 else None
+            self.sobre_inicio = nota()
+            self.inicio = segmento(self.modelos_, self.modelos_[0], self.descrever) if len(self.modelos_) > 1 else None
             self.exemplo = QCheckBox('Add sample code') if len(self.modelos_) == 1 else None
+            self.sobre_exemplo = nota()
             if self.exemplo:
                 self.exemplo.setChecked(True)
+                self.exemplo.toggled.connect(lambda _: self.descrever())
+            self.sistema = segmento(SISTEMAS_JAVA, 'None', self.descrever) if app == 'java' else None
+            self.sobre_sistema = nota()
             self.erro = nota()
             self.criar_ = QPushButton('Create')
             self.criar_.setObjectName('azul')
@@ -1891,14 +2001,23 @@ def janela(inicial=None, lancar=None):
             grade.addWidget(self.existe, 3, 1)
             grade.addWidget(self.git, 4, 1)
             self.extras = []
+            if self.sistema:
+                rot = rotulo('Build system')
+                grade.addWidget(rot, 5, 0)
+                grade.addWidget(self.sistema, 5, 1, Qt.AlignLeft)
+                grade.addWidget(self.sobre_sistema, 6, 1)
+                self.extras += [rot, self.sistema, self.sobre_sistema]
             if self.inicio:
                 rot = rotulo('Starter')
-                grade.addWidget(rot, 5, 0)
-                grade.addWidget(self.inicio, 5, 1, Qt.AlignLeft)
-                self.extras += [rot, self.inicio]
+                grade.addWidget(rot, 7, 0)
+                grade.addWidget(self.inicio, 7, 1, Qt.AlignLeft)
+                grade.addWidget(self.sobre_inicio, 8, 1)
+                self.extras += [rot, self.inicio, self.sobre_inicio]
             if self.exemplo:
-                grade.addWidget(self.exemplo, 5, 1)
-                self.extras.append(self.exemplo)
+                grade.addWidget(self.exemplo, 7, 1)
+                grade.addWidget(self.sobre_exemplo, 8, 1)
+                self.extras += [self.exemplo, self.sobre_exemplo]
+            grade.setColumnMinimumWidth(0, 90)
             direita = QVBoxLayout()
             direita.setContentsMargins(20, 4, 0, 0)
             direita.setSpacing(0)
@@ -1927,6 +2046,18 @@ def janela(inicial=None, lancar=None):
             self.local.textChanged.connect(self.avaliar)
             self.avaliar()
 
+        def escolhido(self, seg):
+            return next(t for t, b in seg.botoes.items() if b.isChecked()) if seg else None
+
+        def descrever(self, *_):
+            if self.sistema:
+                avisar(self.sobre_sistema, SISTEMAS_JAVA[self.escolhido(self.sistema)])
+            if self.inicio:
+                avisar(self.sobre_inicio, f'Starts with {conteudo_modelo(self.app, self.escolhido(self.inicio))}.')
+            if self.exemplo:
+                avisar(self.sobre_exemplo, f'Adds {conteudo_modelo(self.app, self.modelos_[0])} that prints a greeting.'
+                       if self.exemplo.isChecked() else 'Starts with an empty src folder.')
+
         def modelo(self):
             if self.tipos.currentItem().text() == 'Empty Project':
                 return 'Empty Project'
@@ -1937,6 +2068,8 @@ def janela(inicial=None, lancar=None):
         def avaliar(self, *_):
             for w in self.extras:
                 w.setVisible(self.tipos.currentItem().text() != 'Empty Project')
+            if self.tipos.currentItem().text() != 'Empty Project':
+                self.descrever()
             nome, local = self.nome.text().strip(), self.local.text().strip()
             valido = bool(re.fullmatch(r'[\w .-]+', nome)) and nome not in ('.', '..')
             alvo = Path(local).expanduser() / nome
@@ -1958,7 +2091,8 @@ def janela(inicial=None, lancar=None):
                 return
             try:
                 self.projeto = criar_projeto(self.app, self.modelo(), self.nome.text().strip(),
-                                             Path(self.local.text().strip()).expanduser(), self.git.isChecked())
+                                             Path(self.local.text().strip()).expanduser(), self.git.isChecked(),
+                                             None if self.tipos.currentItem().text() == 'Empty Project' else self.escolhido(self.sistema))
                 self.accept()
             except (OSError, subprocess.CalledProcessError) as e:
                 avisar(self.erro, f'Could not create the project: {str(e)[:70]}', True)
@@ -3628,7 +3762,7 @@ def janela(inicial=None, lancar=None):
             except OSError as e:
                 QMessageBox.warning(self, 'Desktop shortcut', f'Could not create the shortcut: {e}')
 
-    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade, Personalizar=Personalizar,
+    CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade, Personalizar=Personalizar, Boasvindas=Boasvindas,
                    endereco_git=endereco_git, erro_git=erro_git)
     aplicacao = QApplication(sys.argv)
     if forcar_xcb:

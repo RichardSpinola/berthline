@@ -250,6 +250,12 @@ def extras(painel):
           and hub.CLASSES['endereco_git']('git@github.com:a/b.git') and not hub.CLASSES['endereco_git']('hello there'))
     passo('git errors in plain words', 'sign-in' in hub.CLASSES['erro_git']('fatal: could not read Username for x')
           and 'No repository' in hub.CLASSES['erro_git']("remote: Repository not found."))
+    maven = hub.criar_projeto('java', 'Java', 'com-maven', TEMP, sistema='Maven')
+    passo('maven layout', (maven / 'pom.xml').exists() and (maven / 'src/main/java/Main.java').exists()
+          and 'target/' in (maven / '.gitignore').read_text())
+    gradle = hub.criar_projeto('java', 'Empty Project', 'com-gradle', TEMP, sistema='Gradle')
+    passo('gradle layout', (gradle / 'build.gradle').exists() and (gradle / 'settings.gradle').read_text() == "rootProject.name = 'com-gradle'\n"
+          and (gradle / 'src/main/java').is_dir())
     teclas = hub.pasta_usuario('web') / 'keybindings.json'
     teclas.parent.mkdir(parents=True, exist_ok=True)
     teclas.write_text('[{"key": "mine", "command": "x"}]')
