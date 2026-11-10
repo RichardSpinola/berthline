@@ -277,13 +277,14 @@ def encerrar(raiz):
 
 def pacote_real(pacote):
     """Updates a copy of the real package with the real program, then makes an update fail."""
-    base = TEMP / 'real'
+    base = pacote.parent / '.update-test'  # beside the package: the temporary folder may be memory, and this needs room
+    shutil.rmtree(base, ignore_errors=True)
     raiz = base / pacote.name
     print('copying the package', flush=True)
     shutil.copytree(pacote, raiz, symlinks=True)
     atual = json.loads((raiz / 'brand.json').read_text(encoding='utf8'))
     casa = base / 'home'
-    casa.mkdir()
+    casa.mkdir(parents=True)
     amb = {**os.environ, 'HOME': str(casa), 'USERPROFILE': str(casa)}
     amb.pop('SUITE_ROOT')
     subprocess.run([str(raiz / troca.PROGRAMA), '--prepare'], env=amb, check=True, timeout=120)
@@ -339,6 +340,7 @@ def pacote_real(pacote):
         passo('real: own extension still there', (raiz / 'data/java/extensions/me.mine-2.0.0/package.json').exists())
     finally:
         encerrar(raiz)
+        shutil.rmtree(base, ignore_errors=True)
 
 
 if __name__ == '__main__':
