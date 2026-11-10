@@ -91,5 +91,27 @@
             "path": "bash",
             "icon": "terminal-bash"
         }
-    }
+    },
+    "editor.fontSize": 14,
+    "terminal.integrated.fontSize": 14,
+    "workbench.activityBar.compact": false,
+    "window.menuBarVisibility": "classic",
+    "window.commandCenter": true,
+    "workbench.layoutControl.enabled": true,
+    "workbench.navigationControl.enabled": true,
+    "workbench.editor.enablePreview": true,
+    "workbench.tree.indent": 8,
+    "explorer.compactFolders": true,
+    "editor.minimap.enabled": true,
+    "editor.showFoldingControls": "mouseover",
+    "editor.foldingImportsByDefault": false,
+    "editor.guides.highlightActiveIndentation": true,
+    "workbench.editor.decorations.badges": true,
+    "workbench.editor.decorations.colors": true,
+    "editor.cursorBlinking": "blink",
+    "editor.hover.delay": 300,
+    "terminal.integrated.cursorStyle": "block",
+    "terminal.integrated.tabs.hideCondition": "never",
+    "scm.defaultViewMode": "list",
+    "editor.stickyScroll.enabled": true
 }

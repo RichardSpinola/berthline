@@ -10,6 +10,7 @@ const { linhaDoElemento } = require('./html');
 const JANELAS = process.platform === 'win32';
 const IGNORAR = /[\\/](node_modules|\.git)[\\/]/;
 let estado = null; // { painel, servidor, raiz, alvo, inspecionando, ouvintes }
+let barra = null; // status bar item: Preview, or the address while it runs
 const devs = new Map(); // raiz -> { url, filho, terminal }
 
 function pastaDoProjeto(arquivo) {
@@ -71,9 +72,11 @@ async function abrir(context, { arquivo, focar = false } = {}) {
             if (atual !== estado) return;
             atual.servidor = await iniciar({ alvo: atual.alvo });
             postar({ type: 'load', url: atual.servidor.url, dev: atual.alvo });
+            atualizarBarra();
         } else {
             atual.servidor = await iniciar({ raiz });
             postar({ type: 'load', url: atual.servidor.url + caminhoWeb(raiz, arquivo).slice(1) });
+            atualizarBarra();
             vigiar(atual);
         }
     } catch (e) {
@@ -81,6 +84,24 @@ async function abrir(context, { arquivo, focar = false } = {}) {
     }
     if (atual !== estado) atual.servidor?.fechar();
     else atual.ouvintes.push(vscode.window.onDidChangeTextEditorSelection(e => aoMoverCursor(atual, e)));
+}
+
+/** Status bar: 'Preview' to start it on web files, the address while it runs. */
+function atualizarBarra() {
+    if (!barra) return;
+    if (estado?.servidor) {
+        const porta = new URL(estado.servidor.url).port;
+        barra.text = `$(radio-tower) Preview :${porta}`;
+        barra.tooltip = estado.alvo ? `Showing ${estado.alvo} (npm run dev). Click to show the preview.` : `Serving ${estado.raiz} at ${estado.servidor.url}. Click to show the preview.`;
+        return barra.show();
+    }
+    const doc = vscode.window.activeTextEditor?.document;
+    const web = doc && ['html', 'css', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact'].includes(doc.languageId);
+    const raiz = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    barra.text = '$(open-preview) Preview';
+    barra.tooltip = 'Open the live preview beside the editor (Ctrl+K V)';
+    if (web || (raiz && fs.existsSync(path.join(raiz, 'index.html')))) barra.show();
+    else barra.hide();
 }
 
 function postar(msg) {
@@ -167,6 +188,7 @@ function fechar(atual) {
     atual.servidor?.fechar();
     if (estado === atual) {
         estado = null;
+        atualizarBarra();
         vscode.commands.executeCommand('setContext', 'web.previewOpen', false);
         vscode.commands.executeCommand('setContext', 'web.inspecting', false);
     }
@@ -401,7 +423,11 @@ if (st.inspecionar) vscode.postMessage({ type: 'inspect', on: true });
 let contexto;
 function ativar(context) {
     contexto = context;
-    context.subscriptions.push({ dispose: pararTudo });
+    barra = vscode.window.createStatusBarItem('web.preview', vscode.StatusBarAlignment.Right, 101);
+    barra.name = 'Preview';
+    barra.command = 'web.preview';
+    context.subscriptions.push(barra, { dispose: pararTudo }, vscode.window.onDidChangeActiveTextEditor(atualizarBarra));
+    atualizarBarra();
     vscode.window.registerWebviewPanelSerializer?.('berthline.preview', {
         // A preview left open last time comes back with a fresh server
         async deserializeWebviewPanel(painel) {

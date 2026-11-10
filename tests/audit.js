@@ -411,7 +411,8 @@ async function exportar(h, pasta) {
 async function botoes(h) {
     await dormir(1000);
     const canto = await h.ev(`[...document.querySelectorAll('.part.activitybar .action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')||'')`);
-    conferir('one settings button', !canto.some(b => b.startsWith('Manage')), canto.join(' | '));
+    // Java hides the corner gear (the title bar has one); Web keeps the VS Code layout
+    if (APP === 'java') conferir('one settings button', !canto.some(b => b.startsWith('Manage')), canto.join(' | '));
     await rpc('executar', { comando: 'workbench.view.explorer' });
     await dormir(600);
     await h.foto(`audit-${APP}-buttons`);

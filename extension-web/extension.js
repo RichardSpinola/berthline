@@ -64,7 +64,7 @@ let contexto;
 
 function activate(context) {
     contexto = context;
-    ativarComum(context, { prefixo: 'web' });
+    ativarComum(context, { prefixo: 'web', estilo: 'vscode' });
     context.subscriptions.push(
         vscode.commands.registerCommand('web.run', () => { const doc = arquivoWeb(); return doc && rodarWeb(doc); }),
         vscode.commands.registerCommand('web.debug', () => { const doc = arquivoWeb(); return doc && depurarWeb(doc); }),

@@ -84,14 +84,6 @@
           "command": "web.stop",
           "group": "navigation@-1",
           "when": "inDebugMode || web.emExecucao"
-        },
-        {
-          "command": "web.search",
-          "group": "navigation@90"
-        },
-        {
-          "command": "web.settings",
-          "group": "navigation@91"
         }
       ],
       "editor/context": [

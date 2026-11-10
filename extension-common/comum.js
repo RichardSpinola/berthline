@@ -294,23 +294,30 @@ function umaEngrenagem(context) {
 function ativarComum(context, opcoes) {
     contexto = context;
     prefixo = opcoes.prefixo;
+    // The Web profile keeps the plain VS Code look: only the background and watermark, none of the IntelliJ touches
+    const intellij = opcoes.estilo !== 'vscode';
     fundoEditor(context).catch(() => {});
-    estiloPausa(context).catch(() => {});
-    if (process.env.SUITE_ANIMATIONS !== '0') estiloAnimacao(context).catch(() => {});
     marcaDagua(context).catch(() => {});
-    umaEngrenagem(context).catch(() => {});
-    conferirSaude(context, opcoes.saudavel ?? 'true');
+    if (intellij) {
+        estiloPausa(context).catch(() => {});
+        if (process.env.SUITE_ANIMATIONS !== '0') estiloAnimacao(context).catch(() => {});
+        umaEngrenagem(context).catch(() => {});
+        conferirSaude(context, opcoes.saudavel ?? 'true');
+    }
     comandoPendente();
     fecharNovidades();
     pintarBreakpoints();
 
-    const rodape = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
-    rodape.command = 'workbench.action.quickOpen';
-    caminhoRodape(rodape);
+    if (intellij) {
+        const rodape = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1000);
+        rodape.command = 'workbench.action.quickOpen';
+        caminhoRodape(rodape);
+        context.subscriptions.push(
+            rodape,
+            vscode.window.onDidChangeActiveTextEditor(() => caminhoRodape(rodape)),
+            vscode.workspace.onDidChangeTextDocument(evento => aoDigitar(context, evento)));
+    }
     context.subscriptions.push(
-        rodape,
-        vscode.window.onDidChangeActiveTextEditor(() => caminhoRodape(rodape)),
-        vscode.workspace.onDidChangeTextDocument(evento => aoDigitar(context, evento)),
         vscode.debug.onDidChangeBreakpoints(pintarBreakpoints),
         vscode.window.onDidChangeVisibleTextEditors(pintarBreakpoints),
         vscode.commands.registerCommand(chave('stop'), pararExecucao),
