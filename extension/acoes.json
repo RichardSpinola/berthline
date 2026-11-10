@@ -210,7 +210,7 @@
   "t": "git.stage"
  },
  "ij.gitGraph": {
-  "t": "workbench.view.scm"
+  "t": "neo-git-graph.view"
  },
  "ij.newInterface": {
   "t": "java.view.package.newJavaInterface"
