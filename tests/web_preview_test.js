@@ -189,6 +189,45 @@ const PAGINA = `<!doctype html>
     });
     await p.fechar();
 
+    // DevTools goes through the preview server: only from its own origin, only to frames it serves
+    let sv;
+    const depura = http.createServer((req, res) => {
+        if (req.url === '/json/list') {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            return res.end(JSON.stringify([{ id: 'AB12', type: 'iframe', url: `${sv.url}index.html` }, { id: 'CD34', type: 'page', url: 'vscode-file://workbench' }]));
+        }
+        res.writeHead(200, { 'content-type': 'text/html' });
+        res.end(`front end ${req.url}`);
+    });
+    const pedidos = [];
+    depura.on('upgrade', (req, socket) => {
+        pedidos.push({ url: req.url, origin: req.headers.origin });
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+        socket.on('end', () => socket.end());
+    });
+    await new Promise(f => depura.listen(0, '127.0.0.1', f));
+    sv = await iniciar({ raiz, depuracao: () => depura.address().port });
+    const ws = (id, origem) => new Promise(ok => {
+        const c = net.connect(sv.porta, '127.0.0.1', () => c.write(`GET /__berthline/devtools-ws/page/${id} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n${origem ? `Origin: ${origem}\r\n` : ''}\r\n`));
+        let b = '';
+        c.on('data', d => { b += d; if (b.includes('\r\n\r\n')) { c.destroy(); ok(b.split('\r\n')[0]); } });
+        c.on('error', () => ok('error'));
+    });
+    await passo('serves the DevTools front end from the debugging port', async () => {
+        assert.strictEqual((await pegar(sv.url + '__berthline/devtools/inspector.html?ws=x')).corpo, 'front end /devtools/inspector.html?ws=x');
+    });
+    await passo('DevTools socket only from its own origin, only to the preview frame', async () => {
+        const meu = `http://127.0.0.1:${sv.porta}`;
+        assert.match(await ws('AB12', meu), / 101 /);
+        assert.deepStrictEqual(pedidos.at(-1), { url: '/devtools/page/AB12', origin: undefined }, 'no Origin reaches the editor');
+        assert.match(await ws('AB12', 'https://evil.example'), / 403 /);
+        assert.match(await ws('AB12', null), / 403 /);
+        assert.match(await ws('CD34', meu), / 403 /, 'the editor window itself is off limits');
+        assert.strictEqual(pedidos.length, 1);
+    });
+    await sv.fechar();
+    await new Promise(f => { depura.close(f); depura.closeAllConnections(); });
+
     await passo('eight blocks, each with markup and CSS', () => {
         assert.strictEqual(BLOCOS.length, 8);
         for (const b of BLOCOS) {

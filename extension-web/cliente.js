@@ -100,6 +100,45 @@
         } else if (m.type === 'reload') location.reload();
     });
     addEventListener('scroll', () => { if (!inspecionando) caixa.style.display = 'none'; }, true);
+    // Console errors and warnings reach the editor (Output > Preview), so they are seen without DevTools
+    const texto = v => { try { return typeof v === 'string' ? v : v instanceof Error ? v.stack || v.message : JSON.stringify(v); } catch { return String(v); } };
+    let enviados = 0;
+    const registrar = (nivel, partes) => { if (enviados++ < 200) avisar({ type: 'log', nivel, texto: partes.map(texto).join(' ') }); };
+    for (const nivel of ['error', 'warn']) {
+        const original = console[nivel];
+        console[nivel] = (...a) => { registrar(nivel, a); return original.apply(console, a); };
+    }
+    addEventListener('error', e => { if (e.message) registrar('error', [`${e.message} (${e.filename || location.pathname}:${e.lineno})`]); });
+    addEventListener('unhandledrejection', e => registrar('error', ['Unhandled rejection:', e.reason]));
+
+    // Right-click: Inspect opens the editor's DevTools on this page; Reload reloads it
+    let menu = null;
+    const fecharMenu = () => { menu?.remove(); menu = null; };
+    addEventListener('contextmenu', e => {
+        if (!pai || inspecionando) return;
+        e.preventDefault();
+        fecharMenu();
+        menu = document.createElement('div');
+        menu.setAttribute('style', 'position:fixed;z-index:2147483647;min-width:160px;padding:4px 0;background:#252526;color:#ccc;' +
+            'border:1px solid #454545;border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.36);font:13px system-ui,sans-serif');
+        for (const [rotulo, acao] of [['Inspect', () => avisar({ type: 'devtools' })], ['Reload', () => location.reload()]]) {
+            const item = document.createElement('div');
+            item.textContent = rotulo;
+            item.setAttribute('style', 'padding:4px 24px;cursor:default;white-space:nowrap');
+            item.onmouseenter = () => { item.style.background = '#04395e'; item.style.color = '#fff'; };
+            item.onmouseleave = () => { item.style.background = ''; item.style.color = ''; };
+            item.onclick = ev => { ev.stopPropagation(); fecharMenu(); acao(); };
+            menu.appendChild(item);
+        }
+        document.documentElement.appendChild(menu);
+        const r = menu.getBoundingClientRect();
+        menu.style.left = `${Math.min(e.clientX, innerWidth - r.width - 4)}px`;
+        menu.style.top = `${Math.min(e.clientY, innerHeight - r.height - 4)}px`;
+    }, true);
+    addEventListener('mousedown', e => { if (menu && !menu.contains(e.target)) fecharMenu(); }, true);
+    addEventListener('keydown', e => { if (e.key === 'Escape') fecharMenu(); }, true);
+    addEventListener('blur', fecharMenu);
+
     const pronto = () => avisar({ type: 'ready', url: location.href, title: document.title });
     document.readyState === 'loading' ? addEventListener('DOMContentLoaded', pronto) : pronto();
     addEventListener('hashchange', pronto);

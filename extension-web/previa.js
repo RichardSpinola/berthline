@@ -10,6 +10,7 @@ const { linhaDoElemento } = require('./html');
 const JANELAS = process.platform === 'win32';
 const IGNORAR = /[\\/](node_modules|\.git)[\\/]/;
 let estado = null; // { painel, servidor, raiz, alvo, inspecionando, ouvintes }
+let saida = null; // Output > Preview: the page's console errors and warnings
 let barra = null; // status bar item: Preview, or the address while it runs
 const devs = new Map(); // raiz -> { url, filho, terminal }
 
@@ -70,11 +71,11 @@ async function abrir(context, { arquivo, focar = false } = {}) {
             postar({ type: 'status', text: 'Starting npm run dev…' });
             atual.alvo = await rodarDev(raiz);
             if (atual !== estado) return;
-            atual.servidor = await iniciar({ alvo: atual.alvo });
+            atual.servidor = await iniciar({ alvo: atual.alvo, depuracao: portaDoEditor });
             postar({ type: 'load', url: atual.servidor.url, dev: atual.alvo });
             atualizarBarra();
         } else {
-            atual.servidor = await iniciar({ raiz });
+            atual.servidor = await iniciar({ raiz, depuracao: portaDoEditor });
             postar({ type: 'load', url: atual.servidor.url + caminhoWeb(raiz, arquivo).slice(1) });
             atualizarBarra();
             vigiar(atual);
@@ -155,6 +156,23 @@ async function aoReceber(atual, m) {
         const url = atual.alvo && m.url.startsWith(atual.servidor?.url) ? new URL(m.url.slice(atual.servidor.url.length), atual.alvo).href : m.url;
         return vscode.env.openExternal(vscode.Uri.parse(url));
     }
+    if (m.type === 'devtools') {
+        // Real Chromium DevTools for the page, docked under it: the editor's debugging port serves the DevTools front end.
+        // Without that port (Hub option off), the editor's own DevTools window is the fallback.
+        const url = await devtoolsDaPagina(atual, m.url);
+        if (url) return postar({ type: 'devtools', url });
+        atual.painel.reveal(undefined, false);
+        return vscode.commands.executeCommand('workbench.action.webview.openDeveloperTools');
+    }
+    if (m.type === 'log') {
+        saida ??= vscode.window.createOutputChannel('Preview', { log: true });
+        return saida[m.nivel === 'warn' ? 'warn' : 'error'](String(m.texto).slice(0, 2000));
+    }
+    if (m.type === 'showLog') {
+        saida ??= vscode.window.createOutputChannel('Preview', { log: true });
+        return saida.show(true);
+    }
+    if (m.type === 'devtools-out') return devtoolsFora(atual, m.url);
     if (m.type === 'window') {
         atual.painel.reveal(undefined, false);
         return vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
@@ -164,6 +182,37 @@ async function aoReceber(atual, m) {
         atual.painel.dispose();
         return abrir(contexto, { arquivo });
     }
+}
+
+/** DevTools in a tab of its own, moved to a new window; closing it brings nothing back, the button docks it again. */
+async function devtoolsFora(atual, url) {
+    if (!url) return;
+    atual.devtools?.dispose();
+    const p = atual.devtools = vscode.window.createWebviewPanel('berthline.devtools', 'DevTools', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false }, { enableScripts: false });
+    p.webview.html = `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://127.0.0.1:*; style-src 'unsafe-inline';">
+<style>html,body,iframe{margin:0;padding:0;width:100%;height:100%;border:0;overflow:hidden;display:block}</style><iframe src="${url.replace(/"/g, '&quot;')}" title="DevTools"></iframe>`;
+    p.onDidDispose(() => { if (atual.devtools === p) atual.devtools = null; });
+    atual.ouvintes.push(p);
+    await vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
+}
+
+function portaDoEditor() {
+    try {
+        const dados = path.resolve(contexto.globalStorageUri.fsPath, '..', '..', '..');
+        return Number(fs.readFileSync(path.join(dados, 'DevToolsActivePort'), 'utf8').split('\n')[0]) || null;
+    } catch { return null; }
+}
+
+async function devtoolsDaPagina(atual, paginaUrl) {
+    const porta = portaDoEditor();
+    if (!porta || !atual.servidor) return null;
+    try {
+        const lista = await (await fetch(`http://127.0.0.1:${porta}/json/list`)).json();
+        const alvos = lista.filter(a => a.type === 'iframe' && a.url.startsWith(atual.servidor.url));
+        const alvo = alvos.find(a => a.url === paginaUrl) ?? alvos[0];
+        const meu = new URL(atual.servidor.url).host;
+        return alvo && `${atual.servidor.url}__berthline/devtools/devtools_app.html?ws=${meu}/__berthline/devtools-ws/page/${alvo.id}`;
+    } catch { return null; }
 }
 
 async function irParaFonte(atual, m) {
@@ -282,6 +331,9 @@ body { display: flex; flex-direction: column; color: var(--vscode-foreground); b
 button.acao { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;
   border: 1px solid transparent; border-radius: 5px; color: var(--vscode-icon-foreground); background: none; cursor: pointer; }
 button.acao:hover { background: var(--vscode-toolbar-hoverBackground); }
+#erros { width: auto; padding: 0 4px; gap: 3px; color: var(--vscode-errorForeground); }
+#erros[hidden] { display: none; }
+.conta { font-size: 11px; font-variant-numeric: tabular-nums; }
 button.acao:focus-visible, .larguras button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 button.acao[aria-pressed="true"] { color: var(--vscode-inputOption-activeForeground); background: var(--vscode-inputOption-activeBackground);
   border-color: var(--vscode-inputOption-activeBorder, transparent); }
@@ -296,7 +348,16 @@ input.url:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: 
 .larguras button[aria-pressed="true"] { color: var(--vscode-inputOption-activeForeground); background: var(--vscode-inputOption-activeBackground);
   border-color: var(--vscode-inputOption-activeBorder, transparent); }
 .sep { width: 1px; height: 16px; margin: 0 4px; background: var(--vscode-editorGroupHeader-tabsBorder, var(--vscode-panel-border)); opacity: .8; }
-.palco { position: relative; flex: 1; overflow: hidden; }
+.area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.palco { position: relative; flex: 1; overflow: hidden; min-height: 60px; }
+.divisor { flex: none; height: 4px; cursor: ns-resize; background: var(--vscode-panel-border, rgba(128,128,128,.35)); }
+.divisor:hover, .divisor.ativo { background: var(--vscode-sash-hoverBorder, var(--vscode-focusBorder)); }
+.ferramentas { flex: none; display: flex; flex-direction: column; height: 45%; min-height: 80px; }
+.ferramentas[hidden], .divisor[hidden] { display: none; }
+.cabeca { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 4px 0 10px; flex: none;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--vscode-panelTitle-activeForeground, var(--vscode-foreground)); }
+.botoes { display: flex; gap: 2px; }
+#dev { flex: 1; background: var(--vscode-editor-background); }
 .palco.medida { background: var(--vscode-editorGroup-emptyBackground, var(--vscode-sideBar-background)); }
 .moldura { position: absolute; top: 0; left: 0; height: 100%; transform-origin: 0 0; }
 iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
@@ -324,13 +385,22 @@ iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff;
   </div>
   <div class="sep"></div>
   <button class="acao" id="inspecionar" aria-pressed="false" title="Inspect: click an element to open its line (Esc to stop)"><span class="ico">&#xebd1;</span></button>
+  <button class="acao" id="erros" title="Page console errors (Output > Preview)" hidden><span class="ico">&#xea87;</span><span class="conta" id="conta"></span></button>
+  <button class="acao" id="devtools" title="DevTools: elements, console, network (or right-click > Inspect)"><span class="ico">&#xeb6d;</span></button>
   <button class="acao" id="janela" title="Move to New Window"><span class="ico">&#xeb23;</span></button>
   <button class="acao" id="externo" title="Open in Browser"><span class="ico">&#xeb14;</span></button>
 </div>
+<div class="area" id="area">
 <div class="palco" id="palco">
   <div class="moldura" id="moldura"><iframe id="quadro" title="Page preview"></iframe></div>
   <div class="escala" id="escala"></div>
   <div class="aviso" id="aviso"><div class="texto" id="avisoTexto"></div><button id="avisoAcao"></button></div>
+</div>
+<div class="divisor" id="divisor" hidden title="Drag to resize"></div>
+<div class="ferramentas" id="ferramentas" hidden>
+  <div class="cabeca"><span>DevTools</span><span class="botoes"><button class="acao" id="foraDev" title="Open DevTools in a New Window"><span class="ico">&#xeb23;</span></button><button class="acao" id="fecharDev" title="Close DevTools"><span class="ico">&#xea76;</span></button></span></div>
+  <iframe id="dev" title="DevTools"></iframe>
+</div>
 </div>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
@@ -380,6 +450,39 @@ function inspecionar(on) {
 $('recarregar').onclick = () => { if (st.url) quadro.src = st.url; };
 $('externo').onclick = () => st.url && vscode.postMessage({ type: 'external', url: st.url });
 $('janela').onclick = () => vscode.postMessage({ type: 'window' });
+$('devtools').onclick = () => { if (!$('ferramentas').hidden) return fecharDev(); vscode.postMessage({ type: 'devtools', url: st.url }); };
+$('fecharDev').onclick = () => fecharDev();
+$('foraDev').onclick = () => { const u = $('dev').src; fecharDev(); vscode.postMessage({ type: 'devtools-out', url: u }); };
+function abrirDev(u) {
+  $('dev').src = u;
+  $('ferramentas').hidden = false; $('divisor').hidden = false;
+  $('devtools').setAttribute('aria-pressed', 'true');
+  medir();
+}
+function fecharDev() {
+  $('dev').src = 'about:blank';
+  $('ferramentas').hidden = true; $('divisor').hidden = true;
+  $('devtools').setAttribute('aria-pressed', 'false');
+  medir();
+}
+$('divisor').addEventListener('pointerdown', e => {
+  const d = $('divisor'), area = $('area').getBoundingClientRect();
+  d.setPointerCapture(e.pointerId); d.classList.add('ativo');
+  // The iframes would swallow the pointer while dragging
+  quadro.style.pointerEvents = $('dev').style.pointerEvents = 'none';
+  const mover = ev => { $('ferramentas').style.height = Math.max(80, Math.min(area.height - 60, area.bottom - ev.clientY)) + 'px'; medir(); };
+  const soltar = () => { d.classList.remove('ativo'); quadro.style.pointerEvents = $('dev').style.pointerEvents = ''; d.removeEventListener('pointermove', mover); };
+  d.addEventListener('pointermove', mover);
+  d.addEventListener('pointerup', soltar, { once: true });
+});
+$('erros').onclick = () => vscode.postMessage({ type: 'showLog' });
+let erros = 0;
+function contarErro(m) {
+  if (m.nivel !== 'error') return;
+  erros++;
+  $('conta').textContent = String(erros);
+  $('erros').hidden = false;
+}
 $('inspecionar').onclick = () => inspecionar(!st.inspecionar);
 $('avisoAcao').onclick = () => vscode.postMessage({ type: 'retry' });
 for (const b of document.querySelectorAll('.larguras button')) b.onclick = () => { st.largura = Number(b.dataset.w); salvar(); marcarLargura(); };
@@ -399,15 +502,19 @@ window.addEventListener('message', e => {
   const m = e.data;
   if (e.source === quadro.contentWindow) {
     if (!m || !m.berthline) return;
+    if (m.type === 'log') contarErro(m);
     if (m.type === 'ready') {
+      erros = 0; $('erros').hidden = true;
       if (document.activeElement !== url) url.value = m.url;
       st.url = m.url; salvar();
       if (st.inspecionar) paraPagina({ type: 'inspect', on: true });
     } else if (m.type === 'inspect-off') inspecionar(false);
+    else if (m.type === 'devtools') vscode.postMessage({ type: 'devtools', url: st.url });
     else vscode.postMessage(m);
     return;
   }
   if (m.type === 'load') carregar(m.url);
+  else if (m.type === 'devtools') abrirDev(m.url);
   else if (m.type === 'status') aviso(m);
   else if (m.type === 'highlight') paraPagina(m);
 });

@@ -1,7 +1,7 @@
 [
     // VS Code keys: F5 debugs, Ctrl+F5 runs (HTML opens the preview, JS and TS run in the bundled Node), Shift+F5 stops
-    { "key": "f5", "command": "web.debug", "when": "!inDebugMode && !web.emExecucao && (editorLangId == html || editorLangId == javascript || editorLangId == typescript) && debugConfigurationType == ''" },
-    { "key": "ctrl+f5", "command": "web.run", "when": "!inDebugMode && (editorLangId == html || editorLangId == javascript || editorLangId == typescript) && debugConfigurationType == ''" },
+    { "key": "f5", "command": "web.debug", "when": "!inDebugMode && !web.emExecucao && (editorLangId == html || editorLangId == javascript || editorLangId == typescript) && !web.hasLaunch" },
+    { "key": "ctrl+f5", "command": "web.run", "when": "!inDebugMode && (editorLangId == html || editorLangId == javascript || editorLangId == typescript) && !web.hasLaunch" },
     { "key": "shift+f5", "command": "web.stop", "when": "!inDebugMode && web.emExecucao" },
     { "key": "ctrl+shift+f5", "command": "web.rerun", "when": "!inDebugMode && web.rodando" },
     { "key": "ctrl+k v", "command": "web.preview", "when": "editorLangId == html || editorLangId == css" },

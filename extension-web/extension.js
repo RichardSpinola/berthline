@@ -74,6 +74,14 @@ function activate(context) {
         vscode.commands.registerCommand('web.stopPreview', () => previa.estado()?.painel.dispose())
     );
     previa.ativar(context);
+    // F5 and Ctrl+F5 go to the project's own launch.json when it has one
+    const marcarLaunch = () => vscode.workspace.findFiles('.vscode/launch.json', null, 1)
+        .then(l => vscode.commands.executeCommand('setContext', 'web.hasLaunch', l.length > 0), () => {});
+    const vigia = vscode.workspace.createFileSystemWatcher('**/.vscode/launch.json');
+    vigia.onDidCreate(marcarLaunch);
+    vigia.onDidDelete(marcarLaunch);
+    context.subscriptions.push(vigia);
+    marcarLaunch();
 }
 
 function deactivate() {

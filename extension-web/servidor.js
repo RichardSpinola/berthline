@@ -21,9 +21,10 @@ const TAG = `<script src="${PREFIXO}client.js"></script>`;
 
 /**
  * Starts the server. `raiz` is the folder to serve; `alvo` (a URL) switches to proxy mode.
+ * `depuracao()` gives the editor's debugging port, so DevTools for the preview can be served from here (see below).
  * Resolves to { porta, url, enviar(msg), fechar() }.
  */
-function iniciar({ raiz, alvo }) {
+function iniciar({ raiz, alvo, depuracao = () => null }) {
     const clientes = new Set();
     const conexoes = new Set();
     const destino = alvo ? new URL(alvo) : null;
@@ -41,12 +42,20 @@ function iniciar({ raiz, alvo }) {
             req.on('close', () => clientes.delete(res));
             return;
         }
+        if (url.pathname.startsWith(`${PREFIXO}devtools/`)) {
+            // The DevTools front end, as the editor's debugging port serves it
+            const porta = depuracao();
+            if (!porta) return erro(res, 404, 'DevTools needs the editor debugging port');
+            const caminho = '/devtools/' + url.pathname.slice(`${PREFIXO}devtools/`.length) + url.search;
+            return repassar(req, res, new URL(`http://127.0.0.1:${porta}`), caminho, false);
+        }
         if (destino) return repassar(req, res, destino);
         servirArquivo(raiz, decodeURIComponent(url.pathname), res);
     });
     servidor.on('connection', s => { conexoes.add(s); s.on('close', () => conexoes.delete(s)); });
     // WebSocket upgrades (Vite and others use them for hot reload) go straight to the dev server
     servidor.on('upgrade', (req, socket, cabeca) => {
+        if (req.url.startsWith(`${PREFIXO}devtools-ws/page/`)) return devtoolsWs(req, socket, cabeca);
         if (!destino) return socket.destroy();
         const outro = net.connect(Number(destino.port) || 80, semColchetes(destino.hostname), () => {
             const linhas = [`${req.method} ${req.url} HTTP/${req.httpVersion}`];
@@ -66,6 +75,46 @@ function iniciar({ raiz, alvo }) {
         socket.on('error', () => outro.destroy());
         socket.on('close', () => outro.destroy());
     });
+
+    /**
+     * DevTools talks to the page over the editor's debugging port. Chromium refuses that socket from a web page
+     * (Origin check), and allowing every origin would let any site drive the editor. So the socket goes through here:
+     * only from DevTools served by this server, only to a frame this server shows, and with no Origin header.
+     */
+    async function devtoolsWs(req, socket, cabeca) {
+        const porta = depuracao();
+        const id = req.url.slice(`${PREFIXO}devtools-ws/page/`.length);
+        const origem = req.headers.origin;
+        const meu = `http://127.0.0.1:${servidor.address().port}`;
+        let valido = false;
+        if (porta && origem === meu && /^[A-F0-9]+$/i.test(id)) {
+            try {
+                const lista = await (await fetch(`http://127.0.0.1:${porta}/json/list`)).json();
+                valido = lista.some(a => a.id === id && a.url.startsWith(`${meu}/`));
+            } catch { /* port gone */ }
+        }
+        if (!valido) {
+            socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+            return;
+        }
+        const outro = net.connect(porta, '127.0.0.1', () => {
+            const linhas = [`GET /devtools/page/${id} HTTP/1.1`];
+            for (let i = 0; i < req.rawHeaders.length; i += 2) {
+                const nome = req.rawHeaders[i].toLowerCase();
+                if (nome === 'origin' || nome === 'host') continue;
+                linhas.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+            }
+            linhas.push(`Host: 127.0.0.1:${porta}`);
+            outro.write(linhas.join('\r\n') + '\r\n\r\n');
+            if (cabeca?.length) outro.write(cabeca);
+            outro.pipe(socket).pipe(outro);
+        });
+        conexoes.add(outro);
+        outro.on('close', () => { conexoes.delete(outro); socket.destroy(); });
+        outro.on('error', () => socket.destroy());
+        socket.on('close', () => outro.destroy());
+        socket.on('error', () => outro.destroy());
+    }
 
     const pulso = setInterval(() => { for (const c of clientes) c.write(': ping\n\n'); }, 25000);
     pulso.unref?.();
@@ -123,11 +172,11 @@ function erro(res, codigo, texto) {
     res.end(pagina);
 }
 
-function repassar(req, res, destino) {
+function repassar(req, res, destino, caminho = req.url, injetar = true) {
     const cabecalhos = { ...req.headers, host: destino.host, 'accept-encoding': 'identity' };
-    const pedido = http.request({ hostname: semColchetes(destino.hostname), port: destino.port || 80, path: req.url, method: req.method, headers: cabecalhos }, resp => {
+    const pedido = http.request({ hostname: semColchetes(destino.hostname), port: destino.port || 80, path: caminho, method: req.method, headers: cabecalhos }, resp => {
         const tipo = String(resp.headers['content-type'] ?? '');
-        if (!tipo.includes('text/html')) {
+        if (!injetar || !tipo.includes('text/html')) {
             res.writeHead(resp.statusCode, resp.headers);
             return resp.pipe(res);
         }

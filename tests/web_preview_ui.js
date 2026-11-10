@@ -216,6 +216,24 @@ async function modoDev() {
     await h.tecla('Enter', 'Enter', 13);
     passo('block CSS appended to style.css', await ate(() => /\/\* Block: Footer \*\/\n\.site-footer \{/.test(fs.readFileSync(path.join(pasta, 'style.css'), 'utf8')), 5000));
     passo('block markup in the page', await ate(async () => !!await pagina.ev(`document.querySelector('footer.site-footer')`), 8000));
+    // Console errors in the page show as a count in the toolbar; the DevTools button opens real DevTools
+    if (toolbar) {
+        await dormir(2000);
+        await pagina.ev(`console.error('broken thing')`);
+        passo('console error counted in the toolbar', await ate(async () => await toolbar.ev(`!document.getElementById('erros').hidden && document.getElementById('conta').textContent`) === '1'));
+        await toolbar.ev(`document.getElementById('devtools').click()`);
+        passo('DevTools opens docked under the page', await ate(async () => await toolbar.ev(`!document.getElementById('ferramentas').hidden && /\\/devtools\\/devtools_app\\.html\\?ws=/.test(document.getElementById('dev').src)`), 8000));
+        await dormir(4000);
+        const dev = await alvo(a => /\/devtools\/devtools_app\.html/.test(a.url), 8000);
+        // Connected DevTools titles itself after the page it inspects
+        passo('DevTools connects to the page', !!dev && await ate(async () => /127\.0\.0\.1:\d+\/index\.html/.test(await dev.ev('document.title') || ''), 8000));
+        await h.foto('preview-9-devtools');
+        const janelas = async () => JSON.parse((await obter(`http://127.0.0.1:${PORTA}/json/list`)).corpo).filter(a => a.type === 'page').length;
+        const antes = await janelas();
+        await toolbar.ev(`document.getElementById('foraDev').click()`);
+        passo('DevTools moves to a window of its own', await ate(async () => await janelas() > antes, 8000));
+        passo('docked DevTools closes when moved out', await toolbar.ev(`document.getElementById('ferramentas').hidden`));
+    }
     passo('server answers', (await obter(base + 'style.css')).status === 200);
     const x = await h.ev(`(() => { const t = [...document.querySelectorAll('.tab')].find(e => /Preview/.test(e.innerText)); const b = t && t.querySelector('.tab-actions .action-label').getBoundingClientRect(); return b && { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
     if (x) await h.xy(x.x, x.y);
