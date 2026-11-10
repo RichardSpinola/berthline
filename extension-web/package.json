@@ -1,7 +1,7 @@
 {
   "name": "berthline-web",
   "displayName": "Berthline Web",
-  "description": "Run and debug for the Berthline Web profile",
+  "description": "Run, debug and live preview for the Berthline Web profile",
   "version": "0.2.1",
   "publisher": "berthline",
   "engines": {
@@ -11,11 +11,24 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onWebviewPanel:berthline.preview"
   ],
   "main": "./extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "web.preview",
+        "title": "Open Preview",
+        "category": "Web",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "web.insertBlock",
+        "title": "Insert Block",
+        "category": "Web",
+        "icon": "$(layout)"
+      },
       {
         "command": "web.run",
         "title": "Run",
@@ -53,9 +66,14 @@
     "menus": {
       "editor/title": [
         {
+          "command": "web.preview",
+          "group": "navigation@-4",
+          "when": "editorLangId == html && !web.previewOpen"
+        },
+        {
           "command": "web.run",
           "group": "navigation@-3",
-          "when": "editorLangId == html || editorLangId == javascript || editorLangId == typescript"
+          "when": "editorLangId == javascript || editorLangId == typescript"
         },
         {
           "command": "web.debug",
@@ -75,7 +93,31 @@
           "command": "web.settings",
           "group": "navigation@91"
         }
+      ],
+      "editor/context": [
+        {
+          "command": "web.insertBlock",
+          "group": "1_modification@9",
+          "when": "editorLangId == html"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "web.preview",
+          "group": "navigation@9",
+          "when": "resourceExtname == .html || resourceExtname == .htm"
+        }
       ]
+    },
+    "configuration": {
+      "title": "Web",
+      "properties": {
+        "web.preview.openOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the preview beside the editor when the folder has an index.html."
+        }
+      }
     }
   }
 }

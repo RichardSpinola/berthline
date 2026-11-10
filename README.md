@@ -69,7 +69,7 @@ Each profile keeps its own settings and extensions, so nothing touches an editor
 | | Profile | What you get |
 |---|---|---|
 | <img src="hub/assets/java.svg" alt="" width="40"> | **Java** | Run with console input, debug, create classes and profile. The Java runtime is included, so you don't need to install a JDK. |
-| <img src="hub/assets/web.svg" alt="" width="40"> | **Web** | HTML, CSS, JavaScript and TypeScript, with Node.js, Live Server, ESLint, Prettier and a REST client. |
+| <img src="hub/assets/web.svg" alt="" width="40"> | **Web** | HTML, CSS, JavaScript and TypeScript, ready to use: Node.js and npm included, a live preview beside the editor (reload on save, phone and tablet widths, click an element to open its line), Insert Block for plain HTML sections, Prettier on save, ESLint, Emmet and a REST client. VS Code keys and theme. |
 | <img src="hub/assets/standard.svg" alt="" width="40"> | **Standard** | The plain editor, for everything else. |
 
 ![Java profile running a program that reads console input](docs/images/java.png)
@@ -120,7 +120,7 @@ The package lands in `dist/`. Tests live in `tests/` and run on GitHub Actions o
 
 ## AI use
 
-AI did most of the work here: Claude Opus 5.5 and, from 0.2.1, Claude Fable 5.2 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. I chose the direction, tested it and decided what to keep.
+AI did most of the work here: Claude Opus 5.5 and, from 0.2.1, Claude Fable 5.2 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. In 0.3.0, Claude Opus 5.5 built the Web preview, blocks and the measure script. I chose the direction, tested it and decided what to keep.
 
 ## License
 

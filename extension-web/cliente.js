@@ -46,8 +46,9 @@
         Object.assign(caixa.style, { display: 'block', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
         const classes = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : '';
         nome.textContent = el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '') + classes;
-        nome.style.top = r.top < 18 ? '100%' : '';
-        nome.style.bottom = r.top < 18 ? 'auto' : '';
+        // The label sits above the box, or below it when the element touches the top
+        nome.style.top = r.top < 18 ? '100%' : 'auto';
+        nome.style.bottom = r.top < 18 ? 'auto' : '100%';
     };
 
     // Plain HTML carries data-bl from the server; frameworks are best effort through their dev metadata

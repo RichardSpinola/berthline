@@ -103,10 +103,6 @@ async function java(pasta) {
 
 async function web(pasta) {
     process.env.ELECTRON_RUN_AS_NODE = '1';
-    // Evita abrir o navegador durante o teste
-    const ajustes = path.join(PACOTE, 'data/web/user/User');
-    fs.mkdirSync(ajustes, { recursive: true });
-    fs.writeFileSync(path.join(ajustes, 'settings.json'), '{"liveServer.settings.NoBrowser": true}');
     const h = await abrir('web', pasta);
     await dormir(6000);
     await h.clica('.explorer-folders-view .monaco-list-row', '^app\\.js');
@@ -122,9 +118,11 @@ async function web(pasta) {
     await h.clica('.explorer-folders-view .monaco-list-row', '^index\\.html');
     await dormir(1200);
     await h.clica('a.action-label', RODAR);
-    passo('live server answers', await h.ate(async () => {
+    passo('preview tab open', await h.ate(async () => /Preview/.test(await h.ev(`[...document.querySelectorAll('.tab')].map(e=>e.innerText).join(' ')`)), 15000));
+    passo('preview page served', await h.ate(async () => {
         try {
-            return await new Promise(ok => http.get('http://127.0.0.1:5500/index.html', r => { ok(r.statusCode === 200); r.resume(); }).on('error', () => ok(false)));
+            const alvos = await new Promise((ok, nao) => http.get(`http://127.0.0.1:${PORTA}/json/list`, r => { let b = ''; r.on('data', d => b += d); r.on('end', () => ok(JSON.parse(b))); }).on('error', nao));
+            return alvos.some(a => /^http:\/\/127\.0\.0\.1:\d+\/index\.html/.test(a.url));
         } catch { return false; }
     }, 15000));
     await h.fechar();
