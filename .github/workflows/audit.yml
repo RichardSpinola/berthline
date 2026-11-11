@@ -25,6 +25,7 @@ jobs:
     outputs:
       java: ${{ steps.c.outputs.java }}
       web: ${{ steps.c.outputs.web }}
+      standard: ${{ steps.c.outputs.standard }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,13 +33,14 @@ jobs:
       - id: c
         run: |
           if [ "${{ github.event_name }}" = workflow_dispatch ] || [[ "${{ github.event.workflow_run.head_branch }}" == v* ]]; then
-            echo "java=true" >> "$GITHUB_OUTPUT"; echo "web=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "java=true" >> "$GITHUB_OUTPUT"; echo "web=true" >> "$GITHUB_OUTPUT"; echo "standard=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           sha=${{ github.event.workflow_run.head_sha }}
           git diff --name-only "$sha~1" "$sha" > changed.txt
           comum='^(profiles/base/|extension-common/|extension-lite/|build/|tests/audit|tests/auditor|tests/cdp)'
           grep -qE "$comum|^profiles/java/|^extension/|^tests/fixture/java" changed.txt && echo "java=true" >> "$GITHUB_OUTPUT" || echo "java=false" >> "$GITHUB_OUTPUT"
           grep -qE "$comum|^profiles/web/|^extension-web/|^tests/fixture/web" changed.txt && echo "web=true" >> "$GITHUB_OUTPUT" || echo "web=false" >> "$GITHUB_OUTPUT"
+          grep -qE "$comum|^profiles/standard/|^tests/fixture/standard" changed.txt && echo "standard=true" >> "$GITHUB_OUTPUT" || echo "standard=false" >> "$GITHUB_OUTPUT"
 
   windows:
     needs: areas
@@ -71,7 +73,7 @@ jobs:
 
   linux:
     needs: areas
-    if: needs.areas.outputs.java == 'true' || needs.areas.outputs.web == 'true'
+    if: needs.areas.outputs.java == 'true' || needs.areas.outputs.web == 'true' || needs.areas.outputs.standard == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -95,6 +97,10 @@ jobs:
         if: always() && needs.areas.outputs.web == 'true'
         timeout-minutes: 10
         run: xvfb-run -a --server-args='-screen 0 1280x800x24' "$RUNNER_TEMP/berthline-linux/node/bin/node" tests/audit.js "$RUNNER_TEMP/berthline-linux" web
+      - name: Audit Standard
+        if: always() && needs.areas.outputs.standard == 'true'
+        timeout-minutes: 5
+        run: xvfb-run -a --server-args='-screen 0 1280x800x24' "$RUNNER_TEMP/berthline-linux/node/bin/node" tests/audit.js "$RUNNER_TEMP/berthline-linux" standard
       - uses: actions/upload-artifact@v4
         if: always()
         with:
