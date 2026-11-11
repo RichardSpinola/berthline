@@ -91,9 +91,9 @@ def roteiro():
     hub.gravar_geral('transitions', False)
     painel.boasvindas('java')
     tela = painel.tela
-    passo('welcome per app', tela.windowTitle() == 'Berthline Hub · Java · Projects', tela.windowTitle())
+    passo('welcome per app', tela.windowTitle() == f"Berthline Hub · {hub.aplicativos()['java']['title']} · Projects", tela.windowTitle())
     tela.ir('Learn')
-    passo('title follows the tab', tela.windowTitle() == 'Berthline Hub · Java · Learn', tela.windowTitle())
+    passo('title follows the tab', tela.windowTitle() == f"Berthline Hub · {hub.aplicativos()['java']['title']} · Learn", tela.windowTitle())
     tela.ir('Projects')
     passo('panel hidden', not painel.isVisible())
     tela.close()
