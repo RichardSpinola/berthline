@@ -493,6 +493,9 @@ async function padrao(h) {
 async function temas(h) {
     const lista = await rpc('temas');
     relatorio.dados.temas = lista.length;
+    // Without a window manager (Xvfb) the window can lose focus; the inactive title colours are not what we measure
+    await h.c('Emulation.setFocusEmulationEnabled', { enabled: true });
+    await h.c('Page.bringToFront');
     const medir = `(()=>{
 const lum=c=>{const v=c.map(x=>{x/=255;return x<=.03928?x/12.92:((x+.055)/1.055)**2.4});return .2126*v[0]+.7152*v[1]+.0722*v[2]};
 const rgb=s=>(s.match(/[\\d.]+/g)||[]).map(Number);
