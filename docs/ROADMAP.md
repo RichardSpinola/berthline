@@ -18,7 +18,7 @@ Direction: every profile will offer two styles, Berthline (default, inspired by 
 | #12 | Java | Java status bar: hide remote indicator; Git Graph as icon or "Git Log" |
 | #13 | Hub | Updater test: run a Java audit after updating |
 | #14 | Hub | Setup shows VS Code keys for Java but the default is intellij |
-| #15 | Hub | Profile names: Java Jolly, Web Wherry, Standard Sloop |
+| #15 | Hub | Profile names: Bean Barge, Web Wherry, Standard Sloop |
 | #16 | Docs | Short README plus docs/ pages and README.pt-BR.md |
 
 ## v0.4.0

@@ -1,10 +1,13 @@
 {
-  "title": "Java",
+  "title": "Bean Barge",
   "description": "Run, debug and refactor Java projects.",
   "order": 1,
   "base": true,
   "memory": true,
   "keymap": true,
+  "hiddenStatus": [
+    "status.host"
+  ],
   "templates": [
     "Java"
   ],

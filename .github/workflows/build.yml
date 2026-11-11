@@ -25,6 +25,8 @@ jobs:
       editor: ${{ steps.areas.outputs.editor }}
       java: ${{ steps.areas.outputs.java }}
       web: ${{ steps.areas.outputs.web }}
+      standard: ${{ steps.areas.outputs.standard }}
+      update: ${{ steps.areas.outputs.update }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,13 +36,16 @@ jobs:
         run: |
           # By hand or on a tag, everything; on a pull request, only what the change touches
           if [ "${{ github.event_name }}" != pull_request ]; then
-            printf 'editor=true\njava=true\nweb=true\n' >> "$GITHUB_OUTPUT"; exit 0
+            printf 'editor=true\njava=true\nweb=true\nstandard=true\nupdate=true\n' >> "$GITHUB_OUTPUT"; exit 0
           fi
           git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
           comum='^(profiles/base/|extension-common/|extension-lite/|build/|tests/audit|tests/auditor|tests/cdp|\.github/)'
           grep -qvE '^(hub/|tests/hub_|tests/update_test)' changed.txt && echo editor=true >> "$GITHUB_OUTPUT" || echo editor=false >> "$GITHUB_OUTPUT"
-          grep -qE "$comum|^profiles/java/|^extension/|^tests/fixture/java" changed.txt && echo java=true >> "$GITHUB_OUTPUT" || echo java=false >> "$GITHUB_OUTPUT"
+          grep -qE "$comum|^profiles/java/|^extension/|^tests/fixture/java|^hub/troca|^tests/update_test" changed.txt && echo java=true >> "$GITHUB_OUTPUT" || echo java=false >> "$GITHUB_OUTPUT"
           grep -qE "$comum|^profiles/web/|^extension-web/|^tests/fixture/web" changed.txt && echo web=true >> "$GITHUB_OUTPUT" || echo web=false >> "$GITHUB_OUTPUT"
+          grep -qE "$comum|^profiles/standard/|^tests/fixture/standard" changed.txt && echo standard=true >> "$GITHUB_OUTPUT" || echo standard=false >> "$GITHUB_OUTPUT"
+          # The 25-minute update audit runs on a pull request only when the updater or the build changes
+          grep -qE '^(hub/troca|tests/update_test|build/|\.github/)' changed.txt && echo update=true >> "$GITHUB_OUTPUT" || echo update=false >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -100,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [java, web]
+        app: [java, web, standard]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -116,6 +121,39 @@ jobs:
         if: always() && needs.linux.outputs[matrix.app] == 'true'
         with:
           name: audit-linux-${{ matrix.app }}
+          path: tests/out
+
+  linux-update-audit:
+    # Updates the last release to this package, then audits Java on the updated install
+    needs: linux
+    if: needs.linux.outputs.java == 'true' && needs.linux.outputs.update == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: build/requirements.txt
+      - run: pip install PySide6 certifi
+      - uses: ./.github/actions/linux-package
+      - name: Audit Java after updating from the last release
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          versao=$(python -c "import json;print(json.load(open('$PKG/brand.json'))['version'])")
+          tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 --json tagName -q '.[].tagName' | grep -vx "v$versao" | head -1)
+          mkdir -p "$RUNNER_TEMP/old"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern berthline-linux.tar.gz --dir "$RUNNER_TEMP/old"
+          tar -xzf "$RUNNER_TEMP/old/berthline-linux.tar.gz" -C "$RUNNER_TEMP/old"
+          echo "updating $tag -> $versao"
+          xvfb-run -a --server-args='-screen 0 1280x800x24' python -u tests/update_test.py "$PKG" --from "$RUNNER_TEMP/old/berthline-linux" --audit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: update-audit-linux
           path: tests/out
 
   windows:
@@ -190,7 +228,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, windows-audit, linux, linux-tests, linux-audit]
+    needs: [windows, windows-audit, linux, linux-tests, linux-audit, linux-update-audit]
     runs-on: ubuntu-latest
     permissions:
       contents: write

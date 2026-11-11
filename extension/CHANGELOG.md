@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The status bar shows "Git Log" in a Git project instead of "(neo) Git Graph".
+
 ## 0.2.1
 
 - Show Git Log opens (neo) Git Graph.
