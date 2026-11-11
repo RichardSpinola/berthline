@@ -324,7 +324,12 @@ def extras(painel):
 
     # Setup window.
     pasta = TEMP / 'projetos-web'
+    tudo = hub.opcoes()
+    tudo.get('java', {}).pop('keymap', None)
+    hub.OPCOES.write_text(json.dumps(tudo), encoding='utf8')
     preparo = hub.CLASSES['Preparo'](painel)
+    passo('setup shows the java default keymap', hub.PADRAO['keymap'] == 'intellij'
+          and preparo.linhas['java'][2].botoes['IntelliJ'].isChecked() and not preparo.linhas['java'][2].botoes['VS Code'].isChecked())
     menu.unlink()
     atalhos = lambda: sorted(str(p) for pasta_ in (menu.parent, mesa.parent) for p in pasta_.glob('berthline*.desktop'))  # noqa: E731
     antes = atalhos()
