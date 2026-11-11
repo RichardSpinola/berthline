@@ -321,6 +321,11 @@ def extras(painel):
     mesa.unlink(missing_ok=True)
     hub.criar_atalho('web', desktop=False, menu=True)
     passo('menu shortcut only', menu.exists() and not mesa.exists())
+    nome = hub.aplicativos()['web']['title']
+    passo('shortcut uses the profile name', f'Name={nome}\n' in menu.read_text())
+    menu.write_text(menu.read_text().replace(f'Name={nome}', 'Name=Berthline Web'))
+    hub.renomear_atalhos()
+    passo('old shortcut renamed where it was', f'Name={nome}\n' in menu.read_text() and not mesa.exists())
 
     # Setup window.
     pasta = TEMP / 'projetos-web'
