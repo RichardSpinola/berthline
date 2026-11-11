@@ -177,7 +177,8 @@ jobs:
         with:
           name: berthline-windows
           path: zip
-      - run: tar -xf zip/berthline-windows.zip -C "$RUNNER_TEMP"
+      - shell: pwsh
+        run: tar -xf zip/berthline-windows.zip -C $env:RUNNER_TEMP
       - name: Audit ${{ matrix.app }}
         timeout-minutes: 15
         run: bash -c "$RETRY" _ "$RUNNER_TEMP/berthline-windows/node/node.exe" tests/audit.js "$RUNNER_TEMP/berthline-windows" ${{ matrix.app }}
