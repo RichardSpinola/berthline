@@ -1,13 +1,9 @@
 name: Linux package
-description: Libraries for the editor under Xvfb, then the package from this run, unpacked; sets PKG
+description: Libraries for the editor, then the package from this run, unpacked; sets PKG
 runs:
   using: composite
   steps:
-    - shell: bash
-      run: |
-        sudo apt-get install -y --no-install-recommends xvfb libegl1 libnss3 libgbm1 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
-          || { sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libegl1 libnss3 libgbm1 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0; }
-        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+    - uses: ./.github/actions/linux-libs
     - uses: actions/download-artifact@v4
       with:
         name: berthline-linux

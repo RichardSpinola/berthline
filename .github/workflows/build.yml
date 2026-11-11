@@ -51,6 +51,7 @@ jobs:
           path: build/cache
           key: build-linux-${{ hashFiles('build/versions.json', 'build/eslint/package-lock.json') }}
           restore-keys: build-linux-
+      - uses: ./.github/actions/linux-libs
       - run: pip install -r build/requirements.txt
       - run: python build/build.py
       - name: Archive
