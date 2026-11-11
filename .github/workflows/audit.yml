@@ -38,7 +38,7 @@ jobs:
           sha=${{ github.event.workflow_run.head_sha }}
           git diff --name-only "$sha~1" "$sha" > changed.txt
           comum='^(profiles/base/|extension-common/|extension-lite/|build/|tests/audit|tests/auditor|tests/cdp)'
-          grep -qE "$comum|^profiles/java/|^extension/|^tests/fixture/java" changed.txt && echo "java=true" >> "$GITHUB_OUTPUT" || echo "java=false" >> "$GITHUB_OUTPUT"
+          grep -qE "$comum|^profiles/java/|^extension/|^tests/fixture/java|^hub/troca|^tests/update_test" changed.txt && echo "java=true" >> "$GITHUB_OUTPUT" || echo "java=false" >> "$GITHUB_OUTPUT"
           grep -qE "$comum|^profiles/web/|^extension-web/|^tests/fixture/web" changed.txt && echo "web=true" >> "$GITHUB_OUTPUT" || echo "web=false" >> "$GITHUB_OUTPUT"
           grep -qE "$comum|^profiles/standard/|^tests/fixture/standard" changed.txt && echo "standard=true" >> "$GITHUB_OUTPUT" || echo "standard=false" >> "$GITHUB_OUTPUT"
 
@@ -75,7 +75,7 @@ jobs:
     needs: areas
     if: needs.areas.outputs.java == 'true' || needs.areas.outputs.web == 'true' || needs.areas.outputs.standard == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -101,6 +101,24 @@ jobs:
         if: always() && needs.areas.outputs.standard == 'true'
         timeout-minutes: 5
         run: xvfb-run -a --server-args='-screen 0 1280x800x24' "$RUNNER_TEMP/berthline-linux/node/bin/node" tests/audit.js "$RUNNER_TEMP/berthline-linux" standard
+      - uses: actions/setup-python@v5
+        if: always() && needs.areas.outputs.java == 'true'
+        with:
+          python-version: '3.13'
+      - name: Audit Java after updating from the last release
+        if: always() && needs.areas.outputs.java == 'true'
+        timeout-minutes: 25
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pip install PySide6 certifi
+          versao=$(python -c "import json;print(json.load(open('$RUNNER_TEMP/berthline-linux/brand.json'))['version'])")
+          tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 --json tagName -q '.[].tagName' | grep -vx "v$versao" | head -1)
+          mkdir -p "$RUNNER_TEMP/old"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern berthline-linux.tar.gz --dir "$RUNNER_TEMP/old"
+          tar -xzf "$RUNNER_TEMP/old/berthline-linux.tar.gz" -C "$RUNNER_TEMP/old"
+          echo "updating $tag -> $versao"
+          xvfb-run -a --server-args='-screen 0 1280x800x24' python -u tests/update_test.py "$RUNNER_TEMP/berthline-linux" --from "$RUNNER_TEMP/old/berthline-linux" --audit
       - uses: actions/upload-artifact@v4
         if: always()
         with:

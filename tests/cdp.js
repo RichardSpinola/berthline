@@ -1,7 +1,7 @@
 // Shared CDP helpers for the editor tests.
 const fs = require('fs'), path = require('path'), http = require('http');
 
-const SAIDA = path.join(__dirname, 'out');
+const SAIDA = process.env.SUITE_AUDIT_OUT || path.join(__dirname, 'out');
 const dormir = ms => new Promise(r => setTimeout(r, ms));
 
 const obter = url => new Promise((ok, no) => http.get(url, r => {

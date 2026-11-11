@@ -40,6 +40,7 @@ CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
 PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keymap': 'intellij', 'folder': ''}
+ANTIGOS = {'java': 'Java', 'web': 'Web', 'standard': 'Standard'}  # display names before 0.3.1, for old shortcuts
 # Defaults of older versions that a later one replaced; a setting still equal to one was never touched.
 LEGADO = {'files.autoSave': 'onFocusChange'}
 COM_TEMAS = ('workbench.colorCustomizations', 'editor.semanticTokenColorCustomizations')
@@ -861,7 +862,7 @@ def imagem_icone(nome, tipo):
 def criar_atalho(app, desktop=True, menu=True):
     """Creates the Hub's or an app's shortcut; an app's goes straight to its screen."""
     b = marca()
-    titulo = f"{b['name']} {aplicativos()[app]['title']}" if app else b['hub']
+    titulo = aplicativos()[app]['title'] if app else b['hub']
     congelado = getattr(sys, 'frozen', False)
     programa = sys.executable if congelado else f'env SUITE_ROOT={RAIZ} HOME={CASA} {sys.executable} {Path(__file__).resolve()}'
     args = f'--welcome {app}' if app else ''
@@ -890,6 +891,29 @@ def criar_atalho(app, desktop=True, menu=True):
         destino.write_text(texto, encoding='utf8')
         destino.chmod(0o755)
     return destinos[0] if destinos else None
+
+
+def renomear_atalhos():
+    """Shortcuts made before the profiles got their names: remade with the new name where they were."""
+    if not JANELAS:
+        for app, info in aplicativos().items():
+            for pasta in (area_de_trabalho(), CASA / '.local/share/applications'):
+                arquivo = pasta / f"{marca()['name'].lower()}-{app}.desktop"
+                try:
+                    texto = arquivo.read_text(encoding='utf8')
+                except OSError:
+                    continue
+                if f"\nName={info['title']}\n" not in texto:
+                    criar_atalho(app, desktop=pasta == area_de_trabalho(), menu=pasta != area_de_trabalho())
+        return
+    inicio = Path(os.environ.get('APPDATA', '')) / 'Microsoft/Windows/Start Menu/Programs'
+    for app, info in aplicativos().items():
+        antigo = f"{marca()['name']} {ANTIGOS.get(app, '')}"
+        for pasta, mesa in ((area_de_trabalho(), True), (inicio, False)):
+            velho = next((p for p in (pasta / f'{antigo}.lnk', pasta / f'{antigo}.bat') if p.exists()), None)
+            if velho and ANTIGOS.get(app):
+                criar_atalho(app, desktop=mesa, menu=not mesa)
+                velho.unlink(missing_ok=True)
 
 
 def origens_importacao():
@@ -1640,7 +1664,7 @@ def janela(inicial=None, lancar=None):
         return caixa
 
     def nome_app(app):
-        return f"{marca()['name']} {aplicativos()[app]['title']}"
+        return aplicativos()[app]['title']
 
     class Combo(QComboBox):
         def wheelEvent(self, evento):
@@ -3088,7 +3112,7 @@ def janela(inicial=None, lancar=None):
                     pass
             if not aplicativos()[self.app].get('base'):
                 self.direita.addWidget(rotulo('Keymap', 'secao'))
-                r = rotulo('Standard keeps the editor defaults, so there is no keymap to learn here.', 'mudo')
+                r = rotulo(f"{aplicativos()[self.app]['title']} keeps the editor defaults, so there is no keymap to learn here.", 'mudo')
                 r.setWordWrap(True)
                 self.direita.addWidget(r)
                 self.direita.addStretch(1)
@@ -3936,6 +3960,10 @@ def main():
             depois_de_atualizar(args[1])
         except Exception:  # any failure here must end the program, so the helper restores the old version
             return 1
+        try:
+            renomear_atalhos()
+        except OSError:
+            pass  # an old shortcut name is not worth failing the update
     elif args[:1] == ['--update-failed']:
         try:
             motivo = (Path(args[1]) / 'error.txt').read_text(encoding='utf8')
