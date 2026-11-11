@@ -28,13 +28,15 @@ async function arquivo(h, nome) {
 
 async function java(pasta) {
     const h = await abrir('java', pasta);
-    await dormir(12000);
+    // Wait for the workbench to show the project, not a fixed time
+    await h.ate(async () => (await h.ev(`document.querySelectorAll('.explorer-folders-view .monaco-list-row').length`)) > 0, 60000);
+    await dormir(1500);
     passo('workspace trusted', !/Restricted Mode/.test(await h.status()), await h.status());
     await arquivo(h, 'Main');
     passo('java server ready', await h.ate(async () => /Java: Ready/.test(await h.status()), 120000));
     console.log('status:', await h.status());
     console.log('actions:', await h.ev(`[...document.querySelectorAll('a.action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')).join(' | ')`));
-    await dormir(5000);
+    await h.ate(async () => await h.ev(`!!window.__ijArvore`), 20000);
     passo('visual extras', await h.ev(`!!window.__ijArvore`) && !/partial/.test(await h.status()));
     passo('app watermark', await h.ev(`!!document.getElementById('ij-marca')`));
     await h.foto('java-1-editor');
@@ -104,7 +106,8 @@ async function java(pasta) {
 async function web(pasta) {
     process.env.ELECTRON_RUN_AS_NODE = '1';
     const h = await abrir('web', pasta);
-    await dormir(6000);
+    await h.ate(async () => !!await h.acha('.explorer-folders-view .monaco-list-row', '^app\\.js'), 60000);
+    await dormir(800);
     await h.clica('.explorer-folders-view .monaco-list-row', '^app\\.js');
     await dormir(1500);
     await h.foto('web-1-editor');
