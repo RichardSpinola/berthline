@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { ativarComum, abrirRun, naJanela } = require('./comum/comum');
+const { ativarComum, abrirRun, naJanela, gitLog } = require('./comum/comum');
 
 const ACOES = require('./acoes.json');
 
@@ -645,6 +645,7 @@ function activate(context) {
     contexto = context;
     const modelos = carregarModelos(context);
     ativarComum(context, { prefixo: 'ij', saudavel: '!!window.__ijArvore' });
+    gitLog(context);
     arvoreJava(context);
     estiloSugestoes(context).catch(() => {});
     esconderPaineis(context);

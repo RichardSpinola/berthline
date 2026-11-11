@@ -291,6 +291,21 @@ function umaEngrenagem(context) {
     return naJanela(context, `(()=>{const s=document.getElementById('ij-gear')||document.head.appendChild(Object.assign(document.createElement('style'),{id:'ij-gear'}));s.textContent=${JSON.stringify(css)}})()`);
 }
 
+// Git Graph's own item reads "(neo) Git Graph"; this one says what it opens, and only in a Git project
+function gitLog(context) {
+    const fs = require('fs'), path = require('path');
+    const item = vscode.window.createStatusBarItem('berthline.gitLog', vscode.StatusBarAlignment.Left, 500);
+    item.name = 'Git Log';
+    item.text = '$(git-commit) Git Log';
+    item.tooltip = 'Show the Git Log';
+    item.command = 'neo-git-graph.view';
+    const mostrar = () => (vscode.workspace.workspaceFolders ?? []).some(p => fs.existsSync(path.join(p.uri.fsPath, '.git'))) ? item.show() : item.hide();
+    mostrar();
+    // "git init" in the terminal shows it without a reload
+    const vigia = vscode.workspace.createFileSystemWatcher('**/.git');
+    context.subscriptions.push(item, vigia, vigia.onDidCreate(mostrar), vigia.onDidDelete(mostrar), vscode.workspace.onDidChangeWorkspaceFolders(mostrar));
+}
+
 function ativarComum(context, opcoes) {
     contexto = context;
     prefixo = opcoes.prefixo;
@@ -334,4 +349,4 @@ function ativarComum(context, opcoes) {
     );
 }
 
-module.exports = { ativarComum, abrirRun, naJanela, nodeDaSuite };
+module.exports = { ativarComum, abrirRun, naJanela, nodeDaSuite, gitLog };

@@ -170,6 +170,25 @@ def sem_novidades(app):
             'alefragnani.Bookmarks', json.dumps({'Bookmarks.version': versao, 'Bookmarks.whatsNew.shown': versao})))
 
 
+def esconder_status(app):
+    """Hides the status bar items the profile lists ("hiddenStatus" in app.json), once each,
+    so one the person shows again with a right click stays."""
+    ids = aplicativos()[app].get('hiddenStatus', [])
+    if not ids:
+        return
+    banco = pasta_usuario(app) / 'globalStorage/state.vscdb'
+    banco.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(banco, timeout=2) as con:
+        con.execute('CREATE TABLE IF NOT EXISTS ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)')
+        ler = lambda chave: json.loads((con.execute('SELECT value FROM ItemTable WHERE key = ?', (chave,)).fetchone() or ['[]'])[0])
+        feitos, ocultos = ler('berthline.statusHidden'), ler('workbench.statusbar.hidden')
+        novos = [i for i in ids if i not in feitos]
+        if not novos:
+            return
+        con.execute('INSERT INTO ItemTable (key, value) VALUES (?, ?)', ('workbench.statusbar.hidden', json.dumps(ocultos + [i for i in novos if i not in ocultos])))
+        con.execute('INSERT INTO ItemTable (key, value) VALUES (?, ?)', ('berthline.statusHidden', json.dumps(feitos + novos)))
+
+
 def aplicar_confianca():
     novos = {caminho_uri(p) for p in pastas_confiaveis()}
 
@@ -302,6 +321,7 @@ def preparar(app):
     usuario.mkdir(parents=True, exist_ok=True)
     aplicar_confianca()
     sem_novidades(app)
+    esconder_status(app)
     ferramentas(app).mkdir(parents=True, exist_ok=True)
     marca_dagua(app)
     arquivo = usuario / 'settings.json'
