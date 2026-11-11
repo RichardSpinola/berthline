@@ -72,6 +72,7 @@
     "editor.codeActionsOnSave": {
         "source.fixAll.eslint": "explicit"
     },
+    "eslint.nodePath": "${SUITE}/eslint/node_modules",
     "eslint.validate": [
         "javascript",
         "javascriptreact",

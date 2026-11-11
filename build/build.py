@@ -76,6 +76,18 @@ def node():
     shutil.rmtree(temp, ignore_errors=True)
 
 
+def eslint():
+    """ESLint for Web projects without their own: the extension falls back to it through eslint.nodePath."""
+    pasta = DESTINO / 'eslint'
+    pasta.mkdir()
+    for nome in ('package.json', 'package-lock.json'):
+        shutil.copy(RAIZ / 'build/eslint' / nome, pasta)
+    npm = DESTINO / 'node' / ('npm.cmd' if JANELAS else 'bin/npm')
+    env = {**os.environ, 'PATH': f'{npm.parent}{os.pathsep}{os.environ["PATH"]}'}
+    subprocess.run([str(npm), 'ci', '--omit=dev', '--ignore-scripts', '--no-fund', '--no-audit', '--cache', str(CACHE / 'npm')],
+                   cwd=pasta, env=env, check=True, shell=JANELAS)
+
+
 def vsix(pasta):
     """Empacota uma extensão local para instalar sem passar pela loja."""
     dados = json.loads((RAIZ / pasta / 'package.json').read_text(encoding='utf8'))
@@ -220,6 +232,7 @@ def main():
     DESTINO.mkdir(parents=True)
     editor()
     node()
+    eslint()
     marcar()
     shutil.copytree(RAIZ / 'profiles', DESTINO / 'profiles')
     shutil.copytree(RAIZ / 'hub/assets', DESTINO / 'assets')
