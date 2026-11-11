@@ -6,7 +6,8 @@ const { SAIDA, dormir, conectar, fechado } = require('./cdp');
 
 const PACOTE = path.resolve(process.argv[2]);
 const APP = process.argv[3] || 'java';
-const PORTA = 9334;
+const PORTA = +process.env.AUDIT_PORT || 9334; // AUDIT_PORT lets two audits run side by side
+const RPC = PORTA + 1;
 const JANELAS = process.platform === 'win32';
 const HUB = path.join(PACOTE, JANELAS ? 'Hub.exe' : 'Hub');
 const INSEGUROS = /^ij\.(newProject|reload|gitPush|gitPull|safeDelete|openFiles)$/;
@@ -20,7 +21,7 @@ const conferir = (nome, ok, extra = '') => (ok ? certo : falha)(nome, extra);
 const aviso = (nome, extra = '') => { relatorio.avisos.push(`${nome} ${extra}`.trim()); console.log('NOTE ', nome, extra); };
 
 const rpc = (acao, dados = {}) => new Promise((ok, nao) => {
-    const r = http.request({ host: '127.0.0.1', port: 9335, method: 'POST' }, res => {
+    const r = http.request({ host: '127.0.0.1', port: RPC, method: 'POST' }, res => {
         let b = '';
         res.on('data', d => b += d);
         res.on('end', () => { const j = JSON.parse(b); j.erro ? nao(new Error(j.erro)) : ok(j.ok); });
@@ -35,7 +36,7 @@ function iniciar(pasta) {
     spawnSync(HUB, ['--prepare'], { env: { ...process.env, SUITE_ROOT: PACOTE } });
     const exe = ['VSCodium.exe', 'Code.exe', 'codium', 'code'].map(n => path.join(PACOTE, 'editor', n)).find(fs.existsSync);
     const env = { ...process.env, SUITE_TOOLS: path.join(usuario, 'tools'), SUITE_VISUAL: '1', SUITE_ANIMATIONS: '1',
-        SUITE_WATERMARK: path.join(usuario, 'watermark.svg'), SUITE_HUB: HUB };
+        SUITE_WATERMARK: path.join(usuario, 'watermark.svg'), SUITE_HUB: HUB, AUDIT_RPC_PORT: String(RPC) };
     delete env.ELECTRON_RUN_AS_NODE;
     const args = [`--user-data-dir=${path.join(usuario, 'user')}`, `--extensions-dir=${path.join(usuario, 'extensions')}`,
         `--extensionDevelopmentPath=${path.join(__dirname, 'auditor')}`, `--remote-debugging-port=${PORTA}`, pasta];
@@ -423,6 +424,25 @@ async function botoes(h) {
     await h.foto(`audit-${APP}-buttons`);
 }
 
+async function barraWeb(h, pasta) {
+    // A plain page script, like a first project: no false type errors, no ESLint library warning
+    const pagina = path.join(pasta, 'page.js');
+    fs.writeFileSync(pagina, 'const card = document.querySelector(".card");\nconst button = card.querySelector("button");\nbutton.addEventListener("click", () => button.setAttribute("aria-expanded", card.classList.toggle("open")));\n');
+    await rpc('abrir', { arquivo: pagina });
+    await h.ate(async () => /JavaScript/.test(await h.status()), 15000);
+    await dormir(6000);
+    const erros = await rpc('erros', { arquivo: pagina });
+    conferir('plain page script has no type errors', !erros.length, erros.join(' / ').slice(0, 200));
+    const avisos = await h.ev(`[...document.querySelectorAll('.notification-toast')].map(e=>e.innerText).join(' / ')`);
+    conferir('no ESLint library warning', !/ESLint library/.test(avisos), avisos.replace(/\s+/g, ' ').slice(0, 160));
+    const ids = await h.ev(`[...document.querySelectorAll('.statusbar-item')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.id)`);
+    for (const [id, nome] of [['status.host', 'remote indicator'], ['chat.statusBarEntry', 'Copilot Sign In'], ['asispts.neo-git-graph', '(neo) Git Graph']])
+        conferir(`status bar hides ${nome}`, !ids.includes(id), ids.join(' | '));
+    if (spawnSync('git', ['init', '-q', pasta]).status === 0)
+        conferir('status bar shows Git Log in a repository', await h.ate(async () => /Git Log/.test(await h.status()), 20000), await h.status());
+    await h.foto(`audit-${APP}-statusbar`);
+}
+
 async function temas(h) {
     const lista = await rpc('temas');
     relatorio.dados.temas = lista.length;
@@ -467,6 +487,7 @@ return r})()`;
     for (const etapa of [
         () => APP === 'java' ? java(h, pasta) : null,
         () => APP === 'java' ? exportar(h, pasta) : null, // needs the clean fixture, before other steps add files
+        () => APP === 'web' ? barraWeb(h, pasta) : null,
         () => botoes(h),
         () => comandos(h),
         () => APP === 'java' ? teclado(h, arquivo) : null,

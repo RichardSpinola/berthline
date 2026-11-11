@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const { ativarComum, abrirRun, nodeDaSuite } = require('./comum/comum');
 const previa = require('./previa');
+const gitlog = require('./gitlog');
 const { inserirBloco } = require('./blocos');
 
 // Web: HTML opens in the preview; JS and TS run in the bundled Node
@@ -74,6 +75,7 @@ function activate(context) {
         vscode.commands.registerCommand('web.stopPreview', () => previa.estado()?.painel.dispose())
     );
     previa.ativar(context);
+    gitlog.ativar(context);
     // F5 and Ctrl+F5 go to the project's own launch.json when it has one
     const marcarLaunch = () => vscode.workspace.findFiles('.vscode/launch.json', null, 1)
         .then(l => vscode.commands.executeCommand('setContext', 'web.hasLaunch', l.length > 0), () => {});
