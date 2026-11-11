@@ -5,6 +5,9 @@
   "base": true,
   "memory": true,
   "keymap": true,
+  "hiddenStatus": [
+    "status.host"
+  ],
   "templates": [
     "Java"
   ],
