@@ -25,7 +25,7 @@ stops when the preview tab closes. No extra browser runs.
 - Console errors of the page are counted in the toolbar and listed under Output > Preview.
 - Status bar: **Preview** opens it; while it runs it shows the port, and a click offers Show, Stop
   and whether it opens by itself. Nothing runs while the preview is closed.
-- `web.preview.openOnStartup` turns the automatic opening off.
+- `web.preview.openOnStartup` opens the preview by itself (off by default, it saves about 100 MB).
 
 ## Insert Block
 

@@ -117,8 +117,8 @@
       "properties": {
         "web.preview.openOnStartup": {
           "type": "boolean",
-          "default": true,
-          "description": "Open the preview beside the editor when the folder has an index.html."
+          "default": false,
+          "description": "Open the preview beside the editor by itself when the folder has an index.html. Off by default: the preview costs about 100 MB of memory."
         }
       }
     }

@@ -107,6 +107,14 @@ const s = http.createServer((req, res) => {
 });
 s.listen(0, '127.0.0.1', () => console.log('\\n  \\x1b[32mLocal\\x1b[0m:   http://localhost:' + s.address().port + '/\\n'));`;
 
+/** The preview no longer opens by itself (it costs memory); this test turns the option on in the package's Web settings. */
+function ligarAbertura() {
+    const f = path.join(PACOTE, 'data', 'web', 'user', 'User', 'settings.json');
+    const j = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : {};
+    j['web.preview.openOnStartup'] = true;
+    fs.writeFileSync(f, JSON.stringify(j, null, 2));
+}
+
 async function modoDev() {
     const temp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'preview-dev-')));
     const pasta = path.join(temp, 'app');
@@ -115,6 +123,7 @@ async function modoDev() {
     fs.writeFileSync(path.join(pasta, 'dev.js'), DEV);
     fs.writeFileSync(path.join(pasta, 'package.json'), JSON.stringify({ name: 'app', private: true, scripts: { dev: 'node dev.js' } }));
     spawnSync(HUB, ['--trust', pasta], { env: { ...process.env, SUITE_ROOT: PACOTE } });
+    ligarAbertura();
     spawn(HUB, ['--open', 'web', '--port', String(PORTA), pasta], { env: { ...process.env, SUITE_ROOT: PACOTE }, stdio: 'ignore' });
     const h = await conectar(PORTA);
     passo('offers npm run dev', await h.ate(() => h.acha('.notification-toast .monaco-button', 'Run npm run dev'), 30000));
@@ -149,6 +158,7 @@ async function modoDev() {
     fs.writeFileSync(path.join(pasta, 'index.html'), HTML);
     fs.writeFileSync(path.join(pasta, 'style.css'), 'h1 { color: rgb(200, 0, 0); }\n');
     spawnSync(HUB, ['--trust', pasta], { env: { ...process.env, SUITE_ROOT: PACOTE } });
+    ligarAbertura();
     spawn(HUB, ['--open', 'web', '--port', String(PORTA), pasta], { env: { ...process.env, SUITE_ROOT: PACOTE }, stdio: 'ignore' });
     const h = await conectar(PORTA);
 

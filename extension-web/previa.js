@@ -545,7 +545,7 @@ function ativar(context) {
         },
     });
     const raiz = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    const auto = vscode.workspace.getConfiguration('web.preview').get('openOnStartup', true);
+    const auto = vscode.workspace.getConfiguration('web.preview').get('openOnStartup', false);
     if (auto && raiz && fs.existsSync(path.join(raiz, 'index.html')) && !estado) {
         const indice = vscode.Uri.file(path.join(raiz, 'index.html'));
         // With nothing open yet, index.html goes on the left so the preview really sits beside it
@@ -567,7 +567,7 @@ async function urlDaPagina(context, arquivo) {
 async function menu() {
     if (!estado) return abrir(contexto);
     const config = vscode.workspace.getConfiguration('web.preview');
-    const auto = config.get('openOnStartup', true);
+    const auto = config.get('openOnStartup', false);
     const itens = [
         { label: '$(open-preview) Show Preview', acao: 'mostrar' },
         { label: '$(debug-stop) Stop Preview', description: 'closes the tab and its server', acao: 'parar' },
