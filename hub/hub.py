@@ -20,6 +20,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+import economico
 import troca
 
 try:
@@ -40,6 +41,9 @@ CLONES = CASA / 'Cloned'
 TEMPORARIO = tempfile.gettempdir()
 MEMORIAS = ['768M', '1G', '2G', '3G']
 PADRAO = {'ai': False, 'visual': True, 'animations': True, 'memory': '1G', 'keymap': 'intellij', 'folder': ''}
+ECONOMIA = ('Uses less memory by turning off some background features of the editors. '
+            'It applies the next time an app opens, and turning it off puts your settings back.')
+ECONOMIA_POUCA = 'This computer has {gib:.1f} GB of RAM, so economy mode is recommended.'
 ANTIGOS = {'java': 'Java', 'web': 'Web', 'standard': 'Standard'}  # display names before 0.3.1, for old shortcuts
 # Defaults of older versions that a later one replaced; a setting still equal to one was never touched.
 LEGADO = {'files.autoSave': 'onFocusChange'}
@@ -316,6 +320,24 @@ def migrar(atual, base, anterior):
             atual[chave] = valor
 
 
+def modo_economico(app, atual):
+    """Applies or undoes the economy settings in `atual`; returns the JDT LS memory limit to use."""
+    gancho = economico.ler_gancho(PERFIS / app)
+    memoria = opcao(app, 'memory')
+    registro = DADOS / app / 'economico.json'
+    antes = ler_json(registro)
+    if opcoes().get('economy', False):
+        economico.aplicar(atual, gancho['settings'], antes)
+        memoria = gancho['memory'] or memoria
+    elif antes:
+        economico.reverter(atual, gancho['settings'], antes)
+    if antes:
+        registro.write_text(json.dumps(antes, ensure_ascii=False), encoding='utf8')
+    elif registro.exists():
+        registro.unlink()
+    return memoria
+
+
 def preparar(app):
     """Grava o perfil a cada abertura, mantendo o que a pessoa mudou."""
     usuario = pasta_usuario(app)
@@ -352,9 +374,10 @@ def preparar(app):
     atual['editor.cursorSmoothCaretAnimation'] = 'explicit' if movimento else 'off'
     if aplicativos()[app].get('base') and ripgrep():
         atual['todo-tree.ripgrep.ripgrep'] = str(ripgrep())
+    memoria = modo_economico(app, atual)
     args = atual.get('java.jdt.ls.vmargs')
     if args:
-        atual['java.jdt.ls.vmargs'] = re.sub(r'-Xmx\S+', f"-Xmx{opcao(app, 'memory')}", args)
+        atual['java.jdt.ls.vmargs'] = re.sub(r'-Xmx\S+', f"-Xmx{memoria}", args)
     arquivo.write_text(json.dumps(atual, indent=4, ensure_ascii=False), encoding='utf8')
     origens = [PERFIS / 'base'] if aplicativos()[app].get('base') else []
     origens.append(PERFIS / app)
@@ -3396,6 +3419,18 @@ def janela(inicial=None, lancar=None):
             fila.addStretch(1)
             v.addLayout(fila)
             v.addSpacing(10)
+            v.addWidget(rotulo('Memory', 'secao'))
+            total = economico.ram_total_gib()
+            self.economia = QCheckBox('Economy mode')
+            self.economia.setChecked(economico.pouca_ram(total))
+            v.addWidget(self.economia)
+            texto = ECONOMIA
+            if economico.pouca_ram(total):
+                texto = ECONOMIA_POUCA.format(gib=total) + ' ' + texto
+            nota_ = rotulo(texto, 'mudo')
+            nota_.setWordWrap(True)
+            v.addWidget(nota_)
+            v.addSpacing(10)
             v.addWidget(rotulo('Theme for all apps', 'secao'))
             self.tema = 'Dark'
             fila = QHBoxLayout()
@@ -3434,6 +3469,7 @@ def janela(inicial=None, lancar=None):
                     if teclas:
                         aplicar_keymap(app, 'intellij' if teclas.botoes['IntelliJ'].isChecked() else 'vscode')
                     gravar_ajuste(app, 'workbench.colorTheme', tema_de(app, self.tema))
+                gravar_geral('economy', self.economia.isChecked())
                 if self.hub_mesa.isChecked() or self.hub_menu.isChecked():
                     criar_atalho(None, self.hub_mesa.isChecked(), self.hub_menu.isChecked())
             except OSError as e:
@@ -3783,6 +3819,22 @@ def janela(inicial=None, lancar=None):
             c.setChecked(opcoes().get('transitions', True))
             c.toggled.connect(lambda n: gravar_geral('transitions', n))
             v.addWidget(c)
+            v.addSpacing(8)
+            v.addWidget(rotulo('Memory', 'secao'))
+            c = QCheckBox('Economy mode')
+            c.setObjectName('economia')
+            c.setChecked(opcoes().get('economy', False))
+            c.toggled.connect(lambda n: gravar_geral('economy', n))
+            v.addWidget(c)
+            nota_ = rotulo(ECONOMIA, 'mudo')
+            nota_.setWordWrap(True)
+            v.addWidget(nota_)
+            total = economico.ram_total_gib()
+            if economico.pouca_ram(total) and not opcoes().get('economy', False):
+                dica = rotulo(ECONOMIA_POUCA.format(gib=total), 'mudo')
+                dica.setObjectName('economia_dica')
+                dica.setWordWrap(True)
+                v.addWidget(dica)
             v.addSpacing(8)
             v.addWidget(rotulo('Shortcuts', 'secao'))
             atalho_ = QPushButton('Add Hub to Desktop')
