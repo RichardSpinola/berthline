@@ -116,7 +116,7 @@
     "[java]": {
         "editor.defaultFormatter": "redhat.java",
         "editor.formatOnSave": false,
-        "editor.snippetSuggestions": "none",
+        "editor.snippetSuggestions": "inline",
         "editor.suggest.localityBonus": true,
         "editor.suggest.showStatusBar": false
     },

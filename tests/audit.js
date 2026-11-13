@@ -367,6 +367,28 @@ async function sugestoes(h, pasta) {
     const modelos = (await rpc('sugestoes', { linha: 5, coluna: 10 })).sort((a, b) => a.ordem.localeCompare(b.ordem)).map(s => s.rotulo);
     conferir('sout comes first', modelos[0] === 'sout', modelos.slice(0, 5).join(' | '));
     await rpc('texto', { texto: limpo });
+    // Snippets a class needs: typing the name and pressing Enter must write the code (they were hidden by snippetSuggestions "none")
+    for (const [escrito, esperado] of [['scan', 'new Scanner(System.in)'], ['dowhile', '} while ('], ['switch', 'default:'], ['while', 'while ('], ['trycatch', 'catch ('], ['foreach', ' : '], ['ifelse', '} else {']]) {
+        await rpc('cursor', { linha: 5, coluna: 0 });
+        await dormir(400);
+        for (const text of escrito) {
+            await h.c('Input.dispatchKeyEvent', { type: 'keyDown', text, key: text, unmodifiedText: text });
+            await h.c('Input.dispatchKeyEvent', { type: 'keyUp', key: text });
+            await dormir(120);
+        }
+        const noTopo = () => h.ev(`document.querySelector('.suggest-widget.visible .monaco-list-row.focused')?.getAttribute('aria-label') ?? ''`);
+        await h.ate(async () => (await noTopo()).startsWith(escrito), 5000);
+        const topo = await noTopo();
+        await tecla(h, [], 'Enter', 'Enter', 13);
+        await dormir(600);
+        const texto = (await rpc('estado')).texto;
+        conferir(`snippet ${escrito} expands`, texto.includes(esperado), `list top: ${topo}`);
+        await rpc('executar', { comando: 'leaveSnippet' });
+        await tecla(h, [], 'Escape', 'Escape', 27);
+        await rpc('texto', { texto: limpo });
+        await dormir(400);
+    }
+    await rpc('texto', { texto: limpo });
     await rpc('executar', { comando: 'workbench.action.files.save' });
 }
 
