@@ -1,12 +1,13 @@
 // Audits a built package: commands, shortcuts, menus, themes and editor behaviour.
-// Usage: node tests/audit.js <package> <java|web>
+// Usage: node tests/audit.js <package> <java|web|standard>
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const { SAIDA, dormir, conectar, fechado } = require('./cdp');
 
 const PACOTE = path.resolve(process.argv[2]);
 const APP = process.argv[3] || 'java';
-const PORTA = 9334;
+const PORTA = +process.env.AUDIT_PORT || 9334; // AUDIT_PORT lets two audits run side by side
+const RPC = PORTA + 1;
 const JANELAS = process.platform === 'win32';
 const HUB = path.join(PACOTE, JANELAS ? 'Hub.exe' : 'Hub');
 const INSEGUROS = /^ij\.(newProject|reload|gitPush|gitPull|safeDelete|openFiles)$/;
@@ -20,7 +21,7 @@ const conferir = (nome, ok, extra = '') => (ok ? certo : falha)(nome, extra);
 const aviso = (nome, extra = '') => { relatorio.avisos.push(`${nome} ${extra}`.trim()); console.log('NOTE ', nome, extra); };
 
 const rpc = (acao, dados = {}) => new Promise((ok, nao) => {
-    const r = http.request({ host: '127.0.0.1', port: 9335, method: 'POST' }, res => {
+    const r = http.request({ host: '127.0.0.1', port: RPC, method: 'POST' }, res => {
         let b = '';
         res.on('data', d => b += d);
         res.on('end', () => { const j = JSON.parse(b); j.erro ? nao(new Error(j.erro)) : ok(j.ok); });
@@ -35,11 +36,12 @@ function iniciar(pasta) {
     spawnSync(HUB, ['--prepare'], { env: { ...process.env, SUITE_ROOT: PACOTE } });
     const exe = ['VSCodium.exe', 'Code.exe', 'codium', 'code'].map(n => path.join(PACOTE, 'editor', n)).find(fs.existsSync);
     const env = { ...process.env, SUITE_TOOLS: path.join(usuario, 'tools'), SUITE_VISUAL: '1', SUITE_ANIMATIONS: '1',
-        SUITE_WATERMARK: path.join(usuario, 'watermark.svg'), SUITE_HUB: HUB };
+        SUITE_WATERMARK: path.join(usuario, 'watermark.svg'), SUITE_HUB: HUB, AUDIT_RPC_PORT: String(RPC) };
     delete env.ELECTRON_RUN_AS_NODE;
     const args = [`--user-data-dir=${path.join(usuario, 'user')}`, `--extensions-dir=${path.join(usuario, 'extensions')}`,
         `--extensionDevelopmentPath=${path.join(__dirname, 'auditor')}`, `--remote-debugging-port=${PORTA}`, pasta];
-    if (!JANELAS) args.unshift('--ozone-platform=x11');
+    // AUDIT_OZONE=headless runs without a window on screen
+    if (!JANELAS) args.unshift(`--ozone-platform=${process.env.AUDIT_OZONE || 'x11'}`);
     spawn(exe, args, { env, stdio: 'ignore', detached: true }).unref();
 }
 
@@ -70,8 +72,10 @@ async function comandos(h) {
     const lista = JSON.parse(atalhos.replace(/,(\s*[\]}])/g, '$1'));
     const vistos = {};
     for (const k of lista) {
-        const c = k.command.replace(/^-/, '');
-        if (!todos.has(c)) falha('shortcut has no command', `${k.key} -> ${c}`);
+        // A removal ("-cmd") never runs anything; it only drops a binding an extension adds,
+        // often for a command that registers later or belongs to a language this app lacks (VS Code keymap)
+        const c = k.command;
+        if (!c.startsWith('-') && !todos.has(c)) falha('shortcut has no command', `${k.key} -> ${c}`);
         if (!k.command.startsWith('-')) (vistos[`${k.key} | ${k.when ?? ''}`] ??= []).push(c);
     }
     for (const [k, v] of Object.entries(vistos)) if (v.length > 1) falha('shortcut conflict', `${k}: ${v.join(', ')}`);
@@ -96,6 +100,7 @@ async function comandos(h) {
     const resultado = {};
     for (const c of proprios) {
         if (INSEGUROS.test(c)) { resultado[c] = 'skipped'; continue; }
+        if (process.env.AUDIT_VERBOSE) console.log('run', c);
         const r = await rpc('executar', { comando: c });
         await dormir(250);
         await tecla(h, [], 'Escape', 'Escape', 27);
@@ -166,7 +171,8 @@ async function java(h, pasta) {
     await dormir(4000);
     const botoes = await h.ev(`[...document.querySelectorAll('.part.titlebar a.action-label, .editor-actions a.action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')||e.innerText)`);
     relatorio.dados.barra = botoes;
-    const rodar = botoes.filter(b => /^Run( Java| or Debug| \()/.test(b));
+    // "Run (Shift+F10)" with IntelliJ keys, plain "Run" with VS Code keys
+    const rodar = botoes.filter(b => /^Run( Java| or Debug| \(|$)/.test(b));
     conferir('single run button', rodar.length === 1, rodar.join(' | '));
     await h.foto(`audit-${APP}-bar`);
 
@@ -193,7 +199,12 @@ async function java(h, pasta) {
 // Fills the New Java Class dialog the way a person does: name first, then arrows to pick the type.
 async function novoTipo(h, pasta, texto, descidas) {
     await rpc('executar', { comando: 'ij.newClassTop', limite: 800 });
-    await dormir(500);
+    // The dialog first looks up the target folder through the clipboard, which can take a while;
+    // typing before it shows sends the name to whatever has focus (the search view, once)
+    const aberto = await h.ate(async () => /New Java Class/.test(await h.ev(`(()=>{const w=document.querySelector('.quick-input-widget');return w&&w.style.display!=='none'?w.querySelector('.quick-input-title')?.innerText??'':''})()`)), 10000);
+    if (!aberto) falha('new class dialog opens', texto);
+    await h.ev(`document.querySelector('.quick-input-box input')?.focus()`);
+    await dormir(200);
     await h.c('Input.insertText', { text: texto });
     await dormir(300);
     for (let i = 0; i < descidas; i++) await tecla(h, [], 'ArrowDown', 'ArrowDown', 40);
@@ -413,19 +424,78 @@ async function exportar(h, pasta) {
     await rpc('executar', { comando: 'workbench.action.closeAllEditors' });
 }
 
-async function botoes(h) {
+async function botoes(h, pasta) {
     await dormir(1000);
     const canto = await h.ev(`[...document.querySelectorAll('.part.activitybar .action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')||'')`);
     // Java hides the corner gear (the title bar has one); Web keeps the VS Code layout
     if (APP === 'java') conferir('one settings button', !canto.some(b => b.startsWith('Manage')), canto.join(' | '));
+    if (APP === 'java') {
+        const barra = () => h.ev(`[...document.querySelectorAll('.part.statusbar .statusbar-item')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.id+'='+e.innerText.trim())`);
+        const antes = await barra();
+        conferir('no remote indicator', !antes.some(b => b.startsWith('status.host')), antes.join(' | '));
+        conferir('no Git Log outside Git', !antes.some(b => b.includes('Git Log')), antes.join(' | '));
+        // In a Git project Git Graph's item reads "Git Log"
+        spawnSync('git', ['init', '-q'], { cwd: pasta });
+        const git = await h.ate(async () => (await barra()).some(b => /Git Log$/.test(b)), 8000);
+        const depois = await barra();
+        conferir('Git Log in a Git project', git && !depois.some(b => b.includes('Git Graph')), depois.join(' | '));
+        fs.rmSync(path.join(pasta, '.git'), { recursive: true, force: true });
+    }
     await rpc('executar', { comando: 'workbench.view.explorer' });
     await dormir(600);
     await h.foto(`audit-${APP}-buttons`);
 }
 
+async function barraWeb(h, pasta) {
+    // A plain page script, like a first project: no false type errors, no ESLint library warning
+    const pagina = path.join(pasta, 'page.js');
+    fs.writeFileSync(pagina, 'const card = document.querySelector(".card");\nconst button = card.querySelector("button");\nbutton.addEventListener("click", () => button.setAttribute("aria-expanded", card.classList.toggle("open")));\n');
+    await rpc('abrir', { arquivo: pagina });
+    await h.ate(async () => /JavaScript/.test(await h.status()), 15000);
+    await dormir(6000);
+    const erros = await rpc('erros', { arquivo: pagina });
+    conferir('plain page script has no type errors', !erros.length, erros.join(' / ').slice(0, 200));
+    const avisos = await h.ev(`[...document.querySelectorAll('.notification-toast')].map(e=>e.innerText).join(' / ')`);
+    conferir('no ESLint library warning', !/ESLint library/.test(avisos), avisos.replace(/\s+/g, ' ').slice(0, 160));
+    const ids = await h.ev(`[...document.querySelectorAll('.statusbar-item')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.id)`);
+    for (const [id, nome] of [['status.host', 'remote indicator'], ['chat.statusBarEntry', 'Copilot Sign In'], ['asispts.neo-git-graph', '(neo) Git Graph']])
+        conferir(`status bar hides ${nome}`, !ids.includes(id), ids.join(' | '));
+    if (spawnSync('git', ['init', '-q', pasta]).status === 0)
+        conferir('status bar shows Git Log in a repository', await h.ate(async () => /Git Log/.test(await h.status()), 20000), await h.status());
+    await h.foto(`audit-${APP}-statusbar`);
+}
+
+// Standard is the plain editor: only the Hub button and its extension, nothing from the other profiles
+async function padrao(h) {
+    const todos = new Set(await rpc('comandos'));
+    relatorio.dados.comandos = todos.size;
+    const nossa = await rpc('contribuicoes', { id: 'berthline.berthline-hub' });
+    conferir('berthline-hub installed', !!nossa);
+    for (const c of nossa?.commands ?? []) if (!todos.has(c.command)) falha('command not registered', c.command);
+    conferir('no commands from other profiles', ![...todos].some(c => /^(ij|web)\./.test(c)));
+    conferir('no other berthline extension', !await rpc('contribuicoes', { id: 'berthline.berthline-tools' }) && !await rpc('contribuicoes', { id: 'berthline.berthline-web' }));
+    const teclas = path.join(PACOTE, 'data/standard/user/User/keybindings.json');
+    const lista = fs.existsSync(teclas) ? JSON.parse(fs.readFileSync(teclas, 'utf8').replace(/^\s*\/\/.*$/gm, '').replace(/,(\s*[\]}])/g, '$1') || '[]') : [];
+    conferir('editor keys untouched', !lista.length, `${lista.length} bindings`);
+    const barra = await h.ev(`[...document.querySelectorAll('.part.statusbar .statusbar-item')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.innerText.trim())`);
+    conferir('back to Hub in the status bar', barra.some(b => /Hub$/.test(b)), barra.join(' | '));
+    const canto = await h.ev(`[...document.querySelectorAll('.part.activitybar .action-label')].filter(e=>e.getBoundingClientRect().width>0).map(e=>e.getAttribute('aria-label')||'')`);
+    conferir('corner gear kept', canto.some(b => b.startsWith('Manage')), canto.join(' | '));
+    conferir('seti icons', await rpc('ajuste', { chave: 'workbench.iconTheme' }) === 'vs-seti');
+    // The person may pick another theme in the Hub; what matters is that it exists, or the editor falls back silently
+    const tema = await rpc('ajuste', { chave: 'workbench.colorTheme' });
+    conferir('colour theme exists', (await rpc('temas')).some(t => t.id === tema), tema);
+    await rpc('executar', { comando: 'workbench.view.explorer' });
+    await dormir(600);
+    await h.foto('audit-standard-buttons');
+}
+
 async function temas(h) {
     const lista = await rpc('temas');
     relatorio.dados.temas = lista.length;
+    // Without a window manager (Xvfb) the window can lose focus; the inactive title colours are not what we measure
+    await h.c('Emulation.setFocusEmulationEnabled', { enabled: true });
+    await h.c('Page.bringToFront');
     const medir = `(()=>{
 const lum=c=>{const v=c.map(x=>{x/=255;return x<=.03928?x/12.92:((x+.055)/1.055)**2.4});return .2126*v[0]+.7152*v[1]+.0722*v[2]};
 const rgb=s=>(s.match(/[\\d.]+/g)||[]).map(Number);
@@ -463,18 +533,19 @@ return r})()`;
     const h = await conectar(PORTA);
     if (!await pronto()) throw new Error('auditor did not start');
     await dormir(5000);
-    const arquivo = path.join(pasta, APP === 'java' ? 'src/Main.java' : 'app.js');
+    const arquivo = path.join(pasta, { java: 'src/Main.java', web: 'app.js', standard: 'hello.py' }[APP]);
     for (const etapa of [
         () => APP === 'java' ? java(h, pasta) : null,
         () => APP === 'java' ? exportar(h, pasta) : null, // needs the clean fixture, before other steps add files
-        () => botoes(h),
-        () => comandos(h),
+        () => APP === 'web' ? barraWeb(h, pasta) : null,
+        () => APP === 'standard' ? padrao(h) : botoes(h, pasta),
+        () => APP === 'standard' ? null : comandos(h),
         () => APP === 'java' ? teclado(h, arquivo) : null,
         () => APP === 'java' ? criacao(h, pasta) : null,
         () => APP === 'java' ? iconesReais(h, pasta) : null,
         () => APP === 'java' ? gerar(h, pasta) : null,
         () => APP === 'java' ? sugestoes(h, pasta) : null,
-        () => autosave(h, arquivo),
+        () => APP === 'standard' ? null : autosave(h, arquivo), // Standard keeps the editor's own autosave (off)
         () => temas(h),
     ]) {
         try { await etapa(); } catch (e) { falha('audit step crashed', e.message); }

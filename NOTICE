@@ -4,6 +4,7 @@ This package bundles third-party software under its own terms:
 
 - VSCodium, MIT License
 - Node.js, MIT License
+- ESLint and its dependencies (eslint/node_modules), each under the license in its own folder
 - Inter font, SIL Open Font License 1.1
 - Qt for Python (PySide6), LGPL v3
 - Editor extensions, each under the license in its own folder (data/<app>/extensions)

@@ -1,5 +1,5 @@
 {
-  "title": "Web",
+  "title": "Web Wherry",
   "description": "HTML, CSS, JavaScript and TypeScript.",
   "order": 2,
   "base": true,
@@ -19,6 +19,9 @@
     "Node.js server": "A small HTTP server with no dependencies. npm run dev restarts it on save; requests.http tries it."
   },
   "accent": "#3B82C4",
+  "hiddenStatus": [
+    "status.host"
+  ],
   "required": [
     "berthline.berthline-web",
     "berthline.berthline-hub"

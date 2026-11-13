@@ -15,7 +15,7 @@ PACOTE = Path(sys.argv[1])
 SAIDA = Path(sys.argv[2])
 SAIDA.mkdir(parents=True, exist_ok=True)
 PASTA_JAVA = Path.home() / 'Aulas'
-NOMES = {'Berthline Java', 'Berthline Web', 'Berthline Standard', 'Berthline Hub'}
+NOMES = {'Bean Barge', 'Web Wherry', 'Standard Sloop', 'Berthline Hub'}
 
 
 def foto(nome):
@@ -116,9 +116,9 @@ def preparar_tudo(pid):
     mesa = Path(subprocess.run(['powershell', '-NoProfile', '-Command', "[Environment]::GetFolderPath('Desktop')"],
                                capture_output=True, text=True, check=True).stdout.strip())
     inicio = Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs'
-    if atalhos(mesa) & NOMES != NOMES - {'Berthline Web'}:
+    if atalhos(mesa) & NOMES != NOMES - {'Web Wherry'}:
         raise SystemExit(f'desktop shortcuts: {sorted(atalhos(mesa))}')
-    if atalhos(inicio) & NOMES != NOMES - {'Berthline Web', 'Berthline Hub'}:
+    if atalhos(inicio) & NOMES != NOMES - {'Web Wherry', 'Berthline Hub'}:
         raise SystemExit(f'menu shortcuts: {sorted(atalhos(inicio))}')
     for app in ('java', 'web', 'standard'):
         ajustes = json.loads((PACOTE / f'data/{app}/user/User/settings.json').read_text(encoding='utf8'))

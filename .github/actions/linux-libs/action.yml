@@ -1,0 +1,10 @@
+name: Linux libraries
+description: What the editor and Qt need on a bare runner; the package index is refreshed only when an install fails
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        libs="xvfb libegl1 libnss3 libgbm1 libasound2t64 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0"
+        sudo apt-get install -y --no-install-recommends $libs || { sudo apt-get update && sudo apt-get install -y --no-install-recommends $libs; }
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0

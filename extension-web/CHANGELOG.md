@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- "Git Log" in the status bar opens the Git history, in place of "(neo) Git Graph"; shown in a repository only.
+
 ## 0.3.0
 
 - Live preview beside the editor, served from inside the editor: reload on save, CSS swap without

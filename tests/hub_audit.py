@@ -242,7 +242,13 @@ def pequenas(painel):
     if not feito:
         erros.append('click did not skip the opening')
     fechar_tudo(painel)
+    tudo = hub.opcoes()
+    for app in ('java', 'web', 'standard'):
+        tudo.get(app, {}).pop('keymap', None)
+    hub.OPCOES.write_text(json.dumps(tudo), encoding='utf8')
     preparo = hub.CLASSES['Preparo'](painel)
+    if not preparo.linhas['java'][2].botoes['IntelliJ'].isChecked():
+        erros.append('setup: java keymap is not the default (IntelliJ)')
     preparo.show()
     varrer_janela(preparo, 'setup')
     preparo.hide()

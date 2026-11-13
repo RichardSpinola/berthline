@@ -2,6 +2,12 @@
 
 Without arguments it uses small fake installs. With a package folder it also updates a real copy of
 that package to a repacked "next version", and makes one update fail to see the old version return.
+
+    update_test.py <package> [--from <older package>] [--audit]
+
+--from installs the older package first and updates it to <package>, as a person updating from the last
+release would. --audit then runs the Java audit (tests/audit.js) on the updated install, to catch what
+differs from a clean one; it needs a display (xvfb-run on a server).
 """
 import json
 import os
@@ -275,14 +281,32 @@ def encerrar(raiz):
     time.sleep(2)
 
 
-def pacote_real(pacote):
-    """Updates a copy of the real package with the real program, then makes an update fail."""
+def auditar(raiz, casa):
+    """Java audit of the updated install; its pictures and report go to tests/out/after-update."""
+    node = next((p for p in (raiz / 'node/bin/node', raiz / 'node/node.exe') if p.exists()), None)
+    saida = Path(__file__).parent / 'out/after-update'
+    amb = {**os.environ, 'HOME': str(casa), 'USERPROFILE': str(casa), 'SUITE_AUDIT_OUT': str(saida)}
+    amb.pop('SUITE_ROOT', None)
+    print('auditing the updated install', flush=True)
+    r = subprocess.run([str(node), str(Path(__file__).parent / 'audit.js'), str(raiz), 'java'], env=amb, timeout=1200,
+                       capture_output=True, text=True, encoding='utf8', errors='replace') if node else None
+    if r:
+        print(r.stdout[-6000:], r.stderr[-2000:], flush=True)
+    falhou = [linha[5:].strip() for linha in (r.stdout if r else '').splitlines() if linha.startswith('FAIL')]
+    passo('real: java audit passes after the update', r is not None and r.returncode == 0, falhou[:12] if r else 'no node')
+    encerrar(raiz)
+
+
+def pacote_real(pacote, antigo=None, auditoria=False):
+    """Updates a copy of the real package with the real program, then makes an update fail.
+
+    With an older package, that one is installed and updated to this one."""
     base = pacote.parent / '.update-test'  # beside the package: the temporary folder may be memory, and this needs room
     shutil.rmtree(base, ignore_errors=True)
     raiz = base / pacote.name
     print('copying the package', flush=True)
-    shutil.copytree(pacote, raiz, symlinks=True)
-    atual = json.loads((raiz / 'brand.json').read_text(encoding='utf8'))
+    shutil.copytree(antigo or pacote, raiz, symlinks=True)
+    atual = json.loads((pacote / 'brand.json').read_text(encoding='utf8'))
     casa = base / 'home'
     casa.mkdir(parents=True)
     amb = {**os.environ, 'HOME': str(casa), 'USERPROFILE': str(casa)}
@@ -293,7 +317,7 @@ def pacote_real(pacote):
     dados.update({'editor.fontSize': 21, 'files.autoSave': 'onFocusChange'})
     dados['workbench.colorCustomizations']['sideBar.background'] = '#191A1C'
     ajustes.write_text(json.dumps(dados), encoding='utf8')
-    (raiz / 'data/java/defaults.json').unlink()  # as left by a version that kept no defaults
+    (raiz / 'data/java/defaults.json').unlink(missing_ok=True)  # as left by a version that kept no defaults
     opcoes = json.loads((raiz / 'data/hub.json').read_text(encoding='utf8')) if (raiz / 'data/hub.json').exists() else {}
     opcoes.update({'setup': True, 'checked': 9e12, 'transitions': False})
     (raiz / 'data/hub.json').write_text(json.dumps(opcoes), encoding='utf8')
@@ -322,6 +346,8 @@ def pacote_real(pacote):
         passo('real: packaged extensions present', len(list((raiz / 'data/java/extensions').glob('redhat.java-*'))) == 1)
         passo('real: editor in place', hub.JANELAS or os.access(next((raiz / 'editor').glob('codium'), raiz), os.X_OK))
         encerrar(raiz)
+        if auditoria:
+            auditar(raiz, casa)
 
         # Second round: the next version cannot start, so 9.9.9 has to come back whole.
         ruim = base / 'broken' / pacote.name
@@ -351,8 +377,12 @@ if __name__ == '__main__':
         migracao()
         certificados()
         ajudante()
-        if len(sys.argv) > 1:
-            pacote_real(Path(sys.argv[1]).resolve())
+        resto = sys.argv[1:]
+        auditoria = '--audit' in resto
+        antigo = resto[resto.index('--from') + 1] if '--from' in resto else None
+        soltos = [a for i, a in enumerate(resto) if not a.startswith('--') and (i == 0 or resto[i - 1] != '--from')]
+        if soltos:
+            pacote_real(Path(soltos[0]).resolve(), antigo and Path(antigo).resolve(), auditoria)
     finally:
         shutil.rmtree(TEMP, ignore_errors=True)
     print(f'{len(falhas)} failures')

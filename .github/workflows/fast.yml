@@ -1,0 +1,25 @@
+name: fast
+# Fast layer: no package, every push and pull request. Same as `python tests/fast.py` on your machine.
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+concurrency:
+  group: fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install ruff==0.17.4
+      - run: python tests/fast.py

@@ -24,12 +24,12 @@ hub-projects/QPushButton:Cargo
 hub-projects/QPushButton:Projects
 hub-projects/QToolButton:
 hub-projects/QToolButton:All
+hub-projects/QToolButton:Bean Barge
 hub-projects/QToolButton:Close
-hub-projects/QToolButton:Java
 hub-projects/QToolButton:Minimize
 hub-projects/QToolButton:Settings
-hub-projects/QToolButton:Standard
-hub-projects/QToolButton:Web
+hub-projects/QToolButton:Standard Sloop
+hub-projects/QToolButton:Web Wherry
 hub-projects/QToolButton:⋯
 hub-settings/QAction:Create Desktop Shortcut
 hub-settings/QAction:Open
@@ -66,7 +66,7 @@ java-customize/Degrau:768M
 java-customize/QCheckBox:Animations
 java-customize/QCheckBox:Enable AI features
 java-customize/QCheckBox:Tree icons and watermark
-java-customize/QLineEdit:Folder where new Java projects are created
+java-customize/QLineEdit:Folder where new Bean Barge projects are created
 java-customize/QPushButton:All settings…
 java-customize/QPushButton:Berthline
 java-customize/QPushButton:Browse
@@ -153,9 +153,9 @@ java-projects/QToolButton:Minimize
 setup/QCheckBox:App menu
 setup/QCheckBox:Desktop
 setup/QCheckBox:Menu
-setup/QLineEdit:Java project folder
-setup/QLineEdit:Standard project folder
-setup/QLineEdit:Web project folder
+setup/QLineEdit:Bean Barge project folder
+setup/QLineEdit:Standard Sloop project folder
+setup/QLineEdit:Web Wherry project folder
 setup/QPushButton:Browse
 setup/QPushButton:Dark
 setup/QPushButton:Finish
@@ -169,7 +169,7 @@ setup/QToolButton:Minimize
 standard-customize/Combo:
 standard-customize/QCheckBox:Animations
 standard-customize/QCheckBox:Enable AI features
-standard-customize/QLineEdit:Folder where new Standard projects are created
+standard-customize/QLineEdit:Folder where new Standard Sloop projects are creat
 standard-customize/QPushButton:All settings…
 standard-customize/QPushButton:Berthline
 standard-customize/QPushButton:Browse
@@ -242,7 +242,7 @@ web-customize/Combo:
 web-customize/QCheckBox:Animations
 web-customize/QCheckBox:Enable AI features
 web-customize/QCheckBox:Tree icons and watermark
-web-customize/QLineEdit:Folder where new Web projects are created
+web-customize/QLineEdit:Folder where new Web Wherry projects are created
 web-customize/QPushButton:All settings…
 web-customize/QPushButton:Berthline
 web-customize/QPushButton:Browse

@@ -67,5 +67,5 @@ exports.activate = () => {
             }
             res.end(JSON.stringify(saida));
         });
-    }).listen(9335, '127.0.0.1');
+    }).listen(+process.env.AUDIT_RPC_PORT || 9335, '127.0.0.1');
 };

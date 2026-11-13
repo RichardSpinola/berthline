@@ -1,0 +1,14 @@
+name: Linux package
+description: Libraries for the editor, then the package from this run, unpacked; sets PKG
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/linux-libs
+    - uses: actions/download-artifact@v4
+      with:
+        name: berthline-linux
+        path: pkg
+    - shell: bash
+      run: |
+        tar -xzf pkg/berthline-linux.tar.gz -C "$RUNNER_TEMP"
+        echo "PKG=$RUNNER_TEMP/berthline-linux" >> "$GITHUB_ENV"

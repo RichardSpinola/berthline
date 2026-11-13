@@ -9,30 +9,32 @@
 
 **A lighter editor that works closer to an IDE.**
 
-A suite of ready-made editor profiles built on VSCodium, with one Hub to launch them.<br>
-Java and Web today, more over time.
+Ready-made editor profiles built on VSCodium, with one Hub to launch them.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-26313D)](LICENSE)
 ![Platforms: Windows and Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-26313D)
 ![Status: early preview](https://img.shields.io/badge/status-early%20preview-C8102E)
-![Personal project](https://img.shields.io/badge/personal-project-26313D)
 ![AI assisted](https://img.shields.io/badge/AI-assisted-26313D)
 
-[Download](#download) · [First run](#first-run) · [Profiles](#profiles) · [Why Berthline](#why-berthline) · [Limitations](#limitations)
+[Download](#download) · [First use](#first-use) · [Profiles](#profiles) · [Limits](#limits) · [Docs](#docs) · [Português](README.pt-BR.md)
 
 </div>
 
 > [!NOTE]
-> Berthline is a personal project: a set of editor profiles, not a full IDE. Updates may take a while and some features may be missing. If something bothers you, open an issue or fork it and fix it your way, with AI or without.
-
-<br>
+> Berthline is a personal project: a set of editor profiles, not a full IDE. If something bothers you, open an issue or fork it and fix it your way.
 
 <table>
   <tr>
-    <td width="34%"><img src="docs/images/hub.png" alt="Berthline Hub listing the Java, Web and Standard apps"></td>
-    <td width="66%"><img src="docs/images/welcome.png" alt="Welcome screen of Berthline Web"></td>
+    <td width="34%"><img src="docs/images/hub.png" alt="Berthline Hub listing Bean Barge, Web Wherry and Standard Sloop"></td>
+    <td width="66%"><img src="docs/images/profile.png" alt="Bean Barge screen in the Hub, with New Project, Open and Clone Repository"></td>
   </tr>
 </table>
+
+## What it is
+
+Each profile is an editor set up for one kind of work, with its own settings and extensions, so it
+never touches an editor you already have. The Hub opens them, creates projects and keeps them up to
+date. Everything stays inside the Berthline folder.
 
 ## Download
 
@@ -45,15 +47,12 @@ Get the latest package from [Releases](https://github.com/RichardSpinola/berthli
 
 `SHA256SUMS` in each release lets you check the files.
 
-## First run
+## First use
 
-**Windows**
+**Windows:** extract the zip to a local folder (it runs slowly from a USB drive) and open `Hub.exe`.
+The package is not signed yet, so SmartScreen may warn you: choose *More info*, then *Run anyway*.
 
-1. Extract the zip to a local folder, such as the Desktop. It runs slowly from a USB drive.
-2. Open `Hub.exe`.
-3. The package is not signed yet, so SmartScreen may warn you. Choose *More info*, then *Run anyway*.
-
-**Linux**
+**Linux:**
 
 ```bash
 tar -xzf berthline-linux.tar.gz
@@ -62,80 +61,47 @@ tar -xzf berthline-linux.tar.gz
 
 On Ubuntu 24.04 or later, the editor may need unprivileged user namespaces to start.
 
+The first start shows Setup: shortcuts, keymap for Bean Barge, project folders and theme. Everything
+there can be changed later. New versions install from the Hub, keeping your settings, projects and
+extensions.
+
 ## Profiles
 
-Each profile keeps its own settings and extensions, so nothing touches an editor you already have.
+| | Profile | For | Page |
+|---|---|---|---|
+| <img src="hub/assets/java.svg" alt="" width="40"> | **Bean Barge** | Java: run with console input, debug, create classes, profile. Java runtime included. IntelliJ-style keys by default. | [docs](docs/profiles/bean-barge.md) |
+| <img src="hub/assets/web.svg" alt="" width="40"> | **Web Wherry** | HTML, CSS, JavaScript and TypeScript, with Node.js, a live preview beside the editor and DevTools. VS Code keys. | [docs](docs/profiles/web-wherry.md) |
+| <img src="hub/assets/standard.svg" alt="" width="40"> | **Standard Sloop** | The plain editor, for everything else. | [docs](docs/profiles/standard-sloop.md) |
 
-| | Profile | What you get |
-|---|---|---|
-| <img src="hub/assets/java.svg" alt="" width="40"> | **Java** | Run with console input, debug, create classes and profile. The Java runtime is included, so you don't need to install a JDK. |
-| <img src="hub/assets/web.svg" alt="" width="40"> | **Web** | HTML, CSS, JavaScript and TypeScript, ready to use: Node.js and npm included, a live preview beside the editor (reload on save, phone and tablet widths, click an element to open its line), Insert Block for plain HTML sections, Prettier on save, ESLint, Emmet and a REST client. VS Code keys and theme. |
-| <img src="hub/assets/standard.svg" alt="" width="40"> | **Standard** | The plain editor, for everything else. |
+![Bean Barge running a program that reads console input](docs/images/java.png)
 
-![Java profile running a program that reads console input](docs/images/java.png)
+## Limits
 
-## Why Berthline
-
-My computer is modest, and IntelliJ IDEA, which I use for my Java studies, was too heavy for it. So I started trying to bring VS Code as close as I could to the IntelliJ IDEA experience, using it as inspiration.
-
-The goal isn't to turn an editor into a complete IDE. That barely makes sense. The goal is to get close enough that you can work comfortably on small and medium projects, and move to a full IDE when a project outgrows it.
-
-Then the idea grew. Java was only the start. Berthline is meant to become a complete suite of profiles for different kinds of work, ready for anyone to use and change. Web came next, and more will follow. Keeping profiles apart also means a Java setup never slows down a Web project.
-
-Berthline won't replace an IDE, and it has its own problems. It is one way to spend less of your computer's power while you code.
-
-### The name
-
-A *berth* is the place where a ship docks. A *line* is a shipping line, a fleet that sails under one flag. Berthline is a fleet of coding tools, and each one has its own berth.
-
-### The look
-
-The Hub's main screen is the Cargo: one boat per language, with its state and main action. A running app sails, a ready one rests at anchor, and the red flag only shows when something needs you. Editors keep a quiet dark theme, a choice of IntelliJ or VS Code shortcuts per app, and run buttons where you expect them.
-
-The app icons follow the nautical theme. All of them share the same hull and change only the cargo: steam for Java, `< >` for Web and a prompt for Standard. The Hub is the ship with the red flag. They are flat, in solid colors, so they stay clear at small sizes.
-
-## Measured
-
-One run of `node tests/measure.js dist/berthline-linux` on a modest laptop (Intel Core i3-10110U, 8 GB RAM, Fedora 45), 0.3.0 package. Each profile opens its sample project once to warm the disk cache, then again for the numbers. Memory is the whole process tree after 30 seconds idle, counted as PSS so shared pages are not counted twice. Web includes its preview, which opens by itself.
-
-| Profile | Startup | Memory (PSS) | Processes | Extensions on disk |
-|---|---:|---:|---:|---:|
-| Java | 4.0 s | 1212 MB | 11 | 267 MB |
-| Web | 3.0 s | 811 MB | 13 | 27 MB |
-| Standard | 5.7 s | 731 MB | 10 | 0 MB |
-
-The unpacked package takes 1.5 GB; the editor, Node.js and the Hub (1.06 GB of it) are shared by all profiles. Java's extensions include their own Java runtime. Run the script again after a change to compare.
-
-## Portability and privacy
-
-- Profiles, settings and extensions stay inside the Berthline folder.
-- The list of trusted folders is stored in `.berthline-shared` in your user folder, and new projects go to `Projects` there. This is what stays on a shared computer.
-- On Linux, the Hub adds a hidden shortcut to your user folder so the taskbar shows the right icon.
-- The Hub asks GitHub for new versions when it opens, and sends nothing else. You can turn this off in Settings.
-- Telemetry stays off. AI features are off by default, and you can turn them on per app under Settings.
-
-## Limitations
-
-- Early preview: expect rough edges.
-- Updates install from the Hub starting with 0.2.1: it downloads the release, checks its SHA-256, swaps the program and keeps your settings, projects and extensions. If the new version does not start, the old one comes back. From 0.2.0, download 0.2.1 by hand once.
+- Early preview: expect rough edges and missing features.
+- Not a full IDE. Small and medium projects work well; large ones are better in a full IDE.
+- Windows and Linux x64 only. The Windows package is not signed.
 - A managed computer can block `.exe` files. Only its administrator can change that.
 
-## Build from source
+## Docs
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install PySide6 pyinstaller certifi
-.venv/bin/python build/build.py
-```
-
-The package lands in `dist/`. Tests live in `tests/` and run on GitHub Actions on Windows and Linux.
+- Profiles: [Bean Barge](docs/profiles/bean-barge.md), [Web Wherry](docs/profiles/web-wherry.md), [Standard Sloop](docs/profiles/standard-sloop.md)
+- [Measurements](docs/measurements.md): startup time and memory per profile
+- [Privacy and portability](docs/privacy.md)
+- [Build from source](docs/build.md)
+- [AI use](docs/ai-use.md)
+- [The name and the look](docs/name-and-look.md)
+- [Roadmap](docs/ROADMAP.md)
 
 ## AI use
 
-AI did most of the work here: Claude Opus 5.5 and, from 0.2.1, Claude Fable 5.2 (Anthropic), through Claude Code, built the profiles, settings, Hub and tests. In 0.3.0, Claude Opus 5.5 built the Web preview, blocks and the measure script. I chose the direction, tested it and decided what to keep.
+Most of Berthline was built with AI: Claude Opus 5.5 and Claude Fable 5.2 (Anthropic), through
+Claude Code. I chose the direction, tested it and decided what to keep. Details in
+[docs/ai-use.md](docs/ai-use.md).
 
 ## License
 
 MIT, see [LICENSE](LICENSE). Bundled software keeps its own license, see [NOTICE](NOTICE).
 
-Not affiliated with or endorsed by VSCodium, Microsoft, JetBrains or Oracle. IntelliJ IDEA and VS Code are trademarks of their owners, mentioned only to describe where the inspiration comes from.
+Not affiliated with or endorsed by VSCodium, Microsoft, JetBrains or Oracle. Java is a trademark of
+Oracle; IntelliJ IDEA and VS Code are trademarks of their owners, mentioned only to describe what the
+profiles work with and where the inspiration comes from.
