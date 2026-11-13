@@ -3268,14 +3268,14 @@ def janela(inicial=None, lancar=None):
             super().__init__()
             self.setObjectName('ferramenta')
             self.setCursor(Qt.PointingHandCursor)
-            self.setFixedSize(400, 146)
+            self.setFixedSize(360, 116)
             self.app = app
             self.painel = painel
             info = aplicativos()[app]
-            self.mar = Sea(app, 400, 146, False, 132, 4)
+            self.mar = Sea(app, 360, 116, False, 104, 4)
             self.mar.setParent(self)
             coluna = QWidget(self)
-            coluna.setGeometry(170, 18, 222, 100)
+            coluna.setGeometry(132, 12, 220, 90)
             t = QVBoxLayout(coluna)
             t.setContentsMargins(0, 0, 0, 0)
             t.setSpacing(5)
@@ -3597,7 +3597,7 @@ def janela(inicial=None, lancar=None):
             # A fixed size keeps window managers, KDE included, from maximizing the panel.
             self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint
                                 | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
-            self.setFixedSize(400, 620)
+            self.setFixedSize(360, 470)
             self.tela = None
             self.linhas = []
             self.miolo = Troca()
@@ -3847,7 +3847,7 @@ def janela(inicial=None, lancar=None):
             v.addWidget(preparo, 0, Qt.AlignLeft)
             v.addSpacing(8)
             v.addWidget(rotulo('Updates', 'secao'))
-            c = QCheckBox('Check GitHub for new versions when the Hub opens')
+            c = QCheckBox('Check GitHub for updates at start')
             c.setChecked(opcoes().get('check_updates', True))
             c.toggled.connect(lambda n: gravar_geral('check_updates', n))
             v.addWidget(c)
@@ -3862,7 +3862,16 @@ def janela(inicial=None, lancar=None):
             v.addLayout(fila)
             v.addStretch(1)
             self.listar()
-            return p
+            for texto in p.findChildren(QLabel):
+                if len(texto.text()) > 30:
+                    texto.setWordWrap(True)
+            rolagem = QScrollArea()
+            rolagem.setObjectName('rolagem')
+            rolagem.setWidgetResizable(True)
+            rolagem.setFrameShape(QFrame.NoFrame)
+            rolagem.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            rolagem.setWidget(p)
+            return rolagem
 
         def mudar_fundo(self, texto):
             """Blur needs a new native window, so the panel reopens itself right away."""

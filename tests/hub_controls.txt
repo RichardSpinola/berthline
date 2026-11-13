@@ -37,7 +37,7 @@ hub-settings/QAction:Open Editor Directly
 hub-settings/QAction:Plugins
 hub-settings/QAction:Settings
 hub-settings/QAction:Show Data Folder
-hub-settings/QCheckBox:Check GitHub for new versions when the Hub opens
+hub-settings/QCheckBox:Check GitHub for updates at start
 hub-settings/QCheckBox:Economy mode
 hub-settings/QCheckBox:Transitions and boat animation
 hub-settings/QListWidget:lista
