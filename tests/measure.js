@@ -127,7 +127,7 @@ async function medir(app, base = false) {
         fs.writeFileSync(arqAjustes, JSON.stringify({ ...JSON.parse(original), ...JSON.parse(fs.readFileSync(AJUSTES, 'utf8')) }, null, 4));
     }
     const exe = ['VSCodium.exe', 'codium'].map(n => path.join(PACOTE, 'editor', n)).find(fs.existsSync);
-    const args = [`--user-data-dir=${usuario}`, `--extensions-dir=${extensoes}`, `--remote-debugging-port=${PORTA}`, pasta];
+    const args = [`--user-data-dir=${usuario}`, `--extensions-dir=${extensoes}`, `--remote-debugging-port=${PORTA}`, ...(process.env.MEASURE_ARGS ? process.env.MEASURE_ARGS.split(" ") : []), pasta];
     if (base) args.unshift('--disable-workspace-trust');
     if (!JANELAS) args.unshift('--ozone-platform=x11');
     const inicio = Date.now();
