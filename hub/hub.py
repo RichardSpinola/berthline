@@ -21,6 +21,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import economico
+import java_layout
+import quadro_windows
 import troca
 
 try:
@@ -960,65 +962,6 @@ def importar(app, origem):
         shutil.copytree(origem / 'snippets', usuario / 'snippets', dirs_exist_ok=True)
 
 
-SISTEMAS_JAVA = {
-    'None': 'Plain .java files in src. Run them with the Run button; nothing to download.',
-    'Maven': 'pom.xml and src/main/java. The usual choice in courses and companies; libraries come from Maven Central.',
-    'Gradle': 'build.gradle and src/main/java. Used by Android and many Spring projects; downloads Gradle the first time.',
-}
-POM = '''<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    <groupId>org.example</groupId>
-    <artifactId>{nome}</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    <properties>
-        <maven.compiler.release>21</maven.compiler.release>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
-</project>
-'''
-GRADLE = '''plugins {{
-    id 'application'
-}}
-
-repositories {{
-    mavenCentral()
-}}
-
-java {{
-    toolchain {{
-        languageVersion = JavaLanguageVersion.of(21)
-    }}
-}}
-
-application {{
-    mainClass = 'Main'
-}}
-'''
-
-
-def montar_java(raiz, sistema, nome):
-    """Turns a plain src/ project into Maven or Gradle layout; the Java extension imports either."""
-    if sistema not in ('Maven', 'Gradle'):
-        return
-    destino = raiz / 'src/main/java'
-    destino.mkdir(parents=True, exist_ok=True)
-    for f in list((raiz / 'src').glob('*.java')):
-        f.replace(destino / f.name)
-    artefato = re.sub(r'[^a-z0-9-]+', '-', nome.lower()).strip('-') or 'app'
-    if sistema == 'Maven':
-        (raiz / 'pom.xml').write_text(POM.replace('{nome}', artefato), encoding='utf8')
-        ignorar = ['target/']
-    else:
-        (raiz / 'build.gradle').write_text(GRADLE.format(), encoding='utf8')
-        (raiz / 'settings.gradle').write_text(f"rootProject.name = '{artefato}'\n", encoding='utf8')
-        ignorar = ['build/', '.gradle/']
-    arquivo = raiz / '.gitignore'
-    linhas_ = arquivo.read_text(encoding='utf8').splitlines() if arquivo.exists() else []
-    arquivo.write_text('\n'.join([*linhas_, *[i for i in ignorar if i not in linhas_]]) + '\n', encoding='utf8')
-
-
 def criar_projeto(app, modelo_, nome, local, git=False, sistema=None):
     raiz = Path(local) / nome
     origem = PERFIS / app / 'templates' / modelo_
@@ -1026,7 +969,7 @@ def criar_projeto(app, modelo_, nome, local, git=False, sistema=None):
         shutil.copytree(origem, raiz)
     else:
         raiz.mkdir(parents=True)
-    montar_java(raiz, sistema, nome)
+    java_layout.montar_java(raiz, sistema, nome)
     ignorar = raiz / '.gitignore'
     if git or ignorar.exists():
         # The editor keeps its own state in .vscode; it is not part of the project.
@@ -1162,65 +1105,7 @@ def restos_de_troca():
 CLASSES = {}  # the audit reaches the small windows through this
 
 
-def moldura_windows(hwnd):
-    """Cuts the caption off a native Windows frame and keeps its shadow."""
-    import ctypes
-    from ctypes import wintypes
 
-    class MARGINS(ctypes.Structure):
-        _fields_ = [('esq', ctypes.c_int), ('dir', ctypes.c_int), ('topo', ctypes.c_int), ('base', ctypes.c_int)]
-    try:
-        ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(wintypes.HWND(hwnd), ctypes.byref(MARGINS(0, 0, 1, 0)))
-        # Windows 11 draws its rounded corners on this kind of window only when asked
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(wintypes.HWND(hwnd), 33, ctypes.byref(ctypes.c_int(2)), 4)
-    except (OSError, AttributeError):
-        pass
-    sem_mudar = 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020  # NOSIZE NOMOVE NOZORDER NOACTIVATE FRAMECHANGED
-    ctypes.windll.user32.SetWindowPos(wintypes.HWND(hwnd), None, 0, 0, 0, 0, sem_mudar)
-
-
-def mensagem_windows(janela_, endereco):
-    """Answers the two messages that decide where the frame is; None leaves the rest to Qt."""
-    import ctypes
-    from ctypes import wintypes
-    msg = wintypes.MSG.from_address(endereco)
-    if msg.message == 0x0083 and msg.wParam:  # WM_NCCALCSIZE: the whole window is client area
-        if ctypes.windll.user32.IsZoomed(msg.hWnd):
-            # maximized windows hang their frame off the screen; pull the content back in
-            borda = ctypes.windll.user32.GetSystemMetrics(32) + ctypes.windll.user32.GetSystemMetrics(92)
-            alto = ctypes.windll.user32.GetSystemMetrics(33) + ctypes.windll.user32.GetSystemMetrics(92)
-            retangulo = wintypes.RECT.from_address(msg.lParam)
-            retangulo.left += borda
-            retangulo.right -= borda
-            retangulo.top += alto
-            retangulo.bottom -= alto
-        return 0
-    if msg.message == 0x0084:  # WM_NCHITTEST: edges resize, the bar moves, the rest is the window's
-        x = ctypes.c_short(msg.lParam & 0xFFFF).value
-        y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
-        caixa = wintypes.RECT()
-        ctypes.windll.user32.GetWindowRect(msg.hWnd, ctypes.byref(caixa))
-        escala = janela_.devicePixelRatioF() or 1
-        borda = int(6 * escala)
-        if janela_.redimensiona_ and not ctypes.windll.user32.IsZoomed(msg.hWnd):
-            esq, dir_ = x < caixa.left + borda, x >= caixa.right - borda
-            cima, baixo = y < caixa.top + borda, y >= caixa.bottom - borda
-            lados = {(True, False, True, False): 13, (False, True, True, False): 14, (True, False, False, True): 16,
-                     (False, True, False, True): 17, (True, False, False, False): 10, (False, True, False, False): 11,
-                     (False, False, True, False): 12, (False, False, False, True): 15}
-            lado = lados.get((esq, dir_, cima, baixo))
-            if lado:
-                return lado
-        barra = janela_.barra_
-        from PySide6.QtCore import QPoint
-        ponto = wintypes.POINT(x, y)
-        ctypes.windll.user32.ScreenToClient(msg.hWnd, ctypes.byref(ponto))
-        local = QPoint(int(ponto.x / escala), int(ponto.y / escala))
-        dentro = barra.mapFrom(janela_, local)
-        if barra.rect().contains(dentro) and barra.arrasta(dentro):
-            return 2  # HTCAPTION: native drag, snap and double-click
-        return 1
-    return None
 AO_ABRIR = []  # work for the moment the first window is up
 
 
@@ -1377,13 +1262,13 @@ def janela(inicial=None, lancar=None):
             super().showEvent(evento)
             if JANELAS and self.barra_ and not getattr(self, 'moldada_', False):
                 self.moldada_ = True
-                moldura_windows(int(self.winId()))
+                quadro_windows.moldura_windows(int(self.winId()))
             if VIDRO[0] and VIDRO[1] == 'blur' and self.barra_:
                 aplicar_vidro(int(self.winId()))
 
         def nativeEvent(self, tipo, mensagem):
             if JANELAS and self.barra_ and tipo == b'windows_generic_MSG':
-                resposta = mensagem_windows(self, int(mensagem))
+                resposta = quadro_windows.mensagem_windows(self, int(mensagem))
                 if resposta is not None:
                     return True, resposta
             return super().nativeEvent(tipo, mensagem)
@@ -2095,7 +1980,7 @@ def janela(inicial=None, lancar=None):
             if self.exemplo:
                 self.exemplo.setChecked(True)
                 self.exemplo.toggled.connect(lambda _: self.descrever())
-            self.sistema = segmento(SISTEMAS_JAVA, 'None', self.descrever) if app == 'java' else None
+            self.sistema = segmento(java_layout.SISTEMAS_JAVA, 'None', self.descrever) if app == 'java' else None
             self.sobre_sistema = nota()
             self.erro = nota()
             self.criar_ = QPushButton('Create')
@@ -2168,7 +2053,7 @@ def janela(inicial=None, lancar=None):
 
         def descrever(self, *_):
             if self.sistema:
-                avisar(self.sobre_sistema, SISTEMAS_JAVA[self.escolhido(self.sistema)])
+                avisar(self.sobre_sistema, java_layout.SISTEMAS_JAVA[self.escolhido(self.sistema)])
             if self.inicio:
                 nome = self.escolhido(self.inicio)
                 sobre = aplicativos()[self.app].get('about_templates', {}).get(nome)
