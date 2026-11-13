@@ -842,12 +842,23 @@ def area_de_trabalho():
     return CASA / 'Desktop'
 
 
+_APP_QT = []
+
+
+def app_qt():
+    """The one Qt application of the process. Whatever needs Qt first (shortcut icons, before the window)
+    creates a QApplication, never a QGuiApplication: the window reuses it, and Qt allows only one."""
+    from PySide6.QtWidgets import QApplication
+    if not QApplication.instance():
+        _APP_QT.append(QApplication(sys.argv))
+    return QApplication.instance()
+
+
 def imagem_icone(nome, tipo):
     from PySide6.QtCore import Qt
-    from PySide6.QtGui import QGuiApplication, QImage, QPainter
+    from PySide6.QtGui import QImage, QPainter
     from PySide6.QtSvg import QSvgRenderer
-    if not QGuiApplication.instance():
-        QGuiApplication(sys.argv)
+    app_qt()
     imagem = QImage(256, 256, QImage.Format_ARGB32)
     imagem.fill(Qt.transparent)
     pintor = QPainter(imagem)
@@ -3867,7 +3878,7 @@ def janela(inicial=None, lancar=None):
 
     CLASSES.update(Partida=Partida, Abertura=Abertura, Preparo=Preparo, Novidade=Novidade, Personalizar=Personalizar, Boasvindas=Boasvindas,
                    endereco_git=endereco_git, erro_git=erro_git)
-    aplicacao = QApplication(sys.argv)
+    aplicacao = app_qt()
     if forcar_xcb:
         del os.environ['QT_QPA_PLATFORM']
     limpar_ambiente()
