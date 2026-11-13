@@ -1,5 +1,6 @@
 // Measures each profile of a built package: startup time, idle memory of the whole process tree, and size on disk.
 // Usage: node tests/measure.js <package> [java,web,standard] [idle seconds, default 30]   (MEASURE_RUNS=3 runs per profile, median; MEASURE_PORT)
+// Experiments: MEASURE_BASELINE=0 skips the baseline; MEASURE_OVERRIDES=<file.json> merges settings over the profile for the run.
 // Each profile is also measured as plain VSCodium with the same extensions (baseline). Memory is also split per process group.
 // Writes tests/out/measure.json and prints a Markdown table for the README.
 const fs = require('fs'), os = require('os'), path = require('path');
@@ -10,6 +11,8 @@ const PACOTE = path.resolve(process.argv[2]);
 const APPS = (process.argv[3] || 'java,web,standard').split(',');
 const OCIOSO = Number(process.argv[4] || 30) * 1000;
 const RUNS = Number(process.env.MEASURE_RUNS || 3);
+const SEM_BASE = process.env.MEASURE_BASELINE === '0';
+const AJUSTES = process.env.MEASURE_OVERRIDES; // JSON of settings merged over the profile for one experiment
 const PORTA = +process.env.MEASURE_PORT || 9336;
 const JANELAS = process.platform === 'win32';
 const HUB = path.join(PACOTE, JANELAS ? 'Hub.exe' : 'Hub');
@@ -117,6 +120,12 @@ async function medir(app, base = false) {
         Object.assign(env, { SUITE_TOOLS: path.join(dados, 'tools'), SUITE_VISUAL: '0', SUITE_ANIMATIONS: '1', SUITE_APP: app,
             SUITE_NODE: path.join(PACOTE, 'node', JANELAS ? 'node.exe' : 'bin/node'), SUITE_WATERMARK: path.join(dados, 'watermark.svg') });
     }
+    const arqAjustes = path.join(usuario, 'User', 'settings.json');
+    let original = null;
+    if (AJUSTES && !base) {
+        original = fs.readFileSync(arqAjustes, 'utf8');
+        fs.writeFileSync(arqAjustes, JSON.stringify({ ...JSON.parse(original), ...JSON.parse(fs.readFileSync(AJUSTES, 'utf8')) }, null, 4));
+    }
     const exe = ['VSCodium.exe', 'codium'].map(n => path.join(PACOTE, 'editor', n)).find(fs.existsSync);
     const args = [`--user-data-dir=${usuario}`, `--extensions-dir=${extensoes}`, `--remote-debugging-port=${PORTA}`, pasta];
     if (base) args.unshift('--disable-workspace-trust');
@@ -130,6 +139,7 @@ async function medir(app, base = false) {
     const mem = memoria(filho.pid);
     await h.fechar();
     await fechado(PORTA);
+    if (original !== null) fs.writeFileSync(arqAjustes, original);
     fs.rmSync(temp, { recursive: true, force: true });
     return { app, abertura_ms: pronto ? abertura : null, ...mem, extensoes: tamanho(path.join(dados, 'extensions')) };
 }
@@ -155,8 +165,8 @@ function resumir(runs) {
         await medir(app);
         const runs = [], bases = [];
         for (let i = 0; i < RUNS; i++) runs.push(await medir(app));
-        for (let i = 0; i < RUNS; i++) bases.push(await medir(app, true));
-        const r = { ...resumir(runs), execucoes: runs.length, baseline: resumir(bases) };
+        if (!SEM_BASE) for (let i = 0; i < RUNS; i++) bases.push(await medir(app, true));
+        const r = { ...resumir(runs), execucoes: runs.length, baseline: SEM_BASE ? { pss: 0, privada: 0, grupos: {} } : resumir(bases) };
         console.log(JSON.stringify({ app, abertura_ms: r.abertura_ms, pss: MB(r.pss ?? r.privada), baseline_pss: MB(r.baseline.pss ?? r.baseline.privada) }));
         linhas.push(r);
     }
